@@ -1,6 +1,11 @@
 import prismadb from "@/lib/prismadb";
 import { stripTaxonomyIcon } from "@/lib/category-seo";
 import {
+  isResidualFiller,
+  parseShoppingIntent,
+  type PriceIntent,
+} from "@/lib/whatsapp/price-intent";
+import {
   SYNONYM_GROUPS,
   colorLemma,
   nameForms,
@@ -45,40 +50,17 @@ export const PRODUCT_NO_MATCH_REASONS: readonly ProductNoMatchReason[] = [
 // --- Precio -----------------------------------------------------------------
 
 /**
- * «Barato» no es un umbral: es un orden. Lo más económico primero, solo lo
- * que hay para vender. Con un tope dicho («menos de 10 mil») se filtra además
- * por precio; sin tope nunca se inventa uno.
+ * La intención de precio y de calidad vive en `price-intent.ts`, en un solo
+ * sitio y sin modelo. Aquí quedan los nombres de siempre para quien ya los usa.
  */
-export interface PriceIntent {
-  sort: "cheapest";
-  maxPrice: number | null;
-}
+export type { PriceIntent, PriceKind, ShoppingSort } from "@/lib/whatsapp/price-intent";
 
 const L = "[\\p{L}\\d]";
 const antes = `(?<!${L})`;
 const despues = `(?!${L})`;
 
-/**
- * «Bajo» o «baja» sueltos no cuentan: «carpeta baja» es una carpeta, no un
- * precio. Solo «precio bajo» y «bajo precio», con la palabra «precio» delante.
- */
-const PRICE_WORD_PATTERNS = [
-  `(?:(?:lo|los|las|la|el)\\s+)?(?:m[aá]s\\s+)?barat(?:[ií]sim[oa]s?|ic[oa]s?|[oa]s?)`,
-  `(?:(?:lo|los|las|la|el)\\s+)?(?:m[aá]s\\s+)?econ[oó]mic[oa]s?`,
-  `(?:a\\s+|de\\s+)?(?:un\\s+)?precios?\\s+baj[oi]s?`,
-  `(?:a\\s+|de\\s+)?bajo\\s+precio`,
-].map((p) => new RegExp(`${antes}${p}${despues}`, "giu"));
-
 /** Cantidades: «10 mil», «10mil», «10.000», «$10000», «10k», «10 lucas». */
 const AMOUNT = `\\$?\\s*(\\d{1,3}(?:[.,]\\d{3})+|\\d+)(?:\\s*(mil|k|lucas))?(?:\\s*pesos)?`;
-
-const CEILING_PATTERNS = [
-  new RegExp(
-    `${antes}(?:de\\s+|por\\s+)?(?:menos\\s+de|hasta|m[aá]ximo(?:\\s+de)?|max|por\\s+debajo\\s+de|no\\s+m[aá]s\\s+de|que\\s+no\\s+pase(?:n)?\\s+de)\\s*${AMOUNT}${despues}`,
-    "giu",
-  ),
-  new RegExp(`${antes}(?:de\\s+)?${AMOUNT}\\s+o\\s+menos${despues}`, "giu"),
-];
 
 /**
  * El valor de una cantidad, o null si no parece dinero. Un número pelado y
@@ -98,39 +80,19 @@ export function parseAmount(raw: string): number | null {
 
 export interface ParsedPrice {
   price: PriceIntent | null;
-  /** El mensaje sin las palabras de precio ni el tope. */
+  /** El mensaje sin las palabras de precio ni de calidad. */
   rest: string;
 }
 
 export function parsePriceIntent(body: string): ParsedPrice {
-  let rest = body;
-  let maxPrice: number | null = null;
-  let barato = false;
-
-  for (const pattern of CEILING_PATTERNS) {
-    rest = rest.replace(pattern, (span) => {
-      const valor = parseAmount(span);
-      if (valor === null) return span;
-      maxPrice = maxPrice === null ? valor : Math.min(maxPrice, valor);
-      return " ";
-    });
-  }
-  for (const pattern of PRICE_WORD_PATTERNS) {
-    rest = rest.replace(pattern, () => {
-      barato = true;
-      return " ";
-    });
-  }
-
-  rest = rest.replace(/\s+/g, " ").trim();
-  if (maxPrice === null && !barato) return { price: null, rest: body };
-  return { price: { sort: "cheapest", maxPrice }, rest };
+  const { price, rest, gift } = parseShoppingIntent(body);
+  return { price, rest: price || gift ? rest : body };
 }
 
-/** Quita las palabras de precio de una ranura del clasificador; vacía → null. */
+/** Quita las palabras de precio, calidad y regalo de una ranura del clasificador; vacía → null. */
 export function stripPriceWords(value: string | null): string | null {
   if (!value) return value;
-  const { rest } = parsePriceIntent(value);
+  const { rest } = parseShoppingIntent(value);
   return rest.trim() ? rest.trim() : null;
 }
 
@@ -206,6 +168,8 @@ const GENERIC_WORDS = new Set([
 const MIN_TERM_LENGTH = 4;
 
 export interface CatalogCategory {
+  id?: string;
+  typeId?: string;
   name: string;
   slug: string;
   keys: Set<string>;
@@ -221,6 +185,8 @@ export interface CatalogTermIndex {
    * su primera palabra («Cuadernos de lettering»).
    */
   taxonomy?: { exact: Map<string, Set<string>>; head: Map<string, Set<string>> };
+  /** Los tipos, con su id: para resolver por nombre secciones como «Kits». */
+  types?: { id: string; name: string }[];
 }
 
 function palabrasUtiles(name: string): string[] {
@@ -335,9 +301,34 @@ export function buildCatalogTermIndex(
         keys.add(k);
       });
     }
-    return { name: stripTaxonomyIcon(c.name), slug: c.slug, keys: ck };
+    return { id: c.id, typeId: c.typeId, name: stripTaxonomyIcon(c.name), slug: c.slug, keys: ck };
   });
-  return { keys, categories: cats, taxonomy: buildTaxonomy(types, categories) };
+  return {
+    keys,
+    categories: cats,
+    taxonomy: buildTaxonomy(types, categories),
+    types: types.filter((t): t is { id: string; name: string } => Boolean(t.id)),
+  };
+}
+
+const nombrePlano = (name: string) => stripAccents(stripTaxonomyIcon(name).toLocaleLowerCase("es-CO")).trim();
+
+/**
+ * Dónde se busca «un regalo» sin otra palabra de producto: el tipo que se
+ * llama exactamente «Kits» y las categorías que dicen «regal…» (no las de
+ * empaques: «Empaques para regalo» es para envolver, no el regalo). Se
+ * resuelve por nombre, en cada tienda; null si la tienda no tiene ninguna.
+ */
+export function giftCategoryIds(index: CatalogTermIndex): string[] | null {
+  const kits = new Set((index.types ?? []).filter((t) => nombrePlano(t.name) === "kits").map((t) => t.id));
+  const ids = new Set<string>();
+  for (const c of index.categories) {
+    if (!c.id) continue;
+    const nombre = nombrePlano(c.name);
+    const deRegalo = nombre.includes("regal") && !nombre.includes("empaque");
+    if ((c.typeId && kits.has(c.typeId)) || deRegalo) ids.add(c.id);
+  }
+  return ids.size > 0 ? Array.from(ids) : null;
 }
 
 export const STATIC_TERM_INDEX: CatalogTermIndex = { keys: STATIC_KEYS, categories: [] };
@@ -391,6 +382,8 @@ export const MAX_TOKENS_FOR_TERM_GATE = 4;
 
 export interface ParsedSearchIntent {
   price: PriceIntent | null;
+  /** Habló de regalo («para un regalo», «un detallito»). */
+  gift: boolean;
   /** Las palabras que se buscan, ya sin cortesía ni precio. */
   tokens: string[];
   /** Las que son del catálogo. */
@@ -420,11 +413,14 @@ const CONVERSATION_MARKERS = new RegExp(
 );
 
 export function parseSearchIntent(body: string, index: CatalogTermIndex): ParsedSearchIntent {
-  const { price, rest } = parsePriceIntent(body);
-  const tokens = searchTokens(rest).filter((t) => !WHATSAPP_FILLER.has(stripAccents(t)));
+  const { price, gift, rest } = parseShoppingIntent(body);
+  const tokens = searchTokens(rest).filter(
+    (t) => !WHATSAPP_FILLER.has(stripAccents(t)) && !isResidualFiller(t),
+  );
   const knownTokens = tokens.filter((t) => isKnownTerm(index, t));
   return {
     price,
+    gift,
     tokens,
     knownTokens,
     allKnown: tokens.length > 0 && knownTokens.length === tokens.length,
@@ -440,7 +436,11 @@ export function parseSearchIntent(body: string, index: CatalogTermIndex): Parsed
  * llega al clasificador, que cuesta.
  */
 export function looksLikeCatalogQuery(parsed: ParsedSearchIntent): boolean {
-  if (parsed.knownTokens.length === 0 || parsed.conversational) return false;
+  if (parsed.conversational) return false;
+  // «algo barato», «tengo 20 mil para un regalo», «cuál me recomiendas»: sin
+  // palabra de producto se busca en todo el catálogo (o en lo de regalo).
+  if (parsed.tokens.length === 0) return parsed.price !== null || parsed.gift;
+  if (parsed.knownTokens.length === 0) return false;
   return parsed.tokens.length <= MAX_TOKENS_FOR_TERM_GATE || parsed.price !== null;
 }
 

@@ -4,8 +4,8 @@ const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   findFirst: vi.fn(),
   count: vi.fn(),
-  typeFindMany: vi.fn(async () => [] as { name: string }[]),
-  categoryFindMany: vi.fn(async () => [] as { name: string; slug: string }[]),
+  typeFindMany: vi.fn(async () => [] as { id?: string; name: string }[]),
+  categoryFindMany: vi.fn(async () => [] as { id?: string; name: string; slug: string; typeId?: string }[]),
   generateText: vi.fn(),
   createGoogle: vi.fn(() => () => "gemini-model"),
 }));
@@ -58,6 +58,9 @@ import {
   intentWithoutModel,
   looksLikeProductQuestionForStore,
   renderCheapSearch,
+  renderPriceSearch,
+  buildPriceListBody,
+  renderFloorMiss,
   renderCeilingMiss,
   renderNoResults,
   buildCheapListBody,
@@ -85,6 +88,7 @@ import {
   resolveProductSearch,
   trimForWhatsApp,
 } from "@/lib/whatsapp/bot-products";
+import { cheapestIntent } from "@/lib/whatsapp/price-intent";
 import { STATIC_TERM_INDEX, parseSearchIntent, resetCatalogTermCache } from "@/lib/whatsapp/search-intent";
 import {
   productNameTokenSearchWhere,
@@ -2169,7 +2173,9 @@ describe("lo barato, el tope y una sola palabra del catálogo", () => {
       fila("m3", "Marcador doble punta", 4000),
       fila("m4", "Marcador apartado", 1000, { stock: 2, reservedUnits: 2 }),
     ]);
-    mocks.count.mockResolvedValue(14);
+    // La base devolvió menos de lo pedido: el total es lo que queda tras
+    // mirar las existencias aquí también (el apartado se cae).
+    mocks.count.mockResolvedValue(4);
 
     const { answer, reason } = await answerProductQuestionDetailed("store-1", "marcadores baratos");
 
@@ -2185,20 +2191,23 @@ describe("lo barato, el tope y una sola palabra del catálogo", () => {
     expect(familia).toContain("micropunta");
 
     expect(answer?.text).toBe(
-      "Estos son los más económicos que tengo 💛\n• Micropunta negra — $1.500\n• Resaltador pastel — $2.500\n• Marcador doble punta — $4.000\n…y 11 más. Dime cuál te interesa y te cuento.",
+      "Sí, mira 💛 Tengo estos:\n• Micropunta negra — $1.500\n• Resaltador pastel — $2.500\n• Marcador doble punta — $4.000\n¿Cuál te interesa?",
     );
     expect(answer?.text).not.toMatch(/más salen|baratos no tengo/i);
     expect(answer?.shownIds).toEqual(["m1", "m2", "m3"]);
     expect(answer?.shownPrices).toEqual([1500, 2500, 4000]);
-    expect(answer?.list?.body).toBe(
-      "Estos son los 3 más económicos que tengo 💛 Me quedan 11 más. Toca el que te guste, o dime algo más preciso y te busco mejor.",
-    );
+    expect(answer?.list?.body).toBe(PRODUCT_TEMPLATES["list.body.few"](3));
     expect(answer?.handoff).toBeFalsy();
+    expect(answer?.decision?.ranking).toEqual([
+      { name: "Micropunta negra", signal: "price" },
+      { name: "Resaltador pastel", signal: "price" },
+      { name: "Marcador doble punta", signal: "price" },
+    ]);
     expect(answer?.decision).toMatchObject({
       intent: "product.search",
       query: "marcadores",
       source: "catalog",
-      price: { sort: "cheapest", maxPrice: null },
+      price: cheapestIntent(),
       outcome: "match",
     });
   });
@@ -2368,13 +2377,13 @@ describe("los textos nuevos, para Paula", () => {
   };
 
   it("lo barato sin tope y con pocos usa la lista de siempre, que no dice «los que más salen»", () => {
-    const t = renderCheapSearch(tres, { sort: "cheapest", maxPrice: null });
+    const t = renderCheapSearch(tres, cheapestIntent());
     expect(t).toBe(PRODUCT_TEMPLATES["search.few"]("• A — $1.500\n• B — $2.500\n• C — $4.000"));
-    expect(buildCheapListBody(3, 3, { sort: "cheapest", maxPrice: null })).toBe(PRODUCT_TEMPLATES["list.body.few"](3));
+    expect(buildCheapListBody(3, 3, cheapestIntent())).toBe(PRODUCT_TEMPLATES["list.body.few"](3));
   });
 
   it("ningún texto de precio dice «los que más salen»", () => {
-    for (const price of [{ sort: "cheapest" as const, maxPrice: null }, { sort: "cheapest" as const, maxPrice: 8000 }]) {
+    for (const price of [cheapestIntent(), cheapestIntent(8000)]) {
       expect(renderCheapSearch({ ...tres, total: 20, hasMore: true }, price)).not.toMatch(/más salen/);
       expect(buildCheapListBody(3, 20, price)).not.toMatch(/más salen/);
     }
@@ -2404,5 +2413,106 @@ describe("los textos nuevos, para Paula", () => {
     ]) {
       expect(todo).toContain(fragmento);
     }
+  });
+});
+
+describe("los textos por modo: cada uno solo cuando lo que dice es verdad", () => {
+  const muchos = {
+    matches: [
+      { name: "A", price: 9000 },
+      { name: "B", price: 10000 },
+      { name: "C", price: 11000 },
+    ],
+    total: 12,
+    hasMore: true,
+  };
+  const pocos = { ...muchos, total: 3, hasMore: false };
+  const lineas = "• A — $9.000\n• B — $10.000\n• C — $11.000";
+
+  it("cerca, rango y piso: pocos con la lista neutra, muchos con su texto", () => {
+    expect(renderPriceSearch(pocos, { mode: "around", cerca: 10000 })).toBe(PRODUCT_TEMPLATES["search.few"](lineas));
+    expect(renderPriceSearch(muchos, { mode: "around", cerca: 10000 })).toBe(
+      PRODUCT_TEMPLATES["search.around.many"]("$10.000", lineas, 9),
+    );
+    expect(renderPriceSearch(muchos, { mode: "range", desde: 2000, hasta: 5000 })).toBe(
+      PRODUCT_TEMPLATES["search.range.many"]("$2.000", "$5.000", lineas, 9),
+    );
+    expect(renderPriceSearch(muchos, { mode: "floor", desde: 20000 })).toBe(
+      PRODUCT_TEMPLATES["search.floor.many"]("$20.000", lineas, 9),
+    );
+    expect(renderFloorMiss(50000, pocos)).toBe(PRODUCT_TEMPLATES["search.floor.none"]("$50.000", lineas));
+  });
+
+  const con = (base: typeof pocos, ...senales: ("featured" | "brand" | "sales")[][]) => ({
+    ...base,
+    ranking: base.matches.map((m, i) => ({ name: m.name, signal: senales[i][0], signals: senales[i] })),
+  });
+
+  it("calidad y valor dicen solo lo que llevan los que se enseñan", () => {
+    const soloVentas = renderPriceSearch(con(pocos, ["sales"], ["sales"], ["sales"]), { mode: "quality" });
+    expect(soloVentas).toBe(PRODUCT_TEMPLATES["search.quality.few"]("los que más se llevan", lineas));
+    expect(soloVentas).not.toContain("marcas reconocidas");
+    expect(soloVentas).not.toContain("recomendamos");
+
+    const conMarca = renderPriceSearch(con(muchos, ["brand"], ["sales"], ["sales"]), { mode: "quality" });
+    expect(conMarca).toBe(
+      PRODUCT_TEMPLATES["search.quality.many"]("los de marcas reconocidas y los que más se llevan", lineas, 9),
+    );
+    expect(conMarca).toContain("de marcas reconocidas");
+
+    expect(renderPriceSearch(con(pocos, ["featured", "sales"], ["brand"], ["sales"]), { mode: "quality" })).toContain(
+      "Primero te muestro los que te recomendamos, los de marcas reconocidas y los que más se llevan 💛",
+    );
+    expect(renderPriceSearch(con(pocos, ["brand"], ["brand"], ["brand"]), { mode: "value" })).toBe(
+      PRODUCT_TEMPLATES["search.value.few"]("los de marcas reconocidas", lineas),
+    );
+    expect(renderPriceSearch(con(muchos, ["sales"], ["sales"], ["sales"]), { mode: "value" })).toBe(
+      PRODUCT_TEMPLATES["search.value.many"]("los que más se llevan", lineas, 9),
+    );
+    expect(renderPriceSearch(muchos, { mode: "quality.none" })).toBe(PRODUCT_TEMPLATES["search.quality.none"](lineas));
+  });
+
+  it("solo cuentan las señales de los que SE ENSEÑAN, no las de toda la búsqueda", () => {
+    const r = con(muchos, ["sales"], ["sales"], ["sales"]);
+    const t = renderPriceSearch({ ...r, ranking: [...r.ranking, { name: "Oculto", signal: "brand", signals: ["brand"] }] }, {
+      mode: "quality",
+    });
+    expect(t).not.toContain("marcas reconocidas");
+  });
+
+  it("la lista tocable de los modos nuevos es la neutra", () => {
+    for (const mode of ["around", "range", "floor", "quality", "value", "quality.none"] as const) {
+      expect(buildPriceListBody(3, 3, { mode })).toBe(PRODUCT_TEMPLATES["list.body.few"](3));
+      expect(buildPriceListBody(3, 12, { mode })).toBe(PRODUCT_TEMPLATES["list.body.many"](3, 9));
+    }
+  });
+
+  it("rango, cerca, piso y calidad nunca dicen «los que más salen» ni «los más económicos»", () => {
+    for (const pt of [
+      { mode: "around" as const, cerca: 10000 },
+      { mode: "range" as const, desde: 2000, hasta: 5000 },
+      { mode: "floor" as const, desde: 20000 },
+      { mode: "quality" as const },
+      { mode: "quality.none" as const },
+    ]) {
+      const texto = renderPriceSearch(muchos, pt) + buildPriceListBody(3, 12, pt);
+      expect(texto).not.toMatch(/más salen|los más económicos/);
+    }
+  });
+
+  it("ninguna plantilla promete calidad: ni «los mejores», ni «no se secan», ni «la mejor calidad»", () => {
+    for (const render of Object.values(PRODUCT_TEMPLATES)) {
+      const texto = (render as (...args: never[]) => string)("x" as never, "y" as never, "z" as never, 1 as never);
+      expect(texto).not.toMatch(/mejores|no se secan|mejor calidad/i);
+    }
+    for (const item of previewProductTemplates()) {
+      expect(item.text).not.toMatch(/mejores|no se secan|mejor calidad/i);
+    }
+  });
+
+  it("sin palabra de producto («algo barato», «un regalo») se busca sin el modelo", () => {
+    const p = (b: string) => parseSearchIntent(b, STATIC_TERM_INDEX);
+    expect(intentWithoutModel("algo barato", p("algo barato"))).toBe("product.search");
+    expect(intentWithoutModel("tengo 20 mil para un regalo", p("tengo 20 mil para un regalo"))).toBe("product.search");
   });
 });

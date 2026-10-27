@@ -18,6 +18,7 @@ import {
   STATIC_TERM_INDEX,
   buildCatalogTermIndex,
   taxonomyCategoryIds,
+  giftCategoryIds,
   categoryUrl,
   closestCategory,
   isKnownTerm,
@@ -39,7 +40,7 @@ describe("palabras de precio y topes", () => {
     ["plumones económicos", null, "plumones"],
     ["plumones economicos", null, "plumones"],
     ["resaltadores baraticos", null, "resaltadores"],
-    ["¿cuál es el más barato?", null, "¿cuál es ?"],
+    ["¿cuál es el más barato?", null, "¿cuál es?"],
     ["lo más económico en libretas", null, "en libretas"],
     ["marcadores a precio bajo", null, "marcadores"],
     ["cuadernos de menos de 10 mil", 10000, "cuadernos"],
@@ -52,7 +53,7 @@ describe("palabras de precio y topes", () => {
     ["cuadernos baratos hasta 20 mil", 20000, "cuadernos"],
   ])("«%s» → tope %s, busca «%s»", (body, maxPrice, rest) => {
     const r = parsePriceIntent(body);
-    expect(r.price).toEqual({ sort: "cheapest", maxPrice });
+    expect(r.price).toMatchObject({ sort: "cheapest", kind: maxPrice === null ? "cheapest" : "ceiling", maxPrice });
     expect(r.rest).toBe(rest);
   });
 
@@ -223,7 +224,6 @@ describe("el portero por términos", () => {
   it.each([
     "hola buenas",
     "gracias!!",
-    "algo barato para regalar",
     "ya hice la transferencia ayer en la tarde",
     "gracias por los stickers",
     "ya llegaron los cuadernos",
@@ -231,6 +231,13 @@ describe("el portero por términos", () => {
   ])(
     "«%s» no pasa",
     (body) => expect(q(body)).toBe(false),
+  );
+
+  // Desde el 27 de octubre, sin palabra de producto se busca en todo el
+  // catálogo (o en lo de regalo): estos sí pasan.
+  it.each(["algo barato para regalar", "algo barato", "tengo 20 mil para un regalo", "qué tienen económico"])(
+    "«%s» pasa sin palabra de producto",
+    (body) => expect(q(body)).toBe(true),
   );
 
   it("una conversación larga que nombra un artículo no pasa; con precio sí", () => {
@@ -267,5 +274,27 @@ describe("enlaces y motivos", () => {
       "classifier_failed",
       "classifier_other",
     ]);
+  });
+});
+
+describe("lo de regalo, por nombre", () => {
+  it("el tipo «Kits» entero y las categorías «regal…», nunca las de empaques", () => {
+    const index = buildCatalogTermIndex(
+      [
+        { id: "t-kits", name: "🎁 Kits" },
+        { id: "t-of", name: "Oficina" },
+      ],
+      [
+        { id: "c-esc", name: "Kits escolares", slug: "kits-escolares", typeId: "t-kits" },
+        { id: "c-reg", name: "Kits para regalar o regalarse", slug: "kits-regalar", typeId: "t-of" },
+        { id: "c-emp", name: "Empaques para regalo", slug: "empaques", typeId: "t-of" },
+        { id: "c-cua", name: "Cuadernos", slug: "cuadernos", typeId: "t-of" },
+      ],
+    );
+    expect(giftCategoryIds(index)?.sort()).toEqual(["c-esc", "c-reg"]);
+  });
+
+  it("sin nada de regalo es null", () => {
+    expect(giftCategoryIds(STATIC_TERM_INDEX)).toBeNull();
   });
 });

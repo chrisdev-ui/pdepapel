@@ -17,13 +17,17 @@ import {
   wordForms,
 } from "@/lib/search-terms";
 import { type FactValue } from "@/lib/whatsapp/bot-facts";
+import { aroundWindow, cheapestIntent } from "@/lib/whatsapp/price-intent";
+import { loadRecognizedLineNames, recognizedBrandSource } from "@/lib/whatsapp/recognized-brands";
 import {
   type CatalogTermIndex,
   type ParsedSearchIntent,
   type PriceIntent,
   type ProductNoMatchReason,
+  STORE_ORIGIN,
   categoryUrl,
   closestCategory,
+  giftCategoryIds,
   isKnownTerm,
   loadCatalogTermIndex,
   looksLikeCatalogQuery,
@@ -360,7 +364,11 @@ export function intentWithoutModel(
   body: string,
   parsed: ParsedSearchIntent,
 ): ProductIntent | null {
-  if (!parsed.allKnown || parsed.conversational) return null;
+  if (parsed.conversational) return null;
+  // «algo barato», «tengo 20 mil para un regalo»: no hay qué preguntarle al
+  // modelo, se busca en todo el catálogo (o en lo de regalo).
+  if (parsed.tokens.length === 0 && (parsed.price !== null || parsed.gift)) return "product.search";
+  if (!parsed.allKnown) return null;
   const text = sinTildes(parsePriceIntent(body).rest);
   if (conSenal(text, DETAIL_SIGNALS)) return null;
   if (conSenal(text, PRICE_SIGNALS)) return "product.price";
@@ -417,6 +425,10 @@ export interface SearchResult<T> {
    * elegir cuál enseñar, y tres fotos seguidas serían un muro.
    */
   photo?: string | null;
+  /** Qué puso a cada uno donde está; solo con intención de precio o calidad. */
+  ranking?: RankingEntry[];
+  /** La caída que hubo: sin señales de calidad, o valor sin candidatos. */
+  fallback?: "quality.none" | "value.cheap";
 }
 
 /** Lo que se busca, armado con lo que dijo el modelo. */
@@ -497,30 +509,176 @@ export async function effectiveUnitPrices(storeId: string, rows: PricedRow[], qu
  * El orden importa: ampliar solo puede añadir productos, nunca quitarlos, así
  * que se hace cuando falta algo, no cuando sobra.
  */
+/** Qué puso a cada producto donde está, para el archivo y la matriz. */
+export type RankingSignal = "featured" | "brand" | "sales" | "price" | "closest" | "none";
+
+export interface RankingEntry {
+  name: string;
+  signal: RankingSignal;
+  /** Si tiene marca reconocida: si salió del campo de marca o del nombre. */
+  brandSource?: "field" | "name";
+  /** Calidad y valor: TODAS las señales que lleva, no solo la que lo ordenó. */
+  signals?: QualitySignal[];
+}
+
+export type QualitySignal = "featured" | "brand" | "sales";
+
+/**
+ * Cómo se busca: el orden y la ventana de precio. Sale de `PriceIntent` y,
+ * en las caídas («no hay cerca de 10 mil, pero por debajo sí»), se escribe a
+ * mano.
+ *  - bestseller: lo más vendido (sin intención de precio, o calidad sin señales).
+ *  - cheapest: del más económico al más caro.
+ *  - closest: lo más cerca de `target`; si empatan, el más económico.
+ *  - below: lo más cercano por debajo de un piso (del más caro al más barato).
+ *  - quality / value: ver `rankQuality` y `rankValue`.
+ */
+type SortMode = "bestseller" | "cheapest" | "closest" | "below" | "quality" | "value";
+
+interface SearchPlan {
+  sort: SortMode;
+  min: number | null;
+  max: number | null;
+  target: number | null;
+  inStock: boolean;
+}
+
 interface SearchOptions {
   withDescription?: boolean;
-  /** Con intención de precio: solo lo que hay para vender, lo más económico primero. */
+  /** Con intención de precio o de calidad: solo lo que hay para vender, en el orden que pide. */
   price?: PriceIntent | null;
+  /** Otra búsqueda que la del mensaje (las caídas). */
+  plan?: SearchPlan;
+  /** Sin palabra de producto («algo barato», «un regalo»): todo el catálogo o `scope`. */
+  emptyQuery?: boolean;
+  /** Solo estas categorías (lo de regalo). */
+  scope?: string[] | null;
+  /** Solo lo que hay para vender aunque no haya intención de precio (los regalos). */
+  inStock?: boolean;
+}
+
+function planFor(price: PriceIntent | null, inStock = false): SearchPlan {
+  if (!price) return { sort: "bestseller", min: null, max: null, target: null, inStock };
+  const ventana =
+    price.kind === "around" && price.target !== null
+      ? aroundWindow(price.target)
+      : { min: price.minPrice, max: price.maxPrice };
+  const sort: SortMode =
+    price.sort === "closest" ? "closest" : price.sort === "quality" ? "quality" : price.sort === "value" ? "value" : "cheapest";
+  return { sort, min: ventana.min, max: ventana.max, target: price.target, inStock: true };
+}
+
+/** Lo que dice el texto según cómo quedó ordenada la lista. */
+export type PriceTextMode = "cheap" | "ceiling" | "range" | "floor" | "around" | "quality" | "value" | "quality.none";
+
+export interface PriceText {
+  mode: PriceTextMode;
+  tope?: number;
+  desde?: number;
+  hasta?: number;
+  cerca?: number;
+}
+
+/**
+ * El texto que le toca a una intención con el orden que de verdad tuvo. La
+ * calidad manda sobre el precio: con «cuadernos buenos de menos de 20 mil» la
+ * ventana filtra, pero el orden (y el texto) es el de calidad.
+ */
+export function priceTextFor(price: PriceIntent, fallback?: "quality.none" | "value.cheap"): PriceText {
+  if (fallback === "quality.none") return { mode: "quality.none" };
+  if (price.sort === "quality") return { mode: "quality" };
+  if (price.sort === "value" && fallback !== "value.cheap") return { mode: "value" };
+  switch (price.kind) {
+    case "ceiling":
+      return price.maxPrice !== null ? { mode: "ceiling", tope: price.maxPrice } : { mode: "cheap" };
+    case "range":
+      return price.minPrice !== null && price.maxPrice !== null
+        ? { mode: "range", desde: price.minPrice, hasta: price.maxPrice }
+        : { mode: "cheap" };
+    case "floor":
+      return price.minPrice !== null ? { mode: "floor", desde: price.minPrice } : { mode: "cheap" };
+    case "around":
+      return price.target !== null ? { mode: "around", cerca: price.target } : { mode: "cheap" };
+    default:
+      return { mode: "cheap" };
+  }
+}
+
+interface FoundRow {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  reservedUnits: number;
+  categoryId: string;
+  productGroupId: string | null;
+  description?: string | null;
+  images: { url: string }[];
+  isFeatured?: boolean;
+  soldCount?: number;
+  brandRef?: { name: string; parent: { name: string } | null } | null;
+  signal?: RankingEntry;
+}
+
+interface Found {
+  rows: FoundRow[];
+  total: number;
+  /** Cuántos productos caben en la ventana y hay para vender, antes de pedir señales. */
+  candidates: number;
+  fallback?: "quality.none" | "value.cheap";
 }
 
 async function runSearch(
   storeId: string,
   query: string,
   options: SearchOptions = {},
-) {
+): Promise<Found | null> {
   // En caché unos minutos por tienda: no suma una consulta por mensaje.
   const index = await loadCatalogTermIndex(storeId);
+  const vacia = searchTokens(query).length === 0;
   const porNombre = botTokenWhere(query, false, index);
-  if (porNombre.length === 0) return null;
-  const seccion = options.price ? seccionExacta(index, query) : null;
-  const buscar = (tokens: Prisma.ProductWhereInput[]) =>
-    seccion ? buscarPorNiveles(storeId, tokens, seccion, options) : buscarCon(storeId, tokens, options);
+  if (porNombre.length === 0 && !(vacia && options.emptyQuery)) return null;
+  const alcance: Prisma.ProductWhereInput[] = options.scope ? [{ categoryId: { in: options.scope } }] : [];
+  const plan = options.plan ?? planFor(options.price ?? null, options.inStock);
+  const lineNames = plan.sort === "quality" || plan.sort === "value" ? await lineasReconocidas(storeId) : [];
+  const seccion = (options.price || options.plan) && !vacia ? seccionExacta(index, query) : null;
+  const buscar = (tokens: Prisma.ProductWhereInput[], p: SearchPlan) =>
+    seccion
+      ? buscarPorNiveles(storeId, tokens, seccion, options, p, lineNames)
+      : buscarCon(storeId, tokens, options, p, lineNames);
 
-  const primera = await buscar(porNombre);
-  if (primera.total > 0) return primera;
-
+  let usadas = [...porNombre, ...alcance];
+  let found = await buscar(usadas, plan);
   // El nombre no encontró nada: puede que la palabra esté en la descripción.
-  return buscar(botTokenWhere(query, true, index));
+  // Solo si de verdad no hubo candidatos: que la calidad no encuentre señales
+  // no es razón para ensuciar la lista con descripciones.
+  if (found.candidates === 0 && !vacia) {
+    usadas = [...botTokenWhere(query, true, index), ...alcance];
+    found = await buscar(usadas, plan);
+  }
+  if (found.total === 0 && found.candidates > 0) {
+    // Hay productos, pero ninguno con señales de calidad (o ninguno en la
+    // mitad más económica con señales): se enseñan con un orden que sí es verdad.
+    if (plan.sort === "quality") {
+      return { ...(await buscar(usadas, { ...plan, sort: "bestseller" })), fallback: "quality.none" };
+    }
+    if (plan.sort === "value") {
+      return { ...(await buscar(usadas, { ...plan, sort: "cheapest" })), fallback: "value.cheap" };
+    }
+  }
+  return found;
+}
+
+async function lineasReconocidas(storeId: string): Promise<string[]> {
+  try {
+    return await loadRecognizedLineNames(storeId);
+  } catch (error) {
+    console.warn("[WHATSAPP_BOT] No se pudieron leer las líneas de marca", {
+      storeId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 /** Las categorías de la primera palabra que nombra EXACTAMENTE un tipo o una categoría. */
@@ -533,25 +691,31 @@ function seccionExacta(index: CatalogTermIndex, query: string): string[] | null 
 }
 
 /**
- * Con precio y una sección exacta, dos niveles que no se mezclan: primero lo
- * que ES de esa sección (los marcadores de «Marcadores»), del más económico
- * al más caro; después la familia de fuera (micropuntas, resaltadores), igual
- * ordenada. Si no, una micropunta de $1.500 tapaba a los marcadores de
- * verdad. El total cuenta los dos, en ese orden.
+ * Con precio (o calidad) y una sección exacta, dos niveles que no se mezclan:
+ * primero lo que ES de esa sección (los marcadores de «Marcadores»), después
+ * la familia de fuera (micropuntas, resaltadores), cada uno con el mismo
+ * orden. Si no, una micropunta de $1.500 tapaba a los marcadores de verdad.
+ * El total cuenta los dos, en ese orden.
  */
 async function buscarPorNiveles(
   storeId: string,
   tokens: Prisma.ProductWhereInput[],
   categoryIds: string[],
   options: SearchOptions,
-) {
+  plan: SearchPlan,
+  lineNames: string[],
+): Promise<Found> {
   const [dentro, fuera] = await Promise.all([
-    buscarCon(storeId, [...tokens, { categoryId: { in: categoryIds } }], options),
-    buscarCon(storeId, [...tokens, { categoryId: { notIn: categoryIds } }], options),
+    buscarCon(storeId, [...tokens, { categoryId: { in: categoryIds } }], options, plan, lineNames),
+    buscarCon(storeId, [...tokens, { categoryId: { notIn: categoryIds } }], options, plan, lineNames),
   ]);
+  // «Desde X no tengo» enseña tres en total, no tres por nivel.
+  const tope = plan.sort === "below" ? FLOOR_MISS_ROWS : PRODUCT_MATCH_LIMIT;
+  const rows = [...dentro.rows, ...fuera.rows].slice(0, tope);
   return {
-    rows: [...dentro.rows, ...fuera.rows].slice(0, PRODUCT_MATCH_LIMIT),
-    total: dentro.total + fuera.total,
+    rows,
+    total: plan.sort === "below" ? rows.length : dentro.total + fuera.total,
+    candidates: dentro.candidates + fuera.candidates,
   };
 }
 
@@ -637,25 +801,47 @@ const COLORES_WHERE: Prisma.ProductWhereInput = {
 
 /**
  * Con intención de precio se piden más candidatos de los que se enseñan: se
- * ordenan por precio de lista en la base y luego por el precio que de verdad
- * se cobra (con ofertas). Un producto con lista por encima del tope y oferta
- * por debajo no entra; es el precio con que se filtra en la base.
+ * filtran por precio de lista en la base y luego se vuelven a mirar con el
+ * precio que de verdad se cobra (con ofertas). Un producto con lista fuera de
+ * la ventana y oferta dentro no entra; es el precio con que se filtra en la base.
  */
 const PRICE_CANDIDATES = 30;
+const AROUND_CANDIDATES = 60;
+/** Calidad y valor necesitan ver más para ordenar por señales; el `select` es pequeño. */
+const QUALITY_CANDIDATES = 200;
+
+const QUALITY_SELECT = {
+  isFeatured: true,
+  soldCount: true,
+  brandRef: { select: { name: true, parent: { select: { name: true } } } },
+} as const;
 
 async function buscarCon(
   storeId: string,
   tokens: Prisma.ProductWhereInput[],
   options: SearchOptions,
-) {
-  const price = options.price ?? null;
+  plan: SearchPlan,
+  lineNames: string[],
+): Promise<Found> {
+  const { sort, min, max } = plan;
   const where: Prisma.ProductWhereInput = {
     storeId,
     isArchived: false,
     AND: tokens,
-    ...(price ? availableStockWhere() : {}),
-    ...(price?.maxPrice ? { price: { lte: price.maxPrice } } : {}),
+    ...(plan.inStock ? availableStockWhere() : {}),
+    ...(min !== null || max !== null
+      ? { price: { ...(min !== null ? { gte: min } : {}), ...(max !== null ? { lte: max } : {}) } }
+      : {}),
   };
+  const conSenales = sort === "quality" || sort === "value";
+  const take =
+    sort === "bestseller"
+      ? PRODUCT_MATCH_LIMIT
+      : conSenales
+        ? QUALITY_CANDIDATES
+        : sort === "closest"
+          ? AROUND_CANDIDATES
+          : PRICE_CANDIDATES;
   const [rows, total] = (await Promise.all([
     prismadb.product.findMany({
       where,
@@ -664,6 +850,7 @@ async function buscarCon(
       select: {
         ...MATCH_SELECT,
         ...(options.withDescription ? { description: true } : {}),
+        ...(conSenales ? QUALITY_SELECT : {}),
         images: {
           // La marcada como principal manda; las rotas (las marca el cron
           // diario) ni se miran. Es el mismo criterio que usa la tienda.
@@ -675,36 +862,140 @@ async function buscarCon(
       },
       // El buscador de la tienda ordena por relevancia calculada en SQL, que
       // aquí no aplica. Lo más vendido primero es lo que más suele servir,
-      // salvo que haya pedido lo barato.
-      orderBy: price
-        ? [{ price: "asc" as const }, { soldCount: "desc" as const }]
-        : [{ soldCount: "desc" as const }, { createdAt: "desc" as const }],
-      take: price ? PRICE_CANDIDATES : PRODUCT_MATCH_LIMIT,
+      // salvo que haya pedido precio o calidad.
+      orderBy:
+        sort === "bestseller" || conSenales
+          ? [{ soldCount: "desc" as const }, { createdAt: "desc" as const }]
+          : sort === "below"
+            ? [{ price: "desc" as const }, { soldCount: "desc" as const }]
+            : [{ price: "asc" as const }, { soldCount: "desc" as const }],
+      take,
     }),
     prismadb.product.count({ where }),
-  ])) as [
-    {
-      id: string;
-      name: string;
-      price: number;
-      stock: number;
-      reservedUnits: number;
-      categoryId: string;
-      productGroupId: string | null;
-      description?: string | null;
-      images: { url: string }[];
-    }[],
-    number,
-  ];
+  ])) as [FoundRow[], number];
   const prices = await effectiveUnitPrices(storeId, rows);
   const conPrecio = rows.map((row) => ({ ...row, price: prices.get(row.id) ?? row.price }));
-  if (!price) return { rows: conPrecio, total };
-  const ordenados = conPrecio
-    .filter((row) => availableStock(row) > 0)
+  if (sort === "bestseller" && !plan.inStock && min === null && max === null) {
+    return { rows: conPrecio.map((r) => ({ ...r, signal: { name: r.name, signal: "none" } })), total, candidates: total };
+  }
+
+  // Lo que la base dejó pasar por precio de lista, mirado otra vez con el que
+  // se cobra: una oferta puede dejar un producto por debajo de un piso.
+  const dentro = conPrecio
     .map((row, i) => ({ row, i }))
+    .filter(
+      ({ row }) =>
+        (!plan.inStock || availableStock(row) > 0) &&
+        (min === null || row.price >= min) &&
+        (max === null || row.price <= max),
+    );
+  // Exacto si la base devolvió menos de lo pedido; si no, una aproximación.
+  const candidates = rows.length < take ? dentro.length : total - (rows.length - dentro.length);
+
+  let ordenados: FoundRow[];
+  if (sort === "bestseller") {
+    ordenados = dentro.map(({ row }) => ({ ...row, signal: { name: row.name, signal: "none" } }));
+  } else if (sort === "quality") {
+    ordenados = rankQuality(dentro.map(({ row }) => row), lineNames);
+  } else if (sort === "value") {
+    ordenados = rankValue(dentro.map(({ row }) => row), lineNames);
+  } else if (sort === "closest") {
+    const target = plan.target ?? 0;
+    ordenados = dentro
+      .sort(
+        (a, b) =>
+          Math.abs(a.row.price - target) - Math.abs(b.row.price - target) || a.row.price - b.row.price || a.i - b.i,
+      )
+      .map(({ row }) => ({ ...row, signal: { name: row.name, signal: "closest" } }));
+  } else if (sort === "below") {
+    ordenados = dentro
+      .sort((a, b) => b.row.price - a.row.price || a.i - b.i)
+      .slice(0, FLOOR_MISS_ROWS)
+      .map(({ row }) => ({ ...row, signal: { name: row.name, signal: "closest" } }));
+  } else {
+    ordenados = dentro
+      .sort((a, b) => a.row.price - b.row.price || a.i - b.i)
+      .map(({ row }) => ({ ...row, signal: { name: row.name, signal: "price" } }));
+  }
+
+  const totalListable =
+    sort === "quality" || sort === "value"
+      ? rows.length < take
+        ? ordenados.length
+        : Math.max(ordenados.length, Math.round((ordenados.length / Math.max(dentro.length, 1)) * candidates))
+      : sort === "below"
+        ? ordenados.length
+        : candidates;
+  return { rows: ordenados.slice(0, PRODUCT_MATCH_LIMIT), total: totalListable, candidates };
+}
+
+/** «Desde 50 mil no tengo»: se enseñan los tres más cercanos por debajo. */
+const FLOOR_MISS_ROWS = 3;
+
+interface Senales {
+  featured: boolean;
+  brand: "field" | "name" | null;
+  sales: number;
+}
+
+function senales(row: FoundRow, lineNames: string[]): Senales {
+  return {
+    featured: Boolean(row.isFeatured),
+    brand: recognizedBrandSource({ name: row.name, brandRef: row.brandRef ?? null }, lineNames),
+    sales: row.soldCount ?? 0,
+  };
+}
+
+const tieneSenal = (s: Senales) => s.featured || s.brand !== null || s.sales > 0;
+
+function entrada(row: FoundRow, s: Senales): RankingEntry {
+  const signals: QualitySignal[] = [
+    ...(s.featured ? (["featured"] as const) : []),
+    ...(s.brand ? (["brand"] as const) : []),
+    ...(s.sales > 0 ? (["sales"] as const) : []),
+  ];
+  const extra = { signals, ...(s.brand ? { brandSource: s.brand } : {}) };
+  if (s.featured) return { name: row.name, signal: "featured", ...extra };
+  if (s.brand) return { name: row.name, signal: "brand", ...extra };
+  return { name: row.name, signal: "sales", ...extra };
+}
+
+/**
+ * Calidad, sin inventar nada: primero los destacados de la tienda, luego los
+ * de marca reconocida (`recognized-brands.ts`), luego los que más se venden y,
+ * al final, el más caro de los que empatan. Solo entra lo que tiene alguna de
+ * esas señales; si nada la tiene, quien llama cae a «quality.none».
+ */
+function rankQuality(rows: FoundRow[], lineNames: string[]): FoundRow[] {
+  return rows
+    .map((row, i) => ({ row, i, s: senales(row, lineNames) }))
+    .filter(({ s }) => tieneSenal(s))
+    .sort(
+      (a, b) =>
+        Number(b.s.featured) - Number(a.s.featured) ||
+        Number(b.s.brand !== null) - Number(a.s.brand !== null) ||
+        b.s.sales - a.s.sales ||
+        b.row.price - a.row.price ||
+        a.i - b.i,
+    )
+    .map(({ row, s }) => ({ ...row, signal: entrada(row, s) }));
+}
+
+/**
+ * «Buenos y baratos»: la mitad más económica del nivel —los que cuestan lo
+ * mismo o menos que la mediana de lo que cabe en la ventana y hay para
+ * vender (con un número par, la menor de las dos del medio)— y, de ellos,
+ * solo los que tienen señal de calidad, del más económico al más caro.
+ */
+function rankValue(rows: FoundRow[], lineNames: string[]): FoundRow[] {
+  if (rows.length === 0) return [];
+  const ordenPrecio = rows.map((r) => r.price).sort((a, b) => a - b);
+  const mediana = ordenPrecio[Math.floor((ordenPrecio.length - 1) / 2)];
+  return rows
+    .map((row, i) => ({ row, i, s: senales(row, lineNames) }))
+    .filter(({ row, s }) => row.price <= mediana && tieneSenal(s))
     .sort((a, b) => a.row.price - b.row.price || a.i - b.i)
-    .map(({ row }) => row);
-  return { rows: ordenados.slice(0, PRODUCT_MATCH_LIMIT), total };
+    .map(({ row, s }) => ({ ...row, signal: { ...entrada(row, s), signal: "price" as const } }));
 }
 
 /** El ancho que ya usan la tienda y el panel; pedir otro crearía copias nuevas. */
@@ -728,22 +1019,27 @@ export function pickPhoto(
   return listo.trim() ? listo : null;
 }
 
+export type ProductSearchOptions = Omit<SearchOptions, "withDescription">;
+
 export async function resolveProductSearch(
   storeId: string,
   classification: ProductClassification,
-  options: { price?: PriceIntent | null } = {},
+  options: ProductSearchOptions = {},
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
   const found = await runSearch(storeId, buildSearchQuery(classification), options);
   // Sin nada que buscar no se sabe. Cero resultados SÍ se sabe: es «no lo tengo».
   if (!found) return { known: false };
+  const conOrden = Boolean(options.price || options.plan);
   return {
     known: true,
     value: {
       matches: found.rows.map((p) => ({ name: p.name, price: p.price })),
       ids: found.rows.map((p) => p.id),
       total: found.total,
-      hasMore: found.total > PRODUCT_MATCH_LIMIT,
+      hasMore: found.total > found.rows.length,
       photo: found.total === 1 ? pickPhoto(found.rows[0]?.images) : null,
+      ...(conOrden ? { ranking: found.rows.map((p) => p.signal ?? { name: p.name, signal: "none" as const }) } : {}),
+      ...(found.fallback ? { fallback: found.fallback } : {}),
     },
   };
 }
@@ -815,7 +1111,7 @@ export async function resolveAvailability(
 export async function resolveProductPrice(
   storeId: string,
   classification: ProductClassification,
-  options: { price?: PriceIntent | null } = {},
+  options: ProductSearchOptions = {},
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
   // Mismo resultado que la búsqueda: para el precio hace falta lo mismo, y la
   // lista de desambiguación ya lleva los precios, así que sirve de respuesta.
@@ -939,6 +1235,34 @@ export const PRODUCT_TEMPLATES = {
     `Hasta ${tope} no tengo por ahora 💛 Lo más económico que tengo es ${name} en ${price}. ¿Te sirve?`,
   "search.ceiling.none": (tope: string, lineas: string) =>
     `Hasta ${tope} no tengo por ahora 💛 Lo más económico que tengo es:\n${lineas}\n¿Te sirve alguno?`,
+  // «Como de 10 mil»: lo más cerca de esa cifra primero.
+  "search.around.many": (cerca: string, lineas: string, resto: number) =>
+    `Por ${cerca} más o menos, mira lo que tengo 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.range.many": (desde: string, hasta: string, lineas: string, resto: number) =>
+    `Entre ${desde} y ${hasta} tengo varios 💛 Del más económico al más caro:\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.floor.many": (desde: string, lineas: string, resto: number) =>
+    `Desde ${desde} tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.floor.none": (desde: string, lineas: string) =>
+    `Desde ${desde} no tengo por ahora 💛 Lo más cercano que tengo es:\n${lineas}\n¿Te sirve alguno?`,
+  /**
+   * Pidió calidad. El bot no sabe cuál es mejor: dice por qué ordena así y
+   * solo lo que de verdad llevan los que enseña (`qualityParts`): «de marcas
+   * reconocidas» si alguno la tiene, «los que más se llevan» si alguno se ha
+   * vendido, «los que te recomendamos» si alguno es destacado. Nunca «el mejor».
+   */
+  "search.quality.part.featured": () => `los que te recomendamos`,
+  "search.quality.part.brand": () => `los de marcas reconocidas`,
+  "search.quality.part.sales": () => `los que más se llevan`,
+  "search.quality.few": (partes: string, lineas: string) =>
+    `Primero te muestro ${partes} 💛\n${lineas}\n¿Cuál te interesa?`,
+  "search.quality.many": (partes: string, lineas: string, resto: number) =>
+    `Primero te muestro ${partes} 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.value.few": (partes: string, lineas: string) =>
+    `Entre ${partes}, estos son los más económicos 💛\n${lineas}\n¿Cuál te interesa?`,
+  "search.value.many": (partes: string, lineas: string, resto: number) =>
+    `Entre ${partes}, estos son los más económicos 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.quality.none": (lineas: string) =>
+    `No tengo cómo decirte cuál es mejor 💛 Pero mira lo que tengo:\n${lineas}\nDime cuál te interesa y te cuento cómo es.`,
   /**
    * Cero resultados la primera vez: no se pasa a Paula de una. Se manda UN
    * mensaje con el enlace dentro (nunca otro aparte: ya hubo un incidente de
@@ -1054,6 +1378,32 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     total: 0,
     hasMore: false,
   };
+  const conSenales = (...senales: QualitySignal[][]): SearchResult<ProductMatch> => ({
+    ...baratos,
+    ranking: baratos.matches.map((m, i) => ({
+      name: m.name,
+      signal: senales[i]?.[0] ?? "sales",
+      signals: senales[i] ?? ["sales"],
+    })),
+  });
+  const cercanos: SearchResult<ProductMatch> = {
+    matches: [
+      { name: "Agenda mini 2027", price: 10000 },
+      { name: "Libreta kraft A5", price: 9500 },
+      { name: "Cuaderno cosido rayado", price: 11000 },
+    ],
+    total: 12,
+    hasMore: true,
+  };
+  const caros: SearchResult<ProductMatch> = {
+    matches: [
+      { name: "Kit de acuarelas x24", price: 22000 },
+      { name: "Planner semanal tapa dura", price: 25000 },
+      { name: "Set de marcadores x36", price: 38000 },
+    ],
+    total: 8,
+    hasMore: true,
+  };
   const baratos: SearchResult<ProductMatch> = {
     matches: [
       { name: "Micropunta negra 0.4", price: 1500 },
@@ -1108,26 +1458,80 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     },
     {
       label: "Pide lo barato y hay muchos (p. ej. «marcadores baratos»)",
-      text: renderCheapSearch(baratos, { sort: "cheapest", maxPrice: null }),
+      text: renderCheapSearch(baratos, cheapestIntent()),
     },
     {
       label: "Pide lo barato y hay muchos: la lista para tocar",
-      text: buildCheapListBody(3, 14, { sort: "cheapest", maxPrice: null }),
+      text: buildCheapListBody(3, 14, cheapestIntent()),
     },
     {
       label: "Dice un tope y hay pocos (p. ej. «cuadernos de menos de 10 mil»)",
-      text: renderCheapSearch({ ...baratos, total: 3, hasMore: false }, { sort: "cheapest", maxPrice: 10000 }),
+      text: renderCheapSearch({ ...baratos, total: 3, hasMore: false }, cheapestIntent(10000)),
     },
     {
       label: "Dice un tope y hay muchos",
-      text: renderCheapSearch(baratos, { sort: "cheapest", maxPrice: 10000 }),
+      text: renderCheapSearch(baratos, cheapestIntent(10000)),
     },
     {
       label: "Dice un tope: la lista para tocar, con pocos y con muchos",
       text: [
-        buildCheapListBody(3, 3, { sort: "cheapest", maxPrice: 10000 }),
-        buildCheapListBody(3, 14, { sort: "cheapest", maxPrice: 10000 }),
+        buildCheapListBody(3, 3, cheapestIntent(10000)),
+        buildCheapListBody(3, 14, cheapestIntent(10000)),
       ].join("\n\n"),
+    },
+    {
+      label: "Dice «como de 10 mil» y hay muchos (los más cercanos a esa cifra primero)",
+      text: renderPriceSearch(cercanos, { mode: "around", cerca: 10000 }),
+    },
+    {
+      label: "Dice «entre 5 y 15 mil» y hay muchos",
+      text: renderPriceSearch(cercanos, { mode: "range", desde: 5000, hasta: 15000 }),
+    },
+    {
+      label: "Dice «desde 20 mil» y hay muchos",
+      text: renderPriceSearch(caros, { mode: "floor", desde: 20000 }),
+    },
+    {
+      label: "Dice «desde 50 mil» y no hay: los más cercanos por debajo",
+      text: renderFloorMiss(50000, { ...caros, total: 3, hasMore: false }),
+    },
+    {
+      label: "Pide calidad («marcadores buenos»): los enseñados tienen marca reconocida y ventas (pocos, y luego muchos)",
+      text: [
+        renderPriceSearch({ ...conSenales(["brand"], ["sales"], ["sales"]), total: 3, hasMore: false }, { mode: "quality" }),
+        renderPriceSearch(conSenales(["brand"], ["sales"], ["sales"]), { mode: "quality" }),
+      ].join("\n\n"),
+    },
+    {
+      label: "Pide calidad y los enseñados solo tienen ventas",
+      text: renderPriceSearch({ ...conSenales(["sales"], ["sales"], ["sales"]), total: 3, hasMore: false }, { mode: "quality" }),
+    },
+    {
+      label: "Pide calidad y los enseñados solo tienen marca reconocida",
+      text: renderPriceSearch({ ...conSenales(["brand"], ["brand"], ["brand"]), total: 3, hasMore: false }, { mode: "quality" }),
+    },
+    {
+      label: "Pide calidad y hay recomendados de la tienda y con ventas",
+      text: renderPriceSearch({ ...conSenales(["featured"], ["sales"], ["sales"]), total: 3, hasMore: false }, { mode: "quality" }),
+    },
+    {
+      label: "Pide calidad y hay de las tres señales",
+      text: renderPriceSearch({ ...conSenales(["featured"], ["brand"], ["sales"]), total: 3, hasMore: false }, { mode: "quality" }),
+    },
+    {
+      label: "Pide bueno y barato («buenos y baratos») (pocos, y luego muchos)",
+      text: [
+        renderPriceSearch({ ...conSenales(["brand"], ["sales"], ["sales"]), total: 3, hasMore: false }, { mode: "value" }),
+        renderPriceSearch(conSenales(["sales"], ["sales"], ["sales"]), { mode: "value" }),
+      ].join("\n\n"),
+    },
+    {
+      label: "Pide calidad pero ningún producto tiene cómo saberlo (sin destacados, ventas ni marca)",
+      text: renderPriceSearch({ ...baratos, total: 3, hasMore: false }, { mode: "quality.none" }),
+    },
+    {
+      label: "Pide algo sin decir qué («algo barato») y no hay nada",
+      text: renderNoResults("eso", null, `${STORE_ORIGIN}/tienda`),
     },
     {
       label: "Dice un tope y no hay nada por debajo: lo más económico que sí hay",
@@ -1358,43 +1762,92 @@ export function buildPartialListBody(
 }
 
 /**
- * La lista cuando pidió lo barato o dijo un tope: ya viene ordenada del más
- * económico al más caro y solo con lo que hay para vender.
+ * La lista con intención de precio o calidad. Cada texto solo sale cuando lo
+ * que dice es verdad para ese orden: «los más económicos» solo con el orden
+ * por precio, «los que más salen» nunca aquí, y los de calidad dicen por qué
+ * van primero sin decir que son mejores.
  */
-export function renderCheapSearch(
-  result: SearchResult<ProductMatch>,
-  price: PriceIntent,
-): string {
+export function renderPriceSearch(result: SearchResult<ProductMatch>, pt: PriceText): string {
   const t = PRODUCT_TEMPLATES;
   if (result.total <= 1) return renderProductSearch(result);
   const lineas = result.matches
     .map((m) => linea(m.name, formatCOP(m.price)))
     .join("\n");
   const resto = result.total - result.matches.length;
-  if (price.maxPrice !== null) {
-    const tope = formatCOP(price.maxPrice);
-    return result.hasMore
-      ? t["search.ceiling.many"](tope, lineas, resto)
-      : t["search.ceiling.few"](tope, lineas);
+  const muchos = result.hasMore;
+  switch (pt.mode) {
+    case "ceiling": {
+      const tope = formatCOP(pt.tope ?? 0);
+      return muchos ? t["search.ceiling.many"](tope, lineas, resto) : t["search.ceiling.few"](tope, lineas);
+    }
+    case "range":
+      return muchos
+        ? t["search.range.many"](formatCOP(pt.desde ?? 0), formatCOP(pt.hasta ?? 0), lineas, resto)
+        : t["search.few"](lineas);
+    case "floor":
+      return muchos ? t["search.floor.many"](formatCOP(pt.desde ?? 0), lineas, resto) : t["search.few"](lineas);
+    case "around":
+      return muchos ? t["search.around.many"](formatCOP(pt.cerca ?? 0), lineas, resto) : t["search.few"](lineas);
+    case "quality": {
+      const partes = qualityParts(result.ranking?.slice(0, result.matches.length));
+      return muchos ? t["search.quality.many"](partes, lineas, resto) : t["search.quality.few"](partes, lineas);
+    }
+    case "value": {
+      const partes = qualityParts(result.ranking?.slice(0, result.matches.length));
+      return muchos ? t["search.value.many"](partes, lineas, resto) : t["search.value.few"](partes, lineas);
+    }
+    case "quality.none":
+      // Sin «…y N más»: el texto no lo lleva; la lista tocable sí lo dice.
+      return t["search.quality.none"](lineas);
+    default:
+      return muchos ? t["search.cheap.many"](lineas, resto) : t["search.few"](lineas);
   }
-  return result.hasMore ? t["search.cheap.many"](lineas, resto) : t["search.few"](lineas);
 }
 
-export function buildCheapListBody(
-  mostrados: number,
-  total: number,
-  price: PriceIntent,
-): string {
+/**
+ * Lo que se puede decir de los que se enseñan: la unión de sus señales, en
+ * orden fijo (recomendados, marca, ventas) y unida como se habla: «a», «a y
+ * b», «a, b y c». Todo producto de calidad o valor lleva al menos una.
+ */
+export function qualityParts(shown: readonly RankingEntry[] | undefined): string {
   const t = PRODUCT_TEMPLATES;
-  if (price.maxPrice !== null) {
-    const tope = formatCOP(price.maxPrice);
+  const hay = new Set((shown ?? []).flatMap((r) => r.signals ?? []));
+  const partes = [
+    hay.has("featured") ? t["search.quality.part.featured"]() : null,
+    hay.has("brand") ? t["search.quality.part.brand"]() : null,
+    hay.has("sales") ? t["search.quality.part.sales"]() : null,
+  ].filter((p): p is string => p !== null);
+  if (partes.length <= 1) return partes[0] ?? t["search.quality.part.sales"]();
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
+export function buildPriceListBody(mostrados: number, total: number, pt: PriceText): string {
+  const t = PRODUCT_TEMPLATES;
+  if (pt.mode === "ceiling") {
+    const tope = formatCOP(pt.tope ?? 0);
     return total > mostrados
       ? t["list.body.ceiling.many"](tope, mostrados, total - mostrados)
       : t["list.body.ceiling"](tope, mostrados);
   }
-  return total > mostrados
-    ? t["list.body.cheap.many"](mostrados, total - mostrados)
-    : t["list.body.few"](mostrados);
+  if (pt.mode === "cheap" && total > mostrados) return t["list.body.cheap.many"](mostrados, total - mostrados);
+  return buildListBody(mostrados, total);
+}
+
+/** Lo de siempre con lo barato o un tope: `renderPriceSearch` con el texto de esa intención. */
+export function renderCheapSearch(result: SearchResult<ProductMatch>, price: PriceIntent): string {
+  return renderPriceSearch(result, priceTextFor(price));
+}
+
+export function buildCheapListBody(mostrados: number, total: number, price: PriceIntent): string {
+  return buildPriceListBody(mostrados, total, priceTextFor(price));
+}
+
+/** «Desde X no tengo»: los más cercanos por debajo. */
+export function renderFloorMiss(desde: number, result: SearchResult<ProductMatch>): string {
+  const lineas = result.matches
+    .map((m) => linea(m.name, formatCOP(m.price)))
+    .join("\n");
+  return PRODUCT_TEMPLATES["search.floor.none"](formatCOP(desde), lineas);
 }
 
 /** Con el tope no quedó nada: lo más económico que sí hay, diciendo que pasa del tope. */
@@ -1421,6 +1874,7 @@ export function renderCeilingMiss(
 export function renderNoResults(
   busqueda: string,
   categoria: { name: string; slug: string } | null,
+  url?: string,
 ): string {
   const t = PRODUCT_TEMPLATES;
   const frase = busqueda.trim();
@@ -1432,7 +1886,7 @@ export function renderNoResults(
       categoryUrl(categoria.slug),
     );
   }
-  return t["search.none.store"](frase, storeSearchUrl(searchTokens(frase).join(" ") || frase));
+  return t["search.none.store"](frase, url ?? storeSearchUrl(searchTokens(frase).join(" ") || frase));
 }
 
 export function renderAvailability(
@@ -1620,8 +2074,12 @@ export interface ProductDecision {
   outcome: "match" | "partial" | "unsure";
   /** Solo cuando no salió lo pedido: por qué. */
   reason?: ProductNoMatchReason;
-  /** Pidió lo barato o un tope. */
+  /** Pidió lo barato, un tope, una cifra, un rango o calidad. */
   price?: PriceIntent;
+  /** Qué puso a cada producto enseñado donde está, en el mismo orden. */
+  ranking?: RankingEntry[];
+  /** Sin palabra de producto: «all» todo el catálogo, «gift» lo de regalo. */
+  scope?: "all" | "gift";
   /** «catalog»: se buscó sin preguntarle al modelo (todas las palabras eran del catálogo). */
   source?: "catalog";
 }
@@ -1785,7 +2243,10 @@ export async function answerProductQuestionDetailed(
   // la lista de ese estante sí contesta.
   const tokens = searchTokens(consulta);
   const unaDelCatalogo = tokens.length === 1 && isKnownTerm(index, tokens[0]);
-  if (tokens.length < MIN_SEARCH_TOKENS && !unaDelCatalogo) {
+  const sinProducto = tokens.length === 0 && (price !== null || parsed.gift);
+  const regalo = sinProducto && parsed.gift ? giftCategoryIds(index) : null;
+  const extra: ProductSearchOptions = sinProducto ? { emptyQuery: true, scope: regalo, inStock: true } : {};
+  if (tokens.length < MIN_SEARCH_TOKENS && !unaDelCatalogo && !sinProducto) {
     if (tokens.length > 0) {
       console.info("[WHATSAPP_BOT] Pregunta demasiado vaga; no se adivina", {
         storeId,
@@ -1813,12 +2274,14 @@ export async function answerProductQuestionDetailed(
     outcome: "match",
     ...(source === "catalog" ? { source } : {}),
     ...(price ? { price } : {}),
+    ...(sinProducto ? { scope: regalo ? ("gift" as const) : ("all" as const) } : {}),
   };
 
-  const resuelto = await resolverSegunIntencion(storeId, intent, buscar, price);
+  const resuelto = await resolverSegunIntencion(storeId, intent, buscar, price, extra);
   if (!resuelto) return { answer: null, reason: null, detail: "sin_descripcion_util" };
   const { value, text, rows, listBody } = resuelto;
   decision.total = value.total;
+  if ("ranking" in value && value.ranking) decision.ranking = value.ranking;
 
   if (value.total > 0) {
     return {
@@ -1838,7 +2301,7 @@ export async function answerProductQuestionDetailed(
   // Pidió lo barato o un tope y no quedó nada: ¿es que no hay, o que no pasa
   // el filtro? Si hay, se enseña con lo que falla dicho, no se esconde.
   if (price) {
-    const filtrado = await filtradoPorPrecio(storeId, intent, buscar, price, decision);
+    const filtrado = await filtradoPorPrecio(storeId, intent, buscar, price, decision, extra);
     if (filtrado) return { answer: filtrado, reason: "filtered_out" };
   }
 
@@ -1879,7 +2342,11 @@ export async function answerProductQuestionDetailed(
                     rows: filas,
                   }
                 : undefined,
-            decision: { ...decision, outcome: "partial" },
+            decision: {
+              ...decision,
+              outcome: "partial",
+              ...(fact.value.ranking ? { ranking: fact.value.ranking } : {}),
+            },
           },
           reason: null,
         };
@@ -1902,11 +2369,13 @@ export async function answerProductQuestionDetailed(
       reason: "zero_results",
     };
   }
-  const categoria = closestCategory(index, searchTokens(soloTipo?.tipo ?? consulta));
+  const categoria = sinProducto ? null : closestCategory(index, searchTokens(soloTipo?.tipo ?? consulta));
   return {
     answer: {
       intent,
-      text: renderNoResults(consulta, categoria),
+      text: sinProducto
+        ? renderNoResults("eso", null, `${STORE_ORIGIN}/tienda`)
+        : renderNoResults(consulta, categoria),
       noMatchReason: "zero_results",
       decision: { ...decision, outcome: "unsure", reason: "zero_results" },
     },
@@ -1928,10 +2397,13 @@ export async function answerProductQuestion(
 }
 
 /**
- * Con precio no salió nada. Dos casos que se distinguen:
- *  - dijo un tope y todo pasa de él: lo más económico que sí hay, diciéndolo;
- *  - todo lo que hay está agotado: se dice así, producto por producto, con
- *    las plantillas de siempre.
+ * Con precio no salió nada. Las caídas dicen lo que es verdad:
+ *  - «como de X»: lo que hay por debajo de X (texto de tope X) y, si nada,
+ *    lo más económico (texto «hasta X no tengo»);
+ *  - «entre X y Y»: sin el piso, hasta Y; y si nada, lo más económico;
+ *  - «hasta X»: lo más económico que sí hay, diciendo que pasa del tope;
+ *  - «desde X»: los tres más cercanos por debajo;
+ *  - todo lo que hay está agotado: se dice así, producto por producto.
  * `null` si sin el filtro tampoco hay nada: entonces es cero de verdad.
  */
 async function filtradoPorPrecio(
@@ -1940,37 +2412,61 @@ async function filtradoPorPrecio(
   buscar: ProductClassification,
   price: PriceIntent,
   decision: ProductDecision,
+  extra: ProductSearchOptions,
 ): Promise<ProductAnswer | null> {
-  if (price.maxPrice !== null) {
-    const sinTope = await resolveProductSearch(storeId, buscar, {
-      price: { sort: "cheapest", maxPrice: null },
-    });
-    if (sinTope.known && sinTope.value.total > 0) {
-      const v = sinTope.value;
-      const filas = buildProductRows(v.matches, v.ids ?? []);
-      return {
-        intent,
-        text: renderCeilingMiss(price.maxPrice, v),
-        photo: v.photo,
-        shownIds: v.ids,
-        shownPrices: quotedPrices(v.matches),
-        list:
-          v.total >= 2 && filas.length >= 2
-            ? {
-                body: PRODUCT_TEMPLATES["list.body.ceiling.none"](formatCOP(price.maxPrice), filas.length),
-                rows: filas,
-              }
-            : undefined,
-        noMatchReason: "filtered_out",
-        decision: {
-          ...decision,
-          retry: { query: decision.query, total: v.total },
-          outcome: "partial",
-          reason: "filtered_out",
-        },
-      };
-    }
+  const base = { ...extra, price };
+  const plano = (max: number | null): SearchPlan => ({ sort: "cheapest", min: null, max, target: null, inStock: true });
+  const intentar = async (plan: SearchPlan) => {
+    const fact = await resolveProductSearch(storeId, buscar, { ...base, plan });
+    return fact.known && fact.value.total > 0 ? fact.value : null;
+  };
+  const respuesta = (v: SearchResult<ProductMatch>, text: string, listBody: string): ProductAnswer => {
+    const filas = buildProductRows(v.matches, v.ids ?? []);
+    return {
+      intent,
+      text,
+      photo: v.photo,
+      shownIds: v.ids,
+      shownPrices: quotedPrices(v.matches),
+      list: v.total >= 2 && filas.length >= 2 ? { body: listBody, rows: filas } : undefined,
+      noMatchReason: "filtered_out",
+      decision: {
+        ...decision,
+        retry: { query: decision.query, total: v.total },
+        outcome: "partial",
+        reason: "filtered_out",
+        ...(v.ranking ? { ranking: v.ranking } : {}),
+      },
+    };
+  };
+  const sinNadaPorDebajo = async (tope: number) => {
+    const v = await intentar(plano(null));
+    if (!v) return null;
+    const filas = Math.min(v.matches.length, PRODUCT_MATCH_LIMIT);
+    return respuesta(v, renderCeilingMiss(tope, v), PRODUCT_TEMPLATES["list.body.ceiling.none"](formatCOP(tope), filas));
+  };
+  const hastaTope = async (tope: number) => {
+    const v = await intentar(plano(tope));
+    if (!v) return null;
+    const pt: PriceText = { mode: "ceiling", tope };
+    return respuesta(v, renderPriceSearch(v, pt), buildPriceListBody(v.matches.length, v.total, pt));
+  };
+
+  if (price.kind === "around" && price.target !== null) {
+    const hit = (await hastaTope(price.target)) ?? (await sinNadaPorDebajo(price.target));
+    if (hit) return hit;
+  } else if (price.kind === "range" && price.maxPrice !== null) {
+    const hit = (await hastaTope(price.maxPrice)) ?? (await sinNadaPorDebajo(price.maxPrice));
+    if (hit) return hit;
+  } else if (price.kind === "ceiling" && price.maxPrice !== null) {
+    const hit = await sinNadaPorDebajo(price.maxPrice);
+    if (hit) return hit;
+  } else if (price.kind === "floor" && price.minPrice !== null) {
+    const v = await intentar({ sort: "below", min: null, max: price.minPrice - 1, target: null, inStock: true });
+    if (v) return respuesta(v, renderFloorMiss(price.minPrice, v), buildListBody(v.matches.length, v.total));
   }
+  // Sin palabra de producto no hay «agotados» que enseñar: es cero de verdad.
+  if (extra.emptyQuery) return null;
   const agotados = await resolveAvailability(storeId, buscar);
   if (!agotados.known || agotados.value.total === 0) return null;
   const v = agotados.value;
@@ -2000,6 +2496,7 @@ async function resolverSegunIntencion(
   intent: ProductIntent,
   buscar: ProductClassification,
   price: PriceIntent | null = null,
+  extra: ProductSearchOptions = {},
 ): Promise<{
   value: SearchResult<ProductMatch | AvailabilityMatch | FeaturesMatch>;
   text: string;
@@ -2010,15 +2507,26 @@ async function resolverSegunIntencion(
   // por precio, y solo con lo que hay (así que «si queda» ya está contestado).
   // La foto de un único producto sigue saliendo como foto.
   if (price) {
-    const fact = await resolveProductSearch(storeId, buscar, { price });
+    const fact = await resolveProductSearch(storeId, buscar, { ...extra, price });
     if (!fact.known) return null;
     const v = fact.value;
     const rows = buildProductRows(v.matches, v.ids ?? []);
+    const pt = priceTextFor(price, v.fallback);
     return {
       value: v,
-      text: intent === "product.photo" && v.total === 1 ? renderProductPhoto(v) : renderCheapSearch(v, price),
+      text: intent === "product.photo" && v.total === 1 ? renderProductPhoto(v) : renderPriceSearch(v, pt),
       rows,
-      listBody: buildCheapListBody(rows.length, v.total, price),
+      listBody: buildPriceListBody(rows.length, v.total, pt),
+    };
+  }
+  // Un regalo sin precio: lo más vendido de lo de regalo, solo lo que hay.
+  if (extra.emptyQuery) {
+    const fact = await resolveProductSearch(storeId, buscar, extra);
+    if (!fact.known) return null;
+    return {
+      value: fact.value,
+      text: renderProductSearch(fact.value),
+      rows: buildProductRows(fact.value.matches, fact.value.ids ?? []),
     };
   }
   if (intent === "product.availability") {

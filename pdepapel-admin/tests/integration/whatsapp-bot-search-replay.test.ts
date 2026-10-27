@@ -57,7 +57,13 @@ beforeAll(async () => {
   const design = await testPrisma.design.create({ data: { name: "Clásico", storeId } });
   const color = await testPrisma.color.create({ data: { name: "Negro", value: `#n-${suffix}`.slice(0, 20), storeId } });
   const size = await testPrisma.size.create({ data: { name: "U", value: `u-rep-${suffix}`, storeId } });
+  // Lo de regalo: el tipo «Kits», y un empaque que nunca debe salir.
+  const kits = await testPrisma.type.create({ data: { name: "Kits", slug: `kits-rep-${suffix}`, storeId } });
+  const kitsEscolares = await testPrisma.category.create({ data: { name: "Kits escolares", slug: `kits-escolares-rep-${suffix}`, storeId, typeId: kits.id } });
+  const empaques = await testPrisma.category.create({ data: { name: "Empaques para regalo", slug: `empaques-rep-${suffix}`, storeId, typeId: type.id } });
   const products: [string, number, number, string][] = [
+    ["Kit escolar básico", 15000, 4, kitsEscolares.id],
+    ["Bolsa de regalo", 3000, 9, empaques.id],
     ["Set de marcadores x12", 16000, 50, cat.id],
     ["Marcador doble punta", 4000, 10, cat.id],
     ["Marcador permanente delgado", 2000, 3, cat.id],
@@ -125,6 +131,23 @@ describe("«marcadores baratos» por el bot entero", () => {
     expect(mocks.sent[0]).toMatch(/^¡Hola! /);
     expect(mocks.sent[0]).toContain("Marcador permanente delgado");
     expect(mocks.sent[0]).not.toContain("Cuéntame qué estás buscando");
+  });
+
+  it("«marcadores buenos» contesta sin el clasificador: los que más se llevan primero, sin prometer calidad", async () => {
+    const result = await ask(await chat(), "marcadores buenos");
+    expect(result.outcome).toBe("replied_product");
+    expect(mocks.sent[0]).toContain("Set de marcadores");
+    expect(mocks.sent[0]).not.toMatch(/los mejores|la mejor calidad|no se secan/i);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("«tengo 20 mil para un regalo» contesta con lo de regalo, nunca con el empaque", async () => {
+    const result = await ask(await chat(), "tengo 20 mil para un regalo");
+    expect(result.outcome).toBe("replied_product");
+    expect(mocks.sent[0]).toContain("Kit escolar básico");
+    expect(mocks.sent[0]).not.toContain("Bolsa de regalo");
+    expect(mocks.sent[0]).not.toContain("Marcador");
+    expect(mocks.generateText).not.toHaveBeenCalled();
   });
 
   it("lo que no es de productos queda con su motivo archivado", async () => {
