@@ -1789,11 +1789,11 @@ export function renderPriceSearch(result: SearchResult<ProductMatch>, pt: PriceT
     case "around":
       return muchos ? t["search.around.many"](formatCOP(pt.cerca ?? 0), lineas, resto) : t["search.few"](lineas);
     case "quality": {
-      const partes = qualityParts(result.ranking?.slice(0, result.matches.length));
+      const partes = qualityParts(result.ranking?.slice(0, Math.min(QUALITY_CLAIM_ROWS, result.matches.length)));
       return muchos ? t["search.quality.many"](partes, lineas, resto) : t["search.quality.few"](partes, lineas);
     }
     case "value": {
-      const partes = qualityParts(result.ranking?.slice(0, result.matches.length));
+      const partes = qualityParts(result.ranking?.slice(0, Math.min(QUALITY_CLAIM_ROWS, result.matches.length)));
       return muchos ? t["search.value.many"](partes, lineas, resto) : t["search.value.few"](partes, lineas);
     }
     case "quality.none":
@@ -1803,6 +1803,13 @@ export function renderPriceSearch(result: SearchResult<ProductMatch>, pt: PriceT
       return muchos ? t["search.cheap.many"](lineas, resto) : t["search.few"](lineas);
   }
 }
+
+/**
+ * La frase de apertura habla de los primeros que se ven, no de toda la lista:
+ * con «buenos y baratos» la única fila de marca era la séptima de nueve y el
+ * texto decía «de marcas reconocidas» (2026-10-27).
+ */
+export const QUALITY_CLAIM_ROWS = 3;
 
 /**
  * Lo que se puede decir de los que se enseñan: la unión de sus señales, en

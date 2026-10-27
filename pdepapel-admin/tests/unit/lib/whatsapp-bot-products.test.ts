@@ -2480,6 +2480,24 @@ describe("los textos por modo: cada uno solo cuando lo que dice es verdad", () =
     expect(t).not.toContain("marcas reconocidas");
   });
 
+  it("la apertura habla de los tres primeros: una marca en la séptima fila no se anuncia", () => {
+    // «buenos y baratos» en producción, 2026-10-27: la única fila de marca era la 7.ª de 9.
+    const nueve = {
+      matches: Array.from({ length: 9 }, (_, i) => ({ name: `P${i + 1}`, price: 400 + i * 100 })),
+      total: 30,
+      hasMore: true,
+    };
+    const ranking = nueve.matches.map((m, i) => ({
+      name: m.name,
+      signal: "price" as const,
+      signals: i === 6 ? (["brand", "sales"] as const) : (["sales"] as const),
+    }));
+    const valor = renderPriceSearch({ ...nueve, ranking } as never, { mode: "value" });
+    expect(valor.split("\n")[0]).toBe("Entre los que más se llevan, estos son los más económicos 💛");
+    const arriba = ranking.map((r, i) => (i === 1 ? { ...r, signals: ["brand", "sales"] as const } : r));
+    expect(renderPriceSearch({ ...nueve, ranking: arriba } as never, { mode: "value" })).toContain("de marcas reconocidas");
+  });
+
   it("la lista tocable de los modos nuevos es la neutra", () => {
     for (const mode of ["around", "range", "floor", "quality", "value", "quality.none"] as const) {
       expect(buildPriceListBody(3, 3, { mode })).toBe(PRODUCT_TEMPLATES["list.body.few"](3));

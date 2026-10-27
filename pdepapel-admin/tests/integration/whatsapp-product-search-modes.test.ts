@@ -253,11 +253,8 @@ describe("calidad y valor", () => {
     expect(answer?.shownIds).not.toContain(ids.normal);
     expect(answer?.shownIds).not.toContain(ids.primaveral);
     expect(answer?.shownIds).not.toContain(ids.resaltador);
-    expect(
-      answer?.text.startsWith(
-        "Primero te muestro los que te recomendamos, los de marcas reconocidas y los que más se llevan 💛",
-      ),
-    ).toBe(true);
+    // La apertura habla de las tres primeras (destacado, marca, marca): sin ventas ahí, no las anuncia.
+    expect(answer?.text.split("\n")[0]).toBe("Primero te muestro los que te recomendamos y los de marcas reconocidas 💛");
     expect(answer?.text).not.toMatch(/mejores|mejor calidad/i);
   });
 
