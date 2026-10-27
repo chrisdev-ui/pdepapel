@@ -39,3 +39,24 @@ vi.mock("@upstash/redis", () => ({
     }
   },
 }));
+
+/**
+ * El trabajo en segundo plano de las rutas se anota para que la limpieza de la
+ * fixture lo espere (`drainBackground`, helpers/background.ts). Corre igual que
+ * en producción: `runInBackground` real, solo con la promesa a la vista. Un
+ * archivo que mockee `@/lib/background` por su cuenta manda sobre esto.
+ */
+vi.mock("@/lib/background", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/background")>();
+  const { trackBackground } = await import("./helpers/background");
+  return {
+    ...actual,
+    runInBackground: (label: string, task: () => Promise<unknown>) =>
+      actual.runInBackground(label, () => {
+        const run = Promise.resolve().then(task);
+        trackBackground(run);
+        return run;
+      }),
+  };
+});
+

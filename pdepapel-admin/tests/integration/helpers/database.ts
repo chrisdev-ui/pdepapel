@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 
 import { assertTestDatabaseEnv } from "../../../scripts/lib/test-database.mjs";
+import { drainBackground } from "./background";
 
 const testDatabaseUrl = assertTestDatabaseEnv(process.env, "integración");
 
@@ -86,6 +87,8 @@ export async function createInventoryFixture() {
 }
 
 export async function deleteInventoryFixture(fixture: InventoryFixture) {
+  // Un aviso o correo que la prueba dejó corriendo puede escribir filas de la tienda después de borrar los pedidos.
+  await drainBackground();
   const productIds = [fixture.component.id, fixture.kit.id];
   const fairEvents = await testPrisma.fairEvent.findMany({
     where: { storeId: fixture.store.id },
@@ -239,5 +242,7 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.orderInventoryIssue.deleteMany({
     where: { storeId: fixture.store.id },
   });
+  // Un aviso de envío tardío puede dejar su fila aunque el pedido ya no exista.
+  await testPrisma.orderNotification.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.store.delete({ where: { id: fixture.store.id } });
 }
