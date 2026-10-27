@@ -304,6 +304,7 @@
       <p>Inicio responde una sola pregunta: <em>¿qué necesita mi atención ahora?</em> No es un tablero de gráficas; es la lista de lo urgente.</p>
       <ol class="steps">
         <li><strong>Las cuatro tarjetas</strong> resumen el día: ventas de hoy (con el ojo puedes ocultar la cifra si hay gente mirando), pedidos por despachar, pagos por verificar y productos con stock crítico. Cada tarjeta enlaza a la lista correspondiente.</li>
+        <li><strong>Clientas esperando</strong> lista los chats de WhatsApp donde una clienta lleva <strong>30 minutos o más</strong> sin respuesta (el número lo cambias en Configuración, ver <a href="#aviso-esperando">Aviso de clientas esperando</a>). Cada fila dice solo <strong>Conversación · hace 42 min</strong> y abre el chat: <strong>no sale el nombre, el teléfono ni lo que escribió</strong>. Se ven ocho, de la que más lleva a la que menos; <strong>Ver en Conversaciones</strong> abre el resto. Si no hay nadie, dice «Ninguna clienta lleva 30 min o más sin respuesta». Solo la ves tú: la cuenta de solo lectura no tiene esta tarjeta.</li>
         <li><strong>Pendientes de acción</strong> reúne, en orden de urgencia, lo que hay que hacer: verificar una transferencia, crear una guía, reponer un producto. El botón de cada fila te lleva justo al lugar donde se resuelve.</li>
         <li><strong>Esta semana</strong> muestra lo vendido por día separando tienda en línea y presencial; <strong>Más vendidos</strong> lista los tres productos que más salieron en la última semana.</li>
         <li><strong>Registrar venta presencial</strong> (arriba a la derecha) abre el punto de venta de inmediato.</li>
@@ -365,7 +366,19 @@
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-envio" alt="La sección «Envío y empaque»: tipo de envío, cotización guardada y el único botón de crear guía." loading="lazy" width="1440" height="900"></div><figcaption>La sección «Envío y empaque»: tipo de envío, cotización guardada y el único botón de crear guía.</figcaption></figure>
       <h3>Avisos a la clienta</h3>
       <p>Cuando se crea la guía (con EnvioClick o escribiendo el número de otra transportadora), la clienta recibe <strong>«Tu pedido ya tiene guía de envío»</strong> con la transportadora, el número de guía y el enlace para seguirlo. Después le llegan <strong>en tránsito</strong>, <strong>sale a entrega</strong>, <strong>entregado</strong> o <strong>novedad</strong>, una sola vez cada uno. Tú recibes copia solo de las entregas y las novedades. Si después marcas el pedido como «Enviado», no le llega otro correo: ya la avisaron con la guía.</p>
-      <p>La tarjeta <strong>Avisos a la clienta</strong> del pedido muestra qué salió, qué falló y por qué. <strong>Reenviar</strong> lo manda otra vez. Si la clienta pidió los avisos por WhatsApp en el chat (solo pedidos que llegaron por WhatsApp), pulsa <strong>Los pidió en el chat</strong>; si ya no los quiere, <strong>Quitar avisos por WhatsApp</strong>. En la tienda ella misma marca la casilla. El WhatsApp sale solo con las plantillas aprobadas y el interruptor encendido en Configuración; el correo sale siempre.</p>
+      <p>La tarjeta <strong>Avisos a la clienta</strong> del pedido muestra qué salió, qué falló y por qué. <strong>Reenviar</strong> lo manda otra vez. Si la clienta pidió los avisos por WhatsApp en el chat (solo pedidos que llegaron por WhatsApp), pulsa <strong>Los pidió en el chat</strong>; si ya no los quiere, <strong>Quitar avisos por WhatsApp</strong>. En la tienda ella misma marca la casilla. El WhatsApp sale solo con las plantillas aprobadas y el interruptor encendido en Configuración (ver <a href="#avisos-envio-whatsapp">Avisos de envío por WhatsApp</a>); el correo sale siempre.</p>
+      <p>Si la clienta escribe <strong>BAJA</strong> en el chat, el pedido queda con «Pidió no recibir avisos por WhatsApp» y la fecha. Es lo mismo que pulsar <strong>Quitar avisos por WhatsApp</strong>. Ver <a href="#baja">Cuando una clienta escribe «BAJA»</a>.</p>
+      <h3 id="sin-avisar">Cambiar estado sin avisar</h3>
+      <p>A veces hay que poner al día un pedido viejo, por ejemplo uno que ya entregaste hace meses. Si cambias el estado como siempre, a la clienta le llega un correo que ya no tiene sentido.</p>
+      <ol class="steps">
+        <li>Al cambiar el estado del pedido (o de varios desde la lista), <strong>quita la marca de «Avisar a la clienta»</strong>.</li>
+        <li>Confirma. El estado cambia y <strong>no le llega ni correo ni WhatsApp</strong>.</li>
+      </ol>
+      <ul class="list">
+        <li>En la tarjeta <strong>Avisos a la clienta</strong> queda la nota «Cambio de estado sin avisar», con el estado nuevo, la fecha y quién lo hizo.</li>
+        <li>Una <strong>tarjeta de regalo</strong> pagada se entrega igual: el código le llega a quien la recibe, porque sin eso no puede usarla.</li>
+        <li>Úsalo solo para arreglos. En un pedido del día, deja la marca puesta: la clienta espera el aviso.</li>
+      </ul>
       <h3>Cuando el pedido es un regalo</h3>
       <p>Una clienta puede comprar para otra persona, desde la tienda (la casilla <strong>¿Es un regalo?</strong> en «Tus datos») o desde el panel. En la sección <strong>Regalo</strong>, debajo de Cliente, enciende <strong>Es un regalo</strong> y escribe <strong>quién lo recibe</strong> (obligatorio); su correo, su teléfono y el mensaje son opcionales.</p>
       <ul class="list">
@@ -389,6 +402,7 @@
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-nuevo" alt="El nuevo pedido con sus secciones como accesos rápidos." loading="lazy" width="1440" height="900"></div><figcaption>El nuevo pedido con sus secciones como accesos rápidos.</figcaption></figure>
       <h3>Acciones desde la lista</h3>
       <p>El menú de fila: <strong>Copiar ID</strong>, <strong>Copiar enlace del pedido</strong>, <strong>Enviar WhatsApp al cliente</strong>, <strong>Copiar número del pedido</strong>, <strong>Actualizar</strong> (abre el pedido) y <strong>Eliminar</strong>, que solo está disponible para pedidos que nunca fueron pagados. Las cotizaciones por enlace y sus plantillas se retiraron en septiembre de 2026.</p>
+      <p>Al cambiar el estado de varios pedidos marcados, también puedes quitar <strong>Avisar a la clienta</strong> para que ninguna reciba correo ni WhatsApp (ver <a href="#sin-avisar">Cambiar estado sin avisar</a>).</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedidos-menu" alt="El menú de una fila de pedidos." loading="lazy" width="1440" height="900"></div><figcaption>El menú de una fila de pedidos.</figcaption></figure>
     </section>
 
@@ -667,7 +681,8 @@
       <h3>La lista</h3>
       <p>Arriba dice cuántas conversaciones esperan tu respuesta. Cada fila trae el nombre que la clienta tiene puesto en WhatsApp, su teléfono, el último mensaje y cuándo llegó. Si el mensaje era una foto, un audio o un sticker, verás el tipo entre paréntesis en vez del texto.</p>
       <p>Debajo del teléfono dice de qué país es. Los de Colombia salen cortos («300 1234567»); los de otro país salen completos con su indicativo y el nombre resaltado, por ejemplo <strong>+86 138 0000 0000 · China</strong>. Sirve para no confundir un número de afuera con un celular local antes de contestar o de cotizar un envío.</p>
-      <p>En el menú lateral, junto a <strong>Conversaciones</strong>, aparece un número cuando hay chats esperándote. Es la misma cuenta de «Necesita respuesta»: si dice 3, hay tres conversaciones que el bot no supo contestar. Desaparece solo cuando las respondes desde tu celular.</p>
+      <p>En el menú lateral, junto a <strong>Conversaciones</strong>, aparece un número cuando hay <strong>clientas esperando</strong>: si dice 3, hay tres chats donde la clienta escribió de último y lleva 30 minutos o más sin respuesta (o los minutos que pusiste en Configuración). Es la misma cuenta de la tarjeta «Clientas esperando» de Inicio. Cuenta también los chats donde el bot está pausado porque escribiste tú. El número baja cuando le respondes o la marcas como atendida.</p>
+      <div class="note tip"><strong>Dos tiempos distintos</strong><p>El filtro <strong>Esperando a Paula</strong> de esta pantalla muestra las esperas desde los <strong>15 minutos</strong>, para que te adelantes. La tarjeta de Inicio, el número del menú y los avisos al celular cuentan desde los <strong>30 minutos</strong> (o lo que pusiste en Configuración).</p></div>
       <div class="table-wrap"><table class="states">
         <tr><th>Estado</th><th>Qué significa</th></tr>
         <tr><td><span class="pill mint">Abierta</span></td><td>Conversación normal, al día.</td></tr>
@@ -691,6 +706,34 @@
       <p>Se lee como el chat: los mensajes de la clienta a la izquierda, los tuyos a la derecha. Las respuestas automáticas del bot salen con borde punteado para que se distingan de lo que escribiste tú. La clienta no ve esa diferencia; tú sí.</p>
       <h3>Cuando te mandan un carrito</h3>
       <p>Si la clienta arma un carrito desde el catálogo de WhatsApp, verás los productos con su cantidad y el total <strong>con los precios de hoy</strong>. Si algo cambió desde que ella lo armó, el panel te avisa debajo: precios que subieron o bajaron, productos sin existencias suficientes, o productos que ya no están en el catálogo. Revisa eso <em>antes</em> de confirmarle un total.</p>
+      <h3 id="bot-productos">Cuando preguntan por productos: precio y calidad</h3>
+      <p>Si la clienta pregunta por un producto, el bot busca en el catálogo y le muestra opciones con existencias. Ahora también entiende <strong>cuánto quiere gastar</strong> y si quiere <strong>algo bueno</strong>.</p>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Si escribe</th><th>Qué le muestra</th></tr>
+        <tr><td>«cuadernos baratos», «que no sea caro»</td><td>Lo más económico primero.</td></tr>
+        <tr><td>«menos de 20 mil», «tengo 15.000»</td><td>Solo lo que cuesta eso o menos.</td></tr>
+        <tr><td>«como de 10 lucas»</td><td>Lo que está cerca de ese precio, un poco más o un poco menos.</td></tr>
+        <tr><td>«entre 2 y 5 mil»</td><td>Lo que cae en ese rango.</td></tr>
+        <tr><td>«más de 30 mil»</td><td>De ahí para arriba, del más barato al más caro.</td></tr>
+        <tr><td>«buenos», «de marca», «cuál me recomiendas»</td><td>Primero lo <strong>Destacado</strong>, después lo de marcas reconocidas y después lo que más se vende.</td></tr>
+      </table></div>
+      <p>Entiende los montos escritos de muchas formas: 10000, 10.000, $10.000, 10 mil, 10k, diez mil o 10 lucas. «Cuaderno de 100 hojas» o «kit de 3 piezas» no los toma como precio.</p>
+      <ul class="list">
+        <li>Cuando pide calidad, el bot nunca dice «los mejores». Dice solo lo que es cierto de lo que muestra: «los que te recomendamos», «los de marcas reconocidas» o «los que más se llevan».</li>
+        <li>Si no dice qué producto busca («algo barato», «cuál me recomiendas»), le manda un <strong>menú con las cinco secciones que más se venden</strong> y que tienen existencias, para que elija. En el de precio, cada sección dice desde cuánto. Empaques, sobres, foami y bolsas no salen en ese menú. El mismo menú sale cuando una búsqueda así no encuentra nada.</li>
+        <li>Si habla de un regalo («para regalar», «un detallito»), busca en <strong>Kits</strong> y en las categorías de regalos.</li>
+      </ul>
+      <div class="note tip"><strong>Para que salga primero lo que tú quieres</strong><p>Marca como <strong>Destacado</strong> (en la ficha del producto, en Visibilidad) lo que recomiendas. Eso es lo primero que ve una clienta que pide algo bueno. La lista de marcas reconocidas (Norma, Kiut, Primavera, Scribe, Offi-Esco, Klipp, Crayola, Incolors, Grafi, Kores, Sharpie, Tombow, Mirado, Studmark y Gipao) la mantiene Christian; si quieres sumar o quitar una, díselo. Una marca cuenta si está puesta en el producto o si aparece en su nombre. Los personajes (Stitch, Sanrio, Hello Kitty, Kuromi, Disney, Pokémon) no cuentan como marca de calidad.</p></div>
+      <h3 id="baja">Cuando una clienta escribe «BAJA»</h3>
+      <p>Si una clienta escribe solo <strong>BAJA</strong>, <strong>stop</strong>, <strong>no más avisos</strong> o <strong>darme de baja</strong>, el bot deja de mandarle por WhatsApp los avisos de sus pedidos y le contesta una vez:</p>
+      <p><em>«Listo 💛 Ya no te enviaremos avisos de tus pedidos por WhatsApp. Si cambias de opinión, escríbenos por aquí.»</em></p>
+      <ul class="list">
+        <li>Tiene que ser el mensaje completo. «¿Tienen la carpeta baja?» es una pregunta por un producto y el bot la contesta normal.</li>
+        <li>Funciona aunque el bot esté apagado o tú estés en la conversación. Si repite «BAJA», la confirmación sale como mucho una vez al día.</li>
+        <li>Se marca en todos sus pedidos con ese teléfono. En la tarjeta <strong>Avisos a la clienta</strong> de cada pedido dice «Pidió no recibir avisos por WhatsApp» y la fecha.</li>
+        <li>Solo para los avisos de pedidos. Los <strong>correos le siguen llegando</strong> y el bot le sigue contestando sus preguntas.</li>
+      </ul>
+      <div class="note care"><strong>Si cambia de opinión</strong><p>Escribir otra vez en el chat no vuelve a encender los avisos solo. En un pedido que llegó por WhatsApp, abre el pedido y pulsa <strong>Los pidió en el chat</strong> en la tarjeta «Avisos a la clienta». En un pedido de la tienda no se puede encender desde el panel: en su próxima compra ella vuelve a marcar la casilla de avisos por WhatsApp.</p></div>
       <h3>Respuestas automáticas</h3>
       <p>Desde el botón <strong>Respuestas automáticas</strong> defines qué contesta el bot solo. Funciona por palabra clave: si el mensaje de la clienta contiene alguna de las frases que escribiste, contesta lo que hayas puesto. Si no coincide ninguna, <strong>no contesta nada</strong> y te deja la conversación marcada.</p>
       <ol class="steps">
@@ -1278,6 +1321,38 @@
         <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ajustes-pagos" alt="Pagos: estado de Bold, Wompi, transferencia y efectivo." loading="lazy" width="1440" height="900"></div><figcaption>Pagos: estado de Bold, Wompi, transferencia y efectivo.</figcaption></figure>
       </div>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ajustes-integraciones" alt="Integraciones: qué servicio está conectado y cómo reconectarlo." loading="lazy" width="1440" height="900"></div><figcaption>Integraciones: qué servicio está conectado y cómo reconectarlo.</figcaption></figure>
+      <h3 id="aviso-esperando">Aviso de clientas esperando</h3>
+      <p>En <strong>Configuración › Tienda › Datos del negocio</strong>, en «Mientras la clienta te espera», está <strong>Avisarme cuando una clienta lleve <em>N</em> min sin respuesta</strong>. Viene en <strong>30</strong>; puedes poner de 5 a 240 minutos y pulsar <strong>Guardar</strong>. Con ese número cuentan la tarjeta «Clientas esperando» de Inicio, el número junto a Conversaciones en el menú y los avisos en tus aparatos.</p>
+      <h3 id="avisos-aparato">Avisos en cada aparato</h3>
+      <p>Debajo del número está <strong>Avisos en este aparato</strong>. Si lo activas, tu celular o tu computador te avisa cuando una clienta lleva esos minutos sin respuesta. Llega un aviso por espera, que dice «Una clienta lleva X min esperando» y abre Conversaciones. <strong>No dice quién es ni qué escribió.</strong></p>
+      <ul class="list">
+        <li>Se activa <strong>en cada aparato por separado</strong>: entra al panel desde ese celular o computador y hazlo ahí.</li>
+        <li><strong>Android o computador</strong>: pulsa <strong>Activar avisos en este aparato</strong> y, cuando el navegador pregunte, dale <strong>Permitir</strong>. Debe quedar «Activado en este aparato.»</li>
+        <li><strong>iPhone o iPad</strong>: primero abre el panel en <strong>Safari</strong>, toca <strong>Compartir</strong> › <strong>Agregar a pantalla de inicio</strong>. Abre el panel desde ese ícono nuevo, ve a Configuración y ahí pulsa <strong>Activar avisos en este aparato</strong>. Si lo intentas desde Safari normal, el iPhone no deja recibirlos.</li>
+        <li>Para apagarlos, en ese mismo aparato pulsa <strong>Desactivar</strong>.</li>
+        <li>Si dice «Bloqueado por el navegador», alguna vez se negó el permiso: ábrelo en los ajustes del navegador para este sitio y vuelve a intentar.</li>
+      </ul>
+      <div class="note tip"><strong>De noche no suena</strong><p>Los avisos llegan solo de <strong>7 a. m. a 9:59 p. m.</strong> Una espera que empieza de noche no avisa, ni siquiera a la mañana siguiente: en la mañana mira la tarjeta de Inicio. No sale correo ni WhatsApp por esto.</p></div>
+      <h3 id="avisos-envio-whatsapp">Avisos de envío por WhatsApp</h3>
+      <p>En Configuración › Tienda › Datos del negocio, la parte <strong>Avisos de envío por WhatsApp</strong> decide si los avisos del envío también salen por WhatsApp. El correo sale siempre, esté encendido o no.</p>
+      <ol class="steps">
+        <li>Las plantillas tienen que estar <strong>aprobadas en WhatsApp Manager</strong>.</li>
+        <li>Escribe el nombre exacto de cada plantilla en su casilla, como aparece en WhatsApp Manager (en la tabla de abajo).</li>
+        <li>Enciende <strong>Mandar avisos de envío por WhatsApp</strong> y pulsa <strong>Guardar</strong>.</li>
+      </ol>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Casilla</th><th>Nombre de la plantilla</th></tr>
+        <tr><td><strong>Plantilla «ya tiene guía»</strong></td><td><code>guia_creada</code></td></tr>
+        <tr><td><strong>Plantilla «en tránsito»</strong></td><td><code>pedido_en_transito</code></td></tr>
+        <tr><td><strong>Plantilla «en reparto»</strong></td><td><code>pedido_en_reparto</code></td></tr>
+        <tr><td><strong>Plantilla «entregado»</strong></td><td><code>pedido_entregado</code></td></tr>
+        <tr><td><strong>Plantilla «novedad»</strong></td><td><code>pedido_novedad</code></td></tr>
+      </table></div>
+      <ul class="list">
+        <li>Si una casilla queda vacía, ese aviso sale solo por correo. Puedes llenar solo las plantillas que ya te aprobaron.</li>
+        <li>Solo le llegan a quien marcó <strong>Recibir avisos de mi pedido por WhatsApp</strong> al comprar en la tienda, o a quien los pidió en el chat y tú lo anotaste en el pedido.</li>
+        <li>Si la clienta escribe <strong>BAJA</strong>, dejan de llegarle (ver <a href="#baja">Cuando una clienta escribe «BAJA»</a>).</li>
+      </ul>
       <div class="note care"><strong>Zona de cuidado</strong><p>«Eliminar tienda» borra catálogo y pedidos y no se puede deshacer. Solo la dueña debería entrar a Avanzado.</p></div>
     </section>
 
