@@ -457,3 +457,4 @@
 2026-10-26T21:55:19.210Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Avisos de envío y WhatsApp (20261102_add_order_notifications)"
 2026-10-27T13:36:36.352Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Aviso de clientas esperando y push (20261103_add_waiting_alert_and_web_push)"
 2026-10-27T14:29:44.306Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-release-needs-owner.mjs@1d3210fdffd10830 | estado=ok | exit=0 | rows=21 | "Liberar conversaciones NEEDS_OWNER viejas (fix 6 del bot)"
+2026-10-27T16:45:08.987Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Plantillas de avisos 3 a 5 (20261104_add_whatsapp_templates_transit_delivery_issue)"
