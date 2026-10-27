@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789",
     WHATSAPP_APP_SECRET: undefined as string | undefined,
     CHAKRA_WEBHOOK_SECRET: undefined as string | undefined,
+    CHAKRA_WEBHOOK_ENFORCE: undefined as string | undefined,
   },
 }));
 
@@ -493,6 +494,7 @@ describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", 
     vi.clearAllMocks();
     mocks.env.WHATSAPP_APP_SECRET = undefined;
     mocks.env.CHAKRA_WEBHOOK_SECRET = CHAKRA_SECRET;
+    mocks.env.CHAKRA_WEBHOOK_ENFORCE = "true";
     mocks.findFirst.mockResolvedValue({ id: "conn-1", storeId: "store-1", selfPhone: null, selfBsuid: null });
     mocks.upsert.mockResolvedValue({ id: "event-self", connectionId: "conn-1" });
     mocks.ignoredFindFirst.mockResolvedValue(null);
@@ -508,28 +510,29 @@ describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", 
     info.mockRestore();
     warn.mockRestore();
     mocks.env.CHAKRA_WEBHOOK_SECRET = undefined;
+    mocks.env.CHAKRA_WEBHOOK_ENFORCE = undefined;
   });
 
   const authLog = () => info.mock.calls.find((call: unknown[]) => call[0] === "[WHATSAPP_WEBHOOK] auth")?.[1];
 
-  it("con el secreto puesto, un cuerpo falsificado con el token pero sin firma se rechaza sin tocar la base", async () => {
+  it("con el secreto y ENFORCE, un cuerpo falsificado con el token pero sin firma se rechaza sin tocar la base", async () => {
     const response = await post(selfEchoBody("/estado ORD-1"), { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(response.status).toBe(401);
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(mocks.commandCreate).not.toHaveBeenCalled();
-    expect(authLog()).toEqual({ method: "rejected", tokenVia: "query", chakraSignature: "absent" });
+    expect(authLog()).toEqual({ method: "rejected", tokenVia: "query", chakraSignature: "absent", chakra: "chakra_hmac_missing", enforce: true });
   });
 
   it("una firma de Chakra inválida se rechaza aunque el token sea bueno", async () => {
     const response = await post(metaBody, { headers: { "x-webhook-token": VERIFY_TOKEN, "x-chakra-signature-256": "0".repeat(64) } });
     expect(response.status).toBe(401);
-    expect(authLog()).toEqual({ method: "rejected", tokenVia: "header", chakraSignature: "present" });
+    expect(authLog()).toEqual({ method: "rejected", tokenVia: "header", chakraSignature: "present", chakra: "chakra_hmac_invalid", enforce: true });
   });
 
   it("acepta la firma de Chakra (hex sin prefijo) y el registro solo dice el método, nunca valores", async () => {
     const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}`, headers: { "x-chakra-signature-256": sign(metaBody) } });
     expect(response.status).toBe(200);
-    expect(authLog()).toEqual({ method: "chakra_hmac", tokenVia: "query", chakraSignature: "present" });
+    expect(authLog()).toEqual({ method: "chakra_hmac", tokenVia: "query", chakraSignature: "present", chakra: "chakra_hmac_valid", enforce: true });
     const logged = JSON.stringify(info.mock.calls);
     expect(logged).not.toContain(VERIFY_TOKEN);
     expect(logged).not.toContain(CHAKRA_SECRET);
@@ -539,10 +542,10 @@ describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", 
   it("sin el secreto sigue aceptando el token como hoy, dice por dónde llegó y avisa una sola vez", async () => {
     mocks.env.CHAKRA_WEBHOOK_SECRET = undefined;
     expect((await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` })).status).toBe(200);
-    expect(authLog()).toEqual({ method: "token_query", tokenVia: "query", chakraSignature: "absent" });
+    expect(authLog()).toEqual({ method: "token_query", tokenVia: "query", chakraSignature: "absent", chakra: "not_configured", enforce: false });
     info.mockClear();
     expect((await post(metaBody, { headers: { "x-webhook-token": VERIFY_TOKEN } })).status).toBe(200);
-    expect(authLog()).toEqual({ method: "token_header", tokenVia: "header", chakraSignature: "absent" });
+    expect(authLog()).toEqual({ method: "token_header", tokenVia: "header", chakraSignature: "absent", chakra: "not_configured", enforce: false });
     const missing = warn.mock.calls.filter((call: unknown[]) => String(call[0]).includes("CHAKRA_WEBHOOK_SECRET"));
     expect(missing.length).toBeLessThanOrEqual(1);
   });
@@ -556,6 +559,31 @@ describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", 
     expect(mocks.enqueue).toHaveBeenCalledWith("event-self", "self:store-1");
     // Nunca toca la conversación (no marca lastOwnerAt del propio número).
     expect(mocks.convUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("con el secreto y sin ENFORCE: nada se rechaza por la firma, solo se anota", async () => {
+    mocks.env.CHAKRA_WEBHOOK_ENFORCE = undefined;
+    // Sin firma.
+    expect((await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` })).status).toBe(200);
+    expect(authLog()).toEqual({ method: "token_query", tokenVia: "query", chakraSignature: "absent", chakra: "chakra_hmac_missing", enforce: false });
+    // Firma que no coincide (secreto distinto en Chakra).
+    info.mockClear();
+    expect((await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}`, headers: { "x-chakra-signature-256": "0".repeat(64) } })).status).toBe(200);
+    expect(authLog()).toEqual({ method: "token_query", tokenVia: "query", chakraSignature: "present", chakra: "chakra_hmac_invalid", enforce: false });
+    // Firma buena.
+    info.mockClear();
+    expect((await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}`, headers: { "x-chakra-signature-256": sign(metaBody) } })).status).toBe(200);
+    expect(authLog()).toEqual({ method: "chakra_hmac", tokenVia: "query", chakraSignature: "present", chakra: "chakra_hmac_valid", enforce: false });
+    // Sin token ni firma: rechazado, como hoy.
+    expect((await post(metaBody)).status).toBe(401);
+  });
+
+  it("sin ENFORCE, un comando con firma inválida no se guarda (solo lo firmado corre)", async () => {
+    mocks.env.CHAKRA_WEBHOOK_ENFORCE = undefined;
+    const response = await post(selfEchoBody("/ayuda"), { headers: { "x-webhook-token": VERIFY_TOKEN, "x-chakra-signature-256": "0".repeat(64) } });
+    expect(response.status).toBe(200);
+    expect(mocks.commandCreate).not.toHaveBeenCalled();
+    expect(mocks.connectionUpdate).not.toHaveBeenCalled();
   });
 
   it("sin firma (solo token): no guarda comando ni aprende nada, y cierra el evento sin encolar", async () => {

@@ -51,9 +51,13 @@ export const env = createEnv({
     // Chakra (usa el token propio de arriba); queda opcional por si hiciera falta.
     WHATSAPP_APP_SECRET: z.string().min(1).optional(),
     // Secreto HMAC de Chakra (Admin → Team → Secrets): firma cada entrega en
-    // `X-Chakra-Signature-256`. Con él puesto el webhook exige la firma y deja
-    // de aceptar el token solo; sin él sigue como antes y avisa en el registro.
+    // `X-Chakra-Signature-256`. Solo se exige con CHAKRA_WEBHOOK_ENFORCE; sin
+    // el secreto el webhook sigue con el token y avisa en el registro.
     CHAKRA_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // «true» vuelve obligatoria la firma de Chakra. Sin ella (o con otro valor)
+    // la firma solo se comprueba y se anota: sirve para confirmar con tráfico
+    // real que el secreto coincide antes de cerrar el webhook.
+    CHAKRA_WEBHOOK_ENFORCE: z.string().optional(),
     // Firma del webhook de Clerk (user.created → prueba de consentimiento).
     // Sin ella el webhook responde 503; con un valor que no es de Clerk, el
     // build falla en vez de dejar el webhook rechazando todo en silencio.

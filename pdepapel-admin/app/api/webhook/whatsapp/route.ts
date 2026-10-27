@@ -6,7 +6,7 @@ import {
   classifyWhatsAppWebhookEvent,
   parseWhatsAppWebhookPayload,
 } from "@/lib/whatsapp/webhook";
-import { authenticateWhatsAppWebhook } from "@/lib/whatsapp/webhook-auth";
+import { authenticateWhatsAppWebhook, isChakraEnforced } from "@/lib/whatsapp/webhook-auth";
 import { runInBackground } from "@/lib/background";
 import { sweepWhatsAppEventsQuietly } from "@/lib/whatsapp/recovery";
 import { ingestWhatsAppWebhook } from "@/lib/whatsapp/webhook-intake";
@@ -82,6 +82,8 @@ export async function POST(request: Request) {
     method: auth.method,
     tokenVia: auth.tokenVia,
     chakraSignature: auth.chakraSignature,
+    chakra: auth.chakraCheck ?? "not_configured",
+    enforce: isChakraEnforced(env),
   });
   if (!env.CHAKRA_WEBHOOK_SECRET && !warnedMissingChakraSecret) {
     warnedMissingChakraSecret = true;

@@ -32,6 +32,7 @@ export const TEST_ENV_STUBS = Object.freeze({
   BOLD_SECRET_KEY: "test-stub-bold-secret",
   CHAKRA_API_KEY: STUB,
   CHAKRA_PLUGIN_ID: STUB,
+  CHAKRA_WEBHOOK_ENFORCE: "false",
   CHAKRA_WEBHOOK_SECRET: STUB,
   CLERK_SECRET_KEY: "sk_test_stub",
   // Base64 válido con el prefijo whsec_, como los de Clerk (Standard Webhooks).
