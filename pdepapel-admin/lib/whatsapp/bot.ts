@@ -215,14 +215,21 @@ export interface WhatsAppBotResult {
 /** Por qué no hubo productos: el de la búsqueda, o que Paula no ha aprobado los textos. */
 type NoMatchRecord = { reason: ProductNoMatchReason | "not_approved"; detail?: string };
 
-/** ¿Lo último que dijo el bot fue «no lo encontré» con el enlace? Un segundo fallo ya va a Paula. */
-async function lastBotSearchMissed(conversationId: string): Promise<boolean> {
+/** Un «no lo encontré» de hace más de esto ya no cuenta como primer fallo. */
+export const SECOND_MISS_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * ¿Lo último que dijo el bot fue «no lo encontré» con el enlace, en las últimas
+ * 24 h? Un segundo fallo seguido va a Paula; uno de hace días es otra charla.
+ */
+export async function lastBotSearchMissed(conversationId: string, now = new Date()): Promise<boolean> {
   const last = await prismadb.conversationMessage.findFirst({
     where: { conversationId, direction: ConversationMessageDirection.OUTBOUND, sentBy: ConversationMessageSentBy.BOT },
     orderBy: { createdAt: "desc" },
-    select: { metadata: true },
+    select: { metadata: true, createdAt: true },
   });
-  const record = asRecord(last?.metadata ?? null).noMatch as { reason?: string } | undefined;
+  if (!last || now.getTime() - last.createdAt.getTime() > SECOND_MISS_WINDOW_MS) return false;
+  const record = asRecord(last.metadata ?? null).noMatch as { reason?: string } | undefined;
   return record?.reason === "zero_results";
 }
 

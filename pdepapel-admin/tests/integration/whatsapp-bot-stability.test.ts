@@ -201,3 +201,33 @@ describe("«BAJA» en el chat", () => {
     await testPrisma.order.deleteMany({ where: { id: own.id } });
   });
 });
+
+describe("el segundo «no lo encontré» solo cuenta dentro de 24 h", () => {
+  async function miss(conversationId: string, at: Date) {
+    await testPrisma.conversationMessage.create({
+      data: { conversationId, direction: "OUTBOUND", sentBy: "BOT", body: "No encontré eso por aquí", createdAt: at, status: "SENT", metadata: { noMatch: { reason: "zero_results" } } },
+    });
+  }
+
+  it("un fallo de hace 1 h sí cuenta: el siguiente va a Paula", async () => {
+    const { lastBotSearchMissed } = await import("@/lib/whatsapp/bot");
+    const chat = await conversation();
+    await miss(chat.id, ago(HOUR));
+    await expect(lastBotSearchMissed(chat.id)).resolves.toBe(true);
+  });
+
+  it("un fallo de hace 25 h ya no cuenta: el bot vuelve a buscar", async () => {
+    const { lastBotSearchMissed } = await import("@/lib/whatsapp/bot");
+    const chat = await conversation();
+    await miss(chat.id, ago(25 * HOUR));
+    await expect(lastBotSearchMissed(chat.id)).resolves.toBe(false);
+  });
+
+  it("si lo último del bot no fue un fallo, no cuenta aunque sea reciente", async () => {
+    const { lastBotSearchMissed } = await import("@/lib/whatsapp/bot");
+    const chat = await conversation();
+    await miss(chat.id, ago(2 * HOUR));
+    await outbound(chat.id, "BOT", ago(HOUR), "Sí, mira 💛");
+    await expect(lastBotSearchMissed(chat.id)).resolves.toBe(false);
+  });
+});
