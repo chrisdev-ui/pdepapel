@@ -30,7 +30,15 @@ export interface NotifyShipmentInput {
   /** «Reenviar» desde el panel: nueva clave, mismo aviso. */
   force?: boolean;
   createdBy?: string | null;
+  /**
+   * «Avisar a la clienta» desmarcado: a ella no le sale nada, pero sus filas
+   * quedan reclamadas como «Omitido», así un webhook posterior del mismo hito
+   * no le escribe. La copia a Paula sale igual.
+   */
+  silent?: boolean;
 }
+
+export const SILENT_NOTICE_REASON = "Cambio de estado sin avisar";
 
 export interface NotifyShipmentResult {
   email: Partial<Record<EmailRole, OrderNotificationStatus | "duplicate">>;
@@ -109,13 +117,20 @@ export async function notifyShipmentMilestone(input: NotifyShipmentInput, deps: 
     if (id) claimed.push({ role, id });
     else result.email[role] = "duplicate";
   }
-  if (claimed.length > 0) {
+  if (input.silent) {
+    for (const { role, id } of claimed.filter((c) => c.role === "customer")) {
+      await settle(db, id, OrderNotificationStatus.SKIPPED, { reason: SILENT_NOTICE_REASON });
+      result.email[role] = OrderNotificationStatus.SKIPPED;
+    }
+  }
+  const toSend = input.silent ? claimed.filter((c) => c.role !== "customer") : claimed;
+  if (toSend.length > 0) {
     const outcomes = await sendShipmentMilestoneEmail(
       order,
       input.milestone,
-      claimed.map((c) => c.role),
+      toSend.map((c) => c.role),
     );
-    for (const { role, id } of claimed) {
+    for (const { role, id } of toSend) {
       const settled = outcomeStatus(outcomes[role]);
       await settle(db, id, settled.status, { reason: settled.reason, providerMessageId: settled.id });
       result.email[role] = settled.status;
@@ -140,10 +155,16 @@ async function notifyByWhatsApp(
 ): Promise<NotifyShipmentResult["whatsapp"]> {
   const settings = await db.storeSettings.findUnique({
     where: { storeId: order.storeId },
-    select: { whatsappOrderUpdatesEnabled: true, whatsappTemplateGuide: true, whatsappTemplateDelivered: true },
+    select: {
+      whatsappOrderUpdatesEnabled: true,
+      whatsappTemplateGuide: true,
+      whatsappTemplateDelivered: true,
+      whatsappTemplateInTransit: true,
+      whatsappTemplateOutForDelivery: true,
+      whatsappTemplateIssue: true,
+    },
   });
-  const templateName =
-    input.milestone === "guia_creada" ? settings?.whatsappTemplateGuide : input.milestone === "entregado" ? settings?.whatsappTemplateDelivered : null;
+  const templateName = settings ? templateNameFor(input.milestone, settings) : null;
   if (!templateName || !canSendWhatsAppOrderUpdates({ settings, order })) return "not_applicable";
   const phone = normalizePhone(order.phone).replace(/\D/g, "");
   if (!phone) return "not_applicable";
@@ -164,17 +185,50 @@ async function notifyByWhatsApp(
     }),
   });
   if (!id) return "duplicate";
+  if (input.silent) {
+    await settle(db, id, OrderNotificationStatus.SKIPPED, { reason: SILENT_NOTICE_REASON });
+    return OrderNotificationStatus.SKIPPED;
+  }
 
   const { sendWhatsAppTemplateMessage } = await import("@/lib/whatsapp/send");
-  const { buildOrderUpdateTemplate } = await import("@/lib/whatsapp-order-templates");
+  const { buildOrderUpdateTemplate, missingTemplateParams } = await import("@/lib/whatsapp-order-templates");
+  const template = buildOrderUpdateTemplate(templateName, input.milestone, order);
+  // Meta rechaza una plantilla con un dato vacío: no se manda, el correo ya salió.
+  const missing = missingTemplateParams(input.milestone, template.bodyParams);
+  if (missing.length > 0) {
+    const reason = `Falta ${missing.join(", ")} en la plantilla; solo se mandó el correo`;
+    console.warn(`[SHIPMENT_NOTIFY] pedido #${order.orderNumber} ${input.milestone}: ${reason}`);
+    await settle(db, id, OrderNotificationStatus.SKIPPED, { reason });
+    return OrderNotificationStatus.SKIPPED;
+  }
   // Sin reintento: un reintento a ciegas le llegaría dos veces (lib/whatsapp/send.ts). El correo ya salió.
-  const sent = await sendWhatsAppTemplateMessage(phone, buildOrderUpdateTemplate(templateName, input.milestone, order));
+  const sent = await sendWhatsAppTemplateMessage(phone, template);
   if (sent.ok) {
     await settle(db, id, OrderNotificationStatus.SENT, { providerMessageId: sent.externalId || null });
     return OrderNotificationStatus.SENT;
   }
   await settle(db, id, OrderNotificationStatus.FAILED, { reason: `${sent.code ? `(#${sent.code}) ` : ""}${sent.error}` });
   return OrderNotificationStatus.FAILED;
+}
+
+type TemplateNames = {
+  whatsappTemplateGuide: string | null;
+  whatsappTemplateDelivered: string | null;
+  whatsappTemplateInTransit: string | null;
+  whatsappTemplateOutForDelivery: string | null;
+  whatsappTemplateIssue: string | null;
+};
+
+/** El nombre de la plantilla de cada hito; vacío = ese hito va solo por correo. */
+export function templateNameFor(milestone: NotifyShipmentInput["milestone"], names: TemplateNames): string | null {
+  const name = {
+    guia_creada: names.whatsappTemplateGuide,
+    en_camino: names.whatsappTemplateInTransit,
+    en_reparto: names.whatsappTemplateOutForDelivery,
+    entregado: names.whatsappTemplateDelivered,
+    novedad: names.whatsappTemplateIssue,
+  }[milestone];
+  return name?.trim() || null;
 }
 
 /** Igual que `notifyShipmentMilestone`, sin retrasar la respuesta y sin que un fallo tumbe a quien llama. */
@@ -192,11 +246,25 @@ export function queueShipmentMilestone(input: NotifyShipmentInput): void {
  * Avisa el hito del estado nuevo cuando un envío cambió. Para las rutas que
  * mueven estados (webhook, sincronización, edición en lote, rastreo manual).
  */
-export function queueShipmentStatusChange(input: { orderId: string; storeId: string; previous: string; next: string; source: string }): void {
+export function queueShipmentStatusChange(input: {
+  orderId: string;
+  storeId: string;
+  previous: string;
+  next: string;
+  source: string;
+  silent?: boolean;
+  createdBy?: string | null;
+}): void {
   if (input.previous === input.next) return;
   const milestone = milestoneForStatus(input.next as Parameters<typeof milestoneForStatus>[0]);
   if (!milestone) return;
-  queueShipmentMilestone({ orderId: input.orderId, storeId: input.storeId, milestone, source: input.source });
+  queueShipmentMilestone({
+    orderId: input.orderId,
+    storeId: input.storeId,
+    milestone,
+    source: input.source,
+    ...(input.silent ? { silent: true, createdBy: input.createdBy ?? null } : {}),
+  });
 }
 
 /** Avisa los envíos que cambiaron en un lote, ya confirmado. */

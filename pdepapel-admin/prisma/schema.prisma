@@ -2098,11 +2098,14 @@ model StoreSettings {
   botFactsVersion    String?   @db.VarChar(64)
 
   /// Avisos de envío por WhatsApp con plantillas de utilidad aprobadas en Meta.
-  /// Apagado por defecto: se enciende cuando las dos plantillas estén aprobadas
-  /// y sus nombres escritos aquí. El correo sale siempre, encendido o no.
-  whatsappOrderUpdatesEnabled Boolean @default(false)
-  whatsappTemplateGuide       String? @db.VarChar(100)
-  whatsappTemplateDelivered   String? @db.VarChar(100)
+  /// Apagado por defecto. Cada hito sale por WhatsApp solo si su plantilla
+  /// tiene nombre; sin nombre, ese hito va solo por correo, que sale siempre.
+  whatsappOrderUpdatesEnabled    Boolean @default(false)
+  whatsappTemplateGuide          String? @db.VarChar(100)
+  whatsappTemplateDelivered      String? @db.VarChar(100)
+  whatsappTemplateInTransit      String? @db.VarChar(100)
+  whatsappTemplateOutForDelivery String? @db.VarChar(100)
+  whatsappTemplateIssue          String? @db.VarChar(100)
 
   /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
   /// bueno de los datos del negocio a propósito: si compartieran versión,

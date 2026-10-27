@@ -165,6 +165,9 @@ export const storeSettingsInputSchema = z
     // El nombre exacto de la plantilla aprobada en WhatsApp Manager.
     whatsappTemplateGuide: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
     whatsappTemplateDelivered: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
+    whatsappTemplateInTransit: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
+    whatsappTemplateOutForDelivery: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
+    whatsappTemplateIssue: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
   })
   .refine(
     (input) =>
@@ -235,6 +238,9 @@ export interface ResolvedStoreSettings {
   whatsappOrderUpdatesEnabled: boolean;
   whatsappTemplateGuide: string | null;
   whatsappTemplateDelivered: string | null;
+  whatsappTemplateInTransit: string | null;
+  whatsappTemplateOutForDelivery: string | null;
+  whatsappTemplateIssue: string | null;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
@@ -298,6 +304,9 @@ export async function getStoreSettings(
     whatsappOrderUpdatesEnabled: settings?.whatsappOrderUpdatesEnabled ?? false,
     whatsappTemplateGuide: settings?.whatsappTemplateGuide?.trim() || null,
     whatsappTemplateDelivered: settings?.whatsappTemplateDelivered?.trim() || null,
+    whatsappTemplateInTransit: settings?.whatsappTemplateInTransit?.trim() || null,
+    whatsappTemplateOutForDelivery: settings?.whatsappTemplateOutForDelivery?.trim() || null,
+    whatsappTemplateIssue: settings?.whatsappTemplateIssue?.trim() || null,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
@@ -337,6 +346,9 @@ export async function saveStoreSettings(
     ...(input.whatsappOrderUpdatesEnabled === undefined ? {} : { whatsappOrderUpdatesEnabled: input.whatsappOrderUpdatesEnabled }),
     ...(input.whatsappTemplateGuide === undefined ? {} : { whatsappTemplateGuide: input.whatsappTemplateGuide?.trim() || null }),
     ...(input.whatsappTemplateDelivered === undefined ? {} : { whatsappTemplateDelivered: input.whatsappTemplateDelivered?.trim() || null }),
+    ...(input.whatsappTemplateInTransit === undefined ? {} : { whatsappTemplateInTransit: input.whatsappTemplateInTransit?.trim() || null }),
+    ...(input.whatsappTemplateOutForDelivery === undefined ? {} : { whatsappTemplateOutForDelivery: input.whatsappTemplateOutForDelivery?.trim() || null }),
+    ...(input.whatsappTemplateIssue === undefined ? {} : { whatsappTemplateIssue: input.whatsappTemplateIssue?.trim() || null }),
     // Un campo que no venga se deja como estaba, en vez de borrarlo.
     ...(input.deliveryEstimate === undefined
       ? {}

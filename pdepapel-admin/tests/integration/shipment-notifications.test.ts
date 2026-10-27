@@ -187,6 +187,62 @@ describe("avisos de envío", () => {
       expect(sent.whatsapp).not.toHaveBeenCalled();
     });
 
+    it("en tránsito, en reparto y novedad salen con su plantilla, nombre y número de pedido", async () => {
+      await testPrisma.storeSettings.update({
+        where: { storeId: f.store.id },
+        data: {
+          whatsappOrderUpdatesEnabled: true,
+          whatsappTemplateInTransit: "pedido_en_transito",
+          whatsappTemplateOutForDelivery: "pedido_en_reparto",
+          whatsappTemplateIssue: "pedido_novedad",
+        },
+      });
+      for (const [milestone, name] of [
+        ["en_camino", "pedido_en_transito"],
+        ["en_reparto", "pedido_en_reparto"],
+        ["novedad", "pedido_novedad"],
+      ] as const) {
+        sent.whatsapp.mockClear();
+        const order = await shippedOrder({ optIn: true });
+        const result = await notifyShipmentMilestone({ orderId: order.id, storeId: f.store.id, milestone, source: "prueba" });
+        expect(result.whatsapp).toBe("SENT");
+        expect(sent.whatsapp).toHaveBeenCalledTimes(1);
+        const [, template] = sent.whatsapp.mock.calls[0];
+        expect(template).toEqual({ name, language: "es_CO", bodyParams: ["Clienta", order.orderNumber], buttonUrlSuffix: order.id });
+      }
+      await testPrisma.storeSettings.update({
+        where: { storeId: f.store.id },
+        data: { whatsappTemplateInTransit: null, whatsappTemplateOutForDelivery: null, whatsappTemplateIssue: null },
+      });
+    });
+
+    it("una plantilla sin nombre: ese hito va solo por correo", async () => {
+      await testPrisma.storeSettings.update({ where: { storeId: f.store.id }, data: { whatsappOrderUpdatesEnabled: true, whatsappTemplateOutForDelivery: null } });
+      const order = await shippedOrder({ optIn: true });
+      const result = await notifyShipmentMilestone({ orderId: order.id, storeId: f.store.id, milestone: "en_reparto", source: "prueba" });
+      expect(result.whatsapp).toBe("not_applicable");
+      expect(result.email.customer).toBe("SENT");
+      expect(sent.whatsapp).not.toHaveBeenCalled();
+    });
+
+    it("un dato vacío en la plantilla no se manda: queda SKIPPED con el motivo y el correo sale; con la guía real, sí sale", async () => {
+      await testPrisma.storeSettings.update({ where: { storeId: f.store.id }, data: { whatsappOrderUpdatesEnabled: true } });
+      const order = await shippedOrder({ optIn: true, tracking: "   " });
+      const first = await notifyShipmentMilestone({ orderId: order.id, storeId: f.store.id, milestone: "guia_creada", source: "prueba" });
+      expect(first.whatsapp).toBe("SKIPPED");
+      expect(first.email.customer).toBe("SENT");
+      expect(sent.whatsapp).not.toHaveBeenCalled();
+      expect((await rows(order.id)).find((r) => r.channel === "WHATSAPP")).toMatchObject({
+        status: "SKIPPED",
+        reason: "Falta {{4}} número de guía en la plantilla; solo se mandó el correo",
+      });
+
+      await testPrisma.shipping.updateMany({ where: { orderId: order.id }, data: { trackingCode: "TRKREAL123" } });
+      const second = await notifyShipmentMilestone({ orderId: order.id, storeId: f.store.id, milestone: "guia_creada", source: "prueba" });
+      expect(second.whatsapp).toBe("SENT");
+      expect(sent.whatsapp).toHaveBeenCalledTimes(1);
+    });
+
     it("un rechazo de Meta queda FAILED con el código y no se reintenta", async () => {
       await testPrisma.storeSettings.update({ where: { storeId: f.store.id }, data: { whatsappOrderUpdatesEnabled: true } });
       sent.whatsapp.mockResolvedValueOnce({ ok: false, error: "Template not found", code: 132001, retryable: false });

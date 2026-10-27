@@ -79,6 +79,9 @@ const formSchema = z.object({
   whatsappOrderUpdatesEnabled: z.boolean(),
   whatsappTemplateGuide: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
   whatsappTemplateDelivered: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
+  whatsappTemplateInTransit: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
+  whatsappTemplateOutForDelivery: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
+  whatsappTemplateIssue: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
   botHoldingText: z.string().trim().max(500),
   botHoldingNightText: z.string().trim().max(500),
   days: z.record(
@@ -129,6 +132,9 @@ export function BusinessInfoPanel({
       whatsappOrderUpdatesEnabled: settings.whatsappOrderUpdatesEnabled,
       whatsappTemplateGuide: settings.whatsappTemplateGuide ?? "",
       whatsappTemplateDelivered: settings.whatsappTemplateDelivered ?? "",
+      whatsappTemplateInTransit: settings.whatsappTemplateInTransit ?? "",
+      whatsappTemplateOutForDelivery: settings.whatsappTemplateOutForDelivery ?? "",
+      whatsappTemplateIssue: settings.whatsappTemplateIssue ?? "",
       botHoldingText: settings.botHoldingText ?? "",
       botHoldingNightText: settings.botHoldingNightText ?? "",
       days: Object.fromEntries(
@@ -201,6 +207,9 @@ export function BusinessInfoPanel({
         whatsappOrderUpdatesEnabled: values.whatsappOrderUpdatesEnabled,
         whatsappTemplateGuide: values.whatsappTemplateGuide.trim() || null,
         whatsappTemplateDelivered: values.whatsappTemplateDelivered.trim() || null,
+        whatsappTemplateInTransit: values.whatsappTemplateInTransit.trim() || null,
+        whatsappTemplateOutForDelivery: values.whatsappTemplateOutForDelivery.trim() || null,
+        whatsappTemplateIssue: values.whatsappTemplateIssue.trim() || null,
         botHoldingText: values.botHoldingText.trim() || null,
         botHoldingNightText: values.botHoldingNightText.trim() || null,
         openingHours: Object.fromEntries(
@@ -784,8 +793,8 @@ export function BusinessInfoPanel({
               <h3 className="text-sm font-semibold">Avisos de envío por WhatsApp</h3>
               <p className="text-sm text-muted-foreground">
                 Solo a quien marcó «Recibir avisos de mi pedido por WhatsApp» en la tienda, o lo pidió en el chat y lo
-                anotaste en el pedido. El correo sale siempre. Enciéndelo cuando las dos plantillas estén aprobadas en
-                WhatsApp Manager.
+                anotaste en el pedido. El correo sale siempre. Escribe el nombre de cada plantilla aprobada en WhatsApp
+                Manager; un aviso con la casilla vacía sale solo por correo.
               </p>
             </div>
             <FormField
@@ -823,6 +832,45 @@ export function BusinessInfoPanel({
                     <FormLabel>Plantilla «entregado»</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={loading} placeholder="pedido_entregado" autoComplete="off" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="whatsappTemplateInTransit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plantilla «en tránsito»</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} placeholder="pedido_en_transito" autoComplete="off" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="whatsappTemplateOutForDelivery"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plantilla «en reparto»</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} placeholder="pedido_en_reparto" autoComplete="off" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="whatsappTemplateIssue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plantilla «novedad»</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} placeholder="pedido_novedad" autoComplete="off" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

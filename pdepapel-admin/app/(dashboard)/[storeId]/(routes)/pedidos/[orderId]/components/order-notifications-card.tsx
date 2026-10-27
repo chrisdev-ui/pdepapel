@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { OrderNotificationsView } from "@/lib/order-notifications-view";
-import type { ShipmentMilestone } from "@/lib/shipment-milestones";
+import { isShipmentMilestone, type ShipmentMilestone } from "@/lib/shipment-milestones";
+import { isSilentChangeMilestone, silentChangeLabel } from "@/lib/silent-status-change";
 
 const MILESTONE_LABEL: Record<ShipmentMilestone, string> = {
   guia_creada: "Ya tiene guía de envío",
@@ -20,6 +21,9 @@ const MILESTONE_LABEL: Record<ShipmentMilestone, string> = {
   entregado: "Entregado",
   novedad: "Novedad del envío",
 };
+
+const milestoneLabel = (milestone: string) =>
+  isShipmentMilestone(milestone) ? MILESTONE_LABEL[milestone] : isSilentChangeMilestone(milestone) ? silentChangeLabel(milestone) : milestone;
 
 const STATUS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   SENT: { label: "Enviado", variant: "secondary" },
@@ -113,6 +117,7 @@ export function OrderNotificationsCard({ storeId, orderId, view }: { storeId: st
           <ul className="divide-y rounded-lg border">
             {view.rows.map((row) => {
               const status = STATUS[row.status] ?? STATUS.SKIPPED;
+              const milestone = isShipmentMilestone(row.milestone) ? row.milestone : null;
               return (
                 <li key={row.id} className="flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-2">
@@ -123,7 +128,7 @@ export function OrderNotificationsCard({ storeId, orderId, view }: { storeId: st
                     )}
                     <div className="min-w-0">
                       <p className="font-medium">
-                        {MILESTONE_LABEL[row.milestone] ?? row.milestone}
+                        {milestoneLabel(row.milestone)}
                         <span className="font-normal text-muted-foreground"> · {row.role === "admin" ? "copia a la tienda" : "a la clienta"}{row.resent ? " · reenviado" : ""}</span>
                       </p>
                       <p className="text-xs text-muted-foreground">{fmt(row.createdAt)}</p>
@@ -132,16 +137,16 @@ export function OrderNotificationsCard({ storeId, orderId, view }: { storeId: st
                   </div>
                   <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
                     <Badge variant={status.variant}>{status.label}</Badge>
-                    {row.channel === "EMAIL" && row.role === "customer" && (
+                    {milestone && row.channel === "EMAIL" && row.role === "customer" && (
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
                         className="min-h-[44px]"
                         disabled={busy !== null}
-                        isLoading={busy === `resend:${row.milestone}`}
-                        onClick={() => resend(row.milestone)}
-                        aria-label={`Reenviar «${MILESTONE_LABEL[row.milestone]}»`}
+                        isLoading={busy === `resend:${milestone}`}
+                        onClick={() => resend(milestone)}
+                        aria-label={`Reenviar «${MILESTONE_LABEL[milestone]}»`}
                       >
                         <RotateCcw className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                         Reenviar

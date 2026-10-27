@@ -49,6 +49,7 @@ import {
 import { getErrorMessage } from "@/lib/api-errors";
 import type { OpenInventoryIssue } from "@/lib/order-inventory-issues";
 import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-panel";
+import { NotifyCustomerCheckbox } from "@/components/orders/notify-customer-checkbox";
 import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
 import { getFirstFormErrorMessage } from "@/lib/form-errors";
 import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
@@ -241,6 +242,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const { isDirty } = form.formState;
 
   const [loading, setLoading] = useState(false);
+  // Fuera del formulario: no ensucia el borrador guardado ni el aviso de salir sin guardar.
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
   // Solo lectura: nada que cambie el pedido se puede pulsar (el servidor también lo rechaza).
   const canWrite = useCanWrite();
   // `/pedidos/nuevo` y `/pedidos/<id>` son el mismo segmento dinamico: Next
@@ -334,6 +337,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         ...data,
         status,
         expectedStatus: initialData?.status,
+        ...(initialData ? { notifyCustomer } : {}),
         userId: finalUserId,
         guestId: finalGuestId,
         ...(orphanGuideId ? { orphanGuideId } : {}),
@@ -368,6 +372,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             payload,
           );
           clearStorage();
+          setNotifyCustomer(true);
           const guide = response.data?.guideCreation;
           if (guide?.attempted && !guide.success) {
             toast({
@@ -431,6 +436,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       clearStorage,
       idempotencyKey,
       initialData,
+      notifyCustomer,
       router,
       storeId,
       toast,
@@ -873,6 +879,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   steps={timeline}
                   loading={loading}
                   onTransition={onTransition}
+                />
+                <NotifyCustomerCheckbox
+                  className="mt-2 rounded-xl border bg-white px-4 py-2 shadow-sm"
+                  checked={notifyCustomer}
+                  onCheckedChange={setNotifyCustomer}
+                  disabled={loading || !canWrite}
                 />
               </div>
             )}

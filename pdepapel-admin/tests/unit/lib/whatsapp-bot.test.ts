@@ -210,6 +210,9 @@ const ajustesBase: ResolvedStoreSettings = {
   whatsappOrderUpdatesEnabled: false,
   whatsappTemplateGuide: null,
   whatsappTemplateDelivered: null,
+  whatsappTemplateInTransit: null,
+  whatsappTemplateOutForDelivery: null,
+  whatsappTemplateIssue: null,
 };
 
 describe("keyword matching", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { NotifyCustomerCheckbox } from "@/components/orders/notify-customer-checkbox";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,6 +88,9 @@ const shippingStatusMap: Record<
   "mark-as-returned": ShippingStatus.Returned,
 };
 
+const isStatusAction = (action: Action | null): action is keyof typeof orderStatusMap | keyof typeof shippingStatusMap =>
+  Boolean(action && (action in orderStatusMap || action in shippingStatusMap));
+
 export function DataTableActionOptions<TData>({
   table,
   model,
@@ -98,6 +102,7 @@ export function DataTableActionOptions<TData>({
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
 
   const routeActions: Action[] = useMemo(() => {
     switch (model) {
@@ -229,7 +234,7 @@ export function DataTableActionOptions<TData>({
         case "mark-as-pending":
         case "mark-as-paid":
         case "mark-as-cancelled":
-          await makeApiCall<{ ids: string[]; status: OrderStatus }>(
+          await makeApiCall<{ ids: string[]; status: OrderStatus; notifyCustomer: boolean }>(
             apiRoute,
             "PATCH",
             {
@@ -237,6 +242,7 @@ export function DataTableActionOptions<TData>({
                 .getFilteredSelectedRowModel()
                 .rows.map((row) => (row.original as { id: string }).id),
               status: orderStatusMap[action],
+              notifyCustomer,
             },
           );
           router.refresh();
@@ -253,7 +259,7 @@ export function DataTableActionOptions<TData>({
         case "mark-as-in-transit":
         case "mark-as-delivered":
         case "mark-as-returned":
-          await makeApiCall<{ ids: string[]; shipping: ShippingStatus }>(
+          await makeApiCall<{ ids: string[]; shipping: ShippingStatus; notifyCustomer: boolean }>(
             apiRoute,
             "PATCH",
             {
@@ -261,6 +267,7 @@ export function DataTableActionOptions<TData>({
                 .getFilteredSelectedRowModel()
                 .rows.map((row) => (row.original as { id: string }).id),
               shipping: shippingStatusMap[action],
+              notifyCustomer,
             },
           );
           router.refresh();
@@ -282,6 +289,7 @@ export function DataTableActionOptions<TData>({
       setIsLoading(false);
       if (open) setOpen(false);
       setAction(null);
+      setNotifyCustomer(true);
     }
   };
 
@@ -293,15 +301,17 @@ export function DataTableActionOptions<TData>({
     (
       action: Action | null,
       count: number,
+      notify: boolean,
     ): { title: string; description: string; confirmLabel: string; destructive: boolean } => {
       const n = `${count} ${count === 1 ? "pedido" : "pedidos"}`;
       const one = count === 1;
+      const silent = " No se le manda correo ni WhatsApp al cliente.";
       switch (action) {
         case "mark-as-paid":
           return {
             title: `¿Marcar ${n} como ${one ? "pagado" : "pagados"}?`,
             description:
-              "Se descuenta el inventario de cada producto, queda un movimiento en el kardex y se fija la fecha de pago de hoy, así que contarán en las ventas y en los reportes tributarios. Cada cliente recibe un correo de pago confirmado. Revisa los comprobantes antes de confirmar: no se pide una referencia por pedido.",
+              `Se descuenta el inventario de cada producto, queda un movimiento en el kardex y se fija la fecha de pago de hoy, así que contarán en las ventas y en los reportes tributarios.${notify ? " Cada cliente recibe un correo de pago confirmado." : silent} Revisa los comprobantes antes de confirmar: no se pide una referencia por pedido.`,
             confirmLabel: one ? "Sí, marcar como pagado" : "Sí, marcar como pagados",
             destructive: false,
           };
@@ -309,9 +319,10 @@ export function DataTableActionOptions<TData>({
           return {
             title: `¿Cancelar ${n}?`,
             description:
-              one
-              ? "Si estaba pagado, su inventario vuelve con un movimiento de cancelación y su cupón se libera. El cliente recibe un correo de cancelación."
-              : "Los que estaban pagados devuelven su inventario con un movimiento de cancelación y liberan su cupón. Cada cliente recibe un correo de cancelación.",
+              (one
+                ? "Si estaba pagado, su inventario vuelve con un movimiento de cancelación y su cupón se libera."
+                : "Los que estaban pagados devuelven su inventario con un movimiento de cancelación y liberan su cupón.") +
+              (notify ? (one ? " El cliente recibe un correo de cancelación." : " Cada cliente recibe un correo de cancelación.") : silent),
             confirmLabel: "Sí, cancelar",
             destructive: true,
           };
@@ -333,7 +344,7 @@ export function DataTableActionOptions<TData>({
           return {
             title: `¿Cambiar el envío de ${n}?`,
             description:
-              "Se actualiza el estado del envío y cada cliente recibe el aviso por correo. Los pedidos sin envío registrado no se pueden cambiar así.",
+              `Se actualiza el estado del envío${notify ? " y cada cliente recibe el aviso por correo" : " sin avisarle al cliente"}. Los pedidos sin envío registrado no se pueden cambiar así.`,
             confirmLabel: "Sí, cambiar el envío",
             destructive: false,
           };
@@ -450,11 +461,16 @@ export function DataTableActionOptions<TData>({
         onClose={() => {
           setAction(null);
           setOpen(false);
+          setNotifyCustomer(true);
         }}
         onConfirm={() => handleAction(action as Action)}
         loading={isLoading}
-        {...confirmCopy(action, table.getFilteredSelectedRowModel().rows.length)}
-      />
+        {...confirmCopy(action, table.getFilteredSelectedRowModel().rows.length, notifyCustomer)}
+      >
+        {model === Models.Orders && isStatusAction(action) && (
+          <NotifyCustomerCheckbox checked={notifyCustomer} onCheckedChange={setNotifyCustomer} disabled={isLoading} />
+        )}
+      </AlertModal>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

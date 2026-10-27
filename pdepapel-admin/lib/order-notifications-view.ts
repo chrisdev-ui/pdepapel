@@ -1,7 +1,7 @@
 import type { NotificationChannel, OrderNotificationStatus, PrismaClient, WhatsAppOptInSource } from "@prisma/client";
 
 import { canRecordChatOptIn } from "@/lib/whatsapp-opt-in";
-import type { ShipmentMilestone } from "@/lib/shipment-milestones";
+import { isSilentChangeMilestone } from "@/lib/silent-status-change";
 
 /**
  * Lo que ve la dueña en «Avisos a la clienta» del pedido. Sin el id de Clerk
@@ -11,7 +11,8 @@ import type { ShipmentMilestone } from "@/lib/shipment-milestones";
 export interface OrderNotificationRowView {
   id: string;
   createdAt: Date;
-  milestone: ShipmentMilestone;
+  /** Un hito de envío, o `estado:<estado>` de un cambio hecho sin avisar. */
+  milestone: string;
   channel: NotificationChannel;
   role: string;
   status: OrderNotificationStatus;
@@ -60,7 +61,7 @@ export async function getOrderNotificationsView(
     db.storeSettings.findUnique({ where: { storeId: input.storeId }, select: { whatsappOrderUpdatesEnabled: true } }),
   ]);
   return {
-    rows: rows.map(({ createdBy, ...row }) => ({ ...row, milestone: row.milestone as ShipmentMilestone, resent: Boolean(createdBy) })),
+    rows: rows.map(({ createdBy, ...row }) => ({ ...row, resent: Boolean(createdBy) && !isSilentChangeMilestone(row.milestone) })),
     hasGuide: Boolean(order.shipping?.trackingCode),
     whatsapp: {
       optInAt: order.whatsappOptInAt,

@@ -80,6 +80,8 @@ import { NextResponse } from "next/server";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+import { parseNotifyCustomer } from "@/lib/silent-status-change";
+import { recordSilentStatusChanges } from "@/lib/silent-status-change-server";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -225,6 +227,9 @@ export async function PATCH(
     } = body;
     // Regalo: solo se toca cuando el cuerpo trae la bandera; un PATCH que
     // no habla de regalo (cambio de estado, guía) deja lo guardado intacto.
+    const notifyCustomer = parseNotifyCustomer(body);
+    if (notifyCustomer === null)
+      throw ErrorFactory.InvalidRequest("«notifyCustomer» debe ser verdadero o falso");
     const gift =
       typeof body.isGift === "boolean"
         ? normalizeGiftFields(body as Record<string, unknown>)
@@ -1185,7 +1190,22 @@ export async function PATCH(
       }
     }
 
-    // Async email notifications
+    if (!notifyCustomer) {
+      try {
+        await recordSilentStatusChanges(prismadb, {
+          storeId: params.storeId,
+          createdBy: userId,
+          before: [{ orderId: params.orderId, status: originalStatus, shippingStatus: originalShippingStatus ?? null }],
+        });
+      } catch (auditError) {
+        console.error("[ORDER_PATCH] No se pudo registrar el cambio sin avisar:", auditError);
+      }
+    }
+
+    // Async email notifications. Sin avisar, los hitos de envío quedan
+    // reclamados como «Omitido» (un webhook posterior no le escribe) y la
+    // copia a Paula sale igual; el correo de estado no sale.
+    const silent = !notifyCustomer;
     runInBackground("correo de cambio de estado del pedido", async () => {
       try {
         // Solo los estados para decidir qué avisar: el correo carga el
@@ -1201,12 +1221,12 @@ export async function PATCH(
         // Guía nueva (automática al pagar, o el número de una transportadora
         // manual escrito a mano): «Tu pedido ya tiene guía de envío», una vez por guía.
         if (guideCreation.success || (current.shipping?.trackingCode && current.shipping.trackingCode !== originalTrackingCode)) {
-          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "pedido del panel" });
+          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "pedido del panel", ...(silent ? { silent, createdBy: userId } : {}) });
         }
 
         // Status change notification
         // Sin enlace de «guardar en tu cuenta»: desde el panel nunca se creó.
-        if (status && current.status !== originalStatus) {
+        if (!silent && status && current.status !== originalStatus) {
           await sendOrderEmail(params.orderId, current.status, {
             notifyAdmin: false,
             accountClaim: false,
@@ -1220,7 +1240,7 @@ export async function PATCH(
             ? milestoneForStatus(current.shipping.status)
             : null;
         if (milestone) {
-          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone, source: "pedido del panel" });
+          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone, source: "pedido del panel", ...(silent ? { silent, createdBy: userId } : {}) });
         }
       } catch (emailError) {
         console.error("Email sending failed:", emailError);

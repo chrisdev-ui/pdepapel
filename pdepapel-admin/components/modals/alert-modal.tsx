@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 
 interface AlertModalProps {
   isOpen: boolean;
@@ -26,6 +27,8 @@ interface AlertModalProps {
   cancelLabel?: string;
   /** Acción que borra o no se puede deshacer: botón rojo. */
   destructive?: boolean;
+  /** Opciones de la confirmación (p. ej. una casilla), entre la descripción y los botones. */
+  children?: ReactNode;
 }
 
 /**
@@ -44,6 +47,7 @@ export function AlertModal({
   confirmLabel = "Sí, eliminar",
   cancelLabel = "Cancelar",
   destructive = true,
+  children,
 }: AlertModalProps) {
   const canWrite = useCanWrite();
   return (
@@ -58,6 +62,7 @@ export function AlertModal({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading} onClick={onClose}>
             {cancelLabel}

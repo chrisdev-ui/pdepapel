@@ -86,6 +86,8 @@ import {
 } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+import { parseNotifyCustomer } from "@/lib/silent-status-change";
+import { recordSilentStatusChanges, type SilentChangeBefore } from "@/lib/silent-status-change-server";
 import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
@@ -1305,6 +1307,9 @@ export async function PATCH(
     }: { ids: string[]; status?: OrderStatus; shipping?: ShippingStatus; fraud?: boolean } =
       body;
     const cancelAsFraud = fraud === true && status === OrderStatus.CANCELLED;
+    const notifyCustomer = parseNotifyCustomer(body);
+    if (notifyCustomer === null)
+      throw ErrorFactory.InvalidRequest("«notifyCustomer» debe ser verdadero o falso");
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       throw ErrorFactory.InvalidRequest(
@@ -1317,6 +1322,7 @@ export async function PATCH(
     const issuedGiftCards: IssuedGiftCard[] = [];
     let purgeCacheAfterCommit = false;
     const shippingBefore = new Map<string, ShippingStatus>();
+    const before: SilentChangeBefore[] = [];
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -1343,6 +1349,7 @@ export async function PATCH(
       }
       for (const order of orders) {
         if (order.shipping) shippingBefore.set(order.id, order.shipping.status);
+        before.push({ orderId: order.id, status: order.status, shippingStatus: order.shipping?.status ?? null });
       }
 
       // Misma guarda que la página del pedido: las ventas presenciales
@@ -1629,16 +1636,34 @@ export async function PATCH(
       await deliverGiftCard(issued, { buyerName: buyer?.fullName ?? null });
     }
 
+    if (!notifyCustomer) {
+      try {
+        await recordSilentStatusChanges(prismadb, { storeId: params.storeId, createdBy: userId, before });
+      } catch (auditError) {
+        console.error("[ORDERS_PATCH] No se pudo registrar el cambio sin avisar:", auditError);
+      }
+    }
+
     // El estado del envío cambiado en lote avisa su hito, como el webhook y Envíos.
+    // Sin avisar: el hito queda reclamado como «Omitido» y la copia a Paula sale igual.
     if (shipping) {
       for (const order of result) {
         const previous = shippingBefore.get(order.id);
-        if (previous) queueShipmentStatusChange({ orderId: order.id, storeId: params.storeId, previous, next: shipping, source: "lista de pedidos" });
+        if (previous) {
+          queueShipmentStatusChange({
+            orderId: order.id,
+            storeId: params.storeId,
+            previous,
+            next: shipping,
+            source: "lista de pedidos",
+            ...(notifyCustomer ? {} : { silent: true, createdBy: userId }),
+          });
+        }
       }
     }
 
     // Send email notifications asynchronously
-    runInBackground("correos de la actualización masiva", async () => {
+    if (notifyCustomer) runInBackground("correos de la actualización masiva", async () => {
       try {
         const emailPromises = result.map(async (order) => {
           // A un pedido de bot no se le escribe: el correo puede ser de otra persona.

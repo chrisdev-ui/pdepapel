@@ -1,6 +1,6 @@
-# Plantillas de WhatsApp para avisos de pedido (borrador para revisar)
+# Plantillas de WhatsApp para avisos de pedido
 
-Dos plantillas de categoría **Utilidad**, idioma **Español (Colombia) — es_CO**. Se crean en WhatsApp Manager → Plantillas de mensajes. Mientras no estén aprobadas y escritas en Configuración (y el interruptor «Avisos de envío por WhatsApp» encendido), el panel no manda ningún WhatsApp: el correo sale siempre.
+Cinco plantillas de categoría **Utilidad** (enviadas a revisión en WhatsApp Manager el 2026-10-27), idioma **Español (Colombia) — es_CO**. Se crean en WhatsApp Manager → Plantillas de mensajes. Mientras no estén aprobadas y escritas en Configuración (y el interruptor «Avisos de envío por WhatsApp» encendido), el panel no manda ningún WhatsApp: el correo sale siempre.
 
 Reglas para que Meta no las pase a Marketing: nada de promociones, cupones, «vuelve a comprar», reseñas ni enlaces a la tienda; solo el estado del pedido de esa clienta.
 
@@ -43,9 +43,17 @@ Variables que manda el panel: {{1}} el primer nombre de la clienta, {{2}} el nú
 
 ---
 
+## 3 a 5. `pedido_en_transito`, `pedido_en_reparto`, `pedido_novedad`
+
+Mismo formato que `pedido_entregado`: **cuerpo** con {{1}} = primer nombre y {{2}} = número de pedido, **botón** «Ver mi pedido» con URL dinámica `https://papeleriapdepapel.com/pedido/{{1}}` (el id del pedido), sin pie, validez 12 h. Salen en los hitos «en tránsito» (`en_camino`), «en reparto» y «novedad» (`lib/shipment-notifications.ts`, `templateNameFor`).
+
+---
+
 ## Después de la aprobación
-1. Configuración → «Avisos de envío por WhatsApp»: escribir los nombres exactos (`guia_creada`, `pedido_entregado`) y encender el interruptor.
+1. Configuración → «Avisos de envío por WhatsApp»: escribir el nombre exacto de cada plantilla aprobada en su casilla («ya tiene guía» `guia_creada`, «en tránsito» `pedido_en_transito`, «en reparto» `pedido_en_reparto`, «entregado» `pedido_entregado`, «novedad» `pedido_novedad`) y encender el interruptor. Una casilla vacía = ese aviso sale solo por correo.
 2. Probar con un pedido propio que tenga la casilla marcada: crear la guía y revisar que llegue el WhatsApp y el correo.
 3. Revisar la calidad de las plantillas en WhatsApp Manager la primera semana.
+
+Si a una plantilla le faltaría un dato (por ejemplo `guia_creada` sin número de guía), no se manda: el aviso queda «Omitido» con el dato que faltó en el historial del pedido y el correo sale igual (`missingTemplateParams`).
 
 Desde el 2026-10-27 el chat lee «BAJA», «STOP» o «no más avisos»: anota la baja en sus pedidos y le confirma una vez. Las plantillas siguen sin pie de «BAJA»: agregarlo es una versión nueva de la plantilla en Meta. Paula también puede quitar los avisos desde el pedido («Quitar avisos por WhatsApp»).
