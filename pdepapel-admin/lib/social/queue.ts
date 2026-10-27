@@ -1,6 +1,7 @@
 import { Client, Receiver } from "@upstash/qstash";
 
 import type { SyncContinuation } from "./sync";
+import { qstashKey } from "@/lib/qstash-keys";
 
 /**
  * Cola de la sincronización de redes: un mensaje por cuenta, uno a la vez por
@@ -34,7 +35,7 @@ export async function enqueueSocialSync(message: SocialSyncMessage, delaySeconds
     retries: 2,
     timeout: 60,
     ...(delaySeconds > 0 ? { delay: `${BigInt(Math.ceil(delaySeconds))}s` as const } : {}),
-    flowControl: { key: `social-account-${message.accountId}`, parallelism: 1 },
+    flowControl: { key: qstashKey("social-account", message.accountId), parallelism: 1 },
     label: ["social", "sync"],
   });
   return true;

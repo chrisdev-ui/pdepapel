@@ -556,7 +556,7 @@ describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", 
     expect(response.status).toBe(200);
     expect(mocks.commandCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ storeId: "store-1", echoId: "wamid.SELF", command: "ayuda", args: null }) });
     expect(mocks.connectionUpdate).toHaveBeenCalledWith({ where: { id: "conn-1" }, data: { selfPhone: BUSINESS, selfBsuid: "CO.7000000000000001" } });
-    expect(mocks.enqueue).toHaveBeenCalledWith("event-self", "self:store-1");
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-self", "self-store-1");
     // Nunca toca la conversación (no marca lastOwnerAt del propio número).
     expect(mocks.convUpdateMany).not.toHaveBeenCalled();
   });

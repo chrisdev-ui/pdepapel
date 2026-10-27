@@ -6,7 +6,7 @@ import prismadb from "@/lib/prismadb";
 import { requireJsonBody } from "@/lib/request-body";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { MAX_WEB_PUSH_SUBSCRIPTIONS_PER_STORE, describePushDevice, getWebPushConfig, hashPushEndpoint } from "@/lib/web-push";
+import { MAX_WEB_PUSH_SUBSCRIPTIONS_PER_STORE, describePushDevice, getWebPushConfig, getWebPushStatus, hashPushEndpoint } from "@/lib/web-push";
 
 /**
  * Avisos push del panel en los aparatos de la dueña («Activar avisos en este
@@ -32,10 +32,11 @@ export async function GET(_req: Request, { params }: { params: { storeId: string
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await requireStoreOwner(params.storeId);
-    const config = getWebPushConfig();
+    // Solo la dueña ve el motivo (qué variable falta o tiene mala forma), nunca un valor.
+    const { config, reason } = getWebPushStatus();
     const devices = await prismadb.webPushSubscription.count({ where: { storeId: params.storeId } });
     return NextResponse.json(
-      { configured: Boolean(config), publicKey: config?.publicKey ?? null, devices, max: MAX_WEB_PUSH_SUBSCRIPTIONS_PER_STORE },
+      { configured: Boolean(config), reason, publicKey: config?.publicKey ?? null, devices, max: MAX_WEB_PUSH_SUBSCRIPTIONS_PER_STORE },
       noCache,
     );
   } catch (error) {

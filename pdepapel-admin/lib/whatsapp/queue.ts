@@ -1,4 +1,5 @@
 import { Client, Receiver } from "@upstash/qstash";
+import { qstashKey } from "@/lib/qstash-keys";
 
 /**
  * Cola durable de WhatsApp: el webhook guarda el evento y lo encola aquí; el
@@ -43,7 +44,7 @@ export function getWhatsAppProcessorUrl(
  * ninguno, por ejemplo un cambio de plantilla).
  */
 export function getWhatsAppFlowControlKey(phone: string | null | undefined) {
-  return `whatsapp-conversation-${phone?.trim() || "unknown"}`;
+  return qstashKey("whatsapp-conversation", phone?.trim() || "unknown");
 }
 
 /** Devuelve `false` sin lanzar cuando la cola no está configurada. */
@@ -151,7 +152,7 @@ export async function enqueueWhatsAppWaitCheck(
     retries: 2,
     timeout: 50,
     delay: `${BigInt(Math.max(1, Math.ceil(delaySeconds)))}s`,
-    deduplicationId,
+    deduplicationId: qstashKey(deduplicationId),
     flowControl: {
       key: getWhatsAppFlowControlKey(contactKey),
       parallelism: 1,

@@ -2,6 +2,7 @@ import { Client, Receiver } from "@upstash/qstash";
 
 import { MERCADOLIBRE_RECOVERY_CRON } from "@/lib/mercadolibre/recovery-schedule";
 import prismadb from "@/lib/prismadb";
+import { qstashKey } from "@/lib/qstash-keys";
 
 export { MERCADOLIBRE_RECOVERY_CRON } from "@/lib/mercadolibre/recovery-schedule";
 
@@ -113,7 +114,7 @@ export async function enqueueMercadoLibreWebhookEvent(
     timeout: 50,
     failureCallback: getMercadoLibreFailureUrl(environment),
     flowControl: {
-      key: `mercadolibre-connection-${connectionId}`,
+      key: qstashKey("mercadolibre-connection", connectionId),
       parallelism: 1,
     },
     label: ["mercadolibre", "webhook"],
@@ -247,7 +248,7 @@ export function getMercadoLibreOutboxFlowControlKey(
   connectionId: string,
   lane: MercadoLibreOutboxQueueLane,
 ) {
-  return `mercadolibre-${lane}-${connectionId}`;
+  return qstashKey("mercadolibre", lane, connectionId);
 }
 
 export function getMercadoLibreOutboxQueueLabel(
@@ -348,7 +349,7 @@ export function getMercadoLibreRecoveryScheduleConfig(
     timeout: 50,
     failureCallback: getMercadoLibreFailureUrl(environment),
     flowControl: {
-      key: `mercadolibre-recovery-${connectionId}`,
+      key: qstashKey("mercadolibre-recovery", connectionId),
       parallelism: 1,
     },
     label: ["mercadolibre", "recovery"],

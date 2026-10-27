@@ -18,19 +18,62 @@ export const MAX_WEB_PUSH_SUBSCRIPTIONS_PER_STORE = 10;
 const PUSH_TTL_SECONDS = 600;
 const PUSH_TIMEOUT_MS = 5000;
 
-export function getWebPushConfig(
-  source: { publicKey?: string; privateKey?: string; subject?: string } = {
-    // Directo de process.env, como otras integraciones opcionales: declaradas en lib/env.mjs, nunca obligatorias.
-    publicKey: process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY,
-    privateKey: process.env.WEB_PUSH_VAPID_PRIVATE_KEY,
-    subject: process.env.WEB_PUSH_VAPID_SUBJECT,
-  },
-): WebPushConfig | null {
+export type WebPushConfigReason =
+  | "missing_public"
+  | "missing_private"
+  | "missing_subject"
+  | "bad_subject_format"
+  | "bad_public_key_format"
+  | "bad_private_key_format";
+
+type WebPushSource = { publicKey?: string; privateKey?: string; subject?: string };
+
+const fromEnv = (): WebPushSource => ({
+  // Directo de process.env, como otras integraciones opcionales: declaradas en lib/env.mjs, nunca obligatorias.
+  publicKey: process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY,
+  privateKey: process.env.WEB_PUSH_VAPID_PRIVATE_KEY,
+  subject: process.env.WEB_PUSH_VAPID_SUBJECT,
+});
+
+/** base64url sin relleno (se tolera un «=» final) y con el largo exacto de la llave VAPID. */
+const isBase64Url = (value: string, length: number) => {
+  const bare = value.replace(/=+$/, "");
+  return bare.length === length && /^[A-Za-z0-9_-]+$/.test(bare);
+};
+
+/**
+ * La configuración o por qué falta, sin mirar los valores más allá de su
+ * forma: pública = punto P-256 sin comprimir (65 bytes → 87 caracteres, empieza
+ * por «B»), privada = 32 bytes (43 caracteres), remitente `mailto:` o `https://`.
+ */
+export function diagnoseWebPushConfig(source: WebPushSource = fromEnv()): { config: WebPushConfig | null; reason: WebPushConfigReason | null } {
   const publicKey = source.publicKey?.trim();
   const privateKey = source.privateKey?.trim();
   const subject = source.subject?.trim();
-  if (!publicKey || !privateKey || !subject || !/^(mailto:|https:\/\/)/.test(subject)) return null;
-  return { publicKey, privateKey, subject };
+  const fail = (reason: WebPushConfigReason) => ({ config: null, reason });
+  if (!publicKey) return fail("missing_public");
+  if (!privateKey) return fail("missing_private");
+  if (!subject) return fail("missing_subject");
+  if (!/^(mailto:|https:\/\/)/.test(subject)) return fail("bad_subject_format");
+  if (!isBase64Url(publicKey, 87) || !publicKey.startsWith("B")) return fail("bad_public_key_format");
+  if (!isBase64Url(privateKey, 43)) return fail("bad_private_key_format");
+  return { config: { publicKey, privateKey, subject }, reason: null };
+}
+
+let loggedReason = false;
+
+/** Lo mismo desde el entorno, anotando el motivo una vez por arranque (solo el motivo, nunca los valores). */
+export function getWebPushStatus(): { config: WebPushConfig | null; reason: WebPushConfigReason | null } {
+  const status = diagnoseWebPushConfig(fromEnv());
+  if (status.reason && !loggedReason) {
+    loggedReason = true;
+    console.warn("[WEB_PUSH] Avisos push no configurados", { reason: status.reason });
+  }
+  return status;
+}
+
+export function getWebPushConfig(source?: WebPushSource): WebPushConfig | null {
+  return source ? diagnoseWebPushConfig(source).config : getWebPushStatus().config;
 }
 
 /** La llave única de una suscripción: el endpoint puede pasar de 500 caracteres. */

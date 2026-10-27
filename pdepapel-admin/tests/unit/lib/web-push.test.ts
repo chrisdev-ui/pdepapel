@@ -41,7 +41,7 @@ vi.mock("web-push", () => ({
   },
 }));
 
-import { describePushDevice, getWebPushConfig, hashPushEndpoint, sendWebPushToStore, type WebPushConfig } from "@/lib/web-push";
+import { describePushDevice, diagnoseWebPushConfig, getWebPushConfig, getWebPushStatus, hashPushEndpoint, sendWebPushToStore, type WebPushConfig } from "@/lib/web-push";
 
 const config: WebPushConfig = { publicKey: "BPublicKeyTest", privateKey: "privateKeyTest", subject: "mailto:avisos@ejemplo.test" };
 const payload = { title: "P de Papel", body: "Una clienta lleva 31 min esperando", url: "/store-1/conversaciones?esperando=1", tag: "clientas-esperando-store-1" };
@@ -57,21 +57,48 @@ beforeEach(() => {
   webpush.failWith = null;
 });
 
-describe("getWebPushConfig", () => {
-  it("sin alguna de las tres variables, no configurado", () => {
-    expect(getWebPushConfig({ publicKey: "a", privateKey: "b" })).toBeNull();
-    expect(getWebPushConfig({ publicKey: "a", subject: "mailto:x@y.test" })).toBeNull();
-    expect(getWebPushConfig({ privateKey: "b", subject: "mailto:x@y.test" })).toBeNull();
-    expect(getWebPushConfig({ publicKey: " ", privateKey: "b", subject: "mailto:x@y.test" })).toBeNull();
+// Llaves ficticias con la forma de una VAPID real: pública 87 caracteres que empieza con «B», privada 43.
+const PUB = `B${"A".repeat(86)}`;
+const PRIV = "A".repeat(43);
+const SUBJECT = "mailto:avisos@ejemplo.test";
+
+describe("getWebPushConfig y diagnoseWebPushConfig", () => {
+  it("con las tres bien formadas, configurado", () => {
+    expect(diagnoseWebPushConfig({ publicKey: PUB, privateKey: PRIV, subject: SUBJECT })).toEqual({
+      config: { publicKey: PUB, privateKey: PRIV, subject: SUBJECT },
+      reason: null,
+    });
+    expect(getWebPushConfig({ publicKey: ` ${PUB} `, privateKey: `${PRIV}=`, subject: "https://admin.ejemplo.test" })).not.toBeNull();
   });
 
-  it("el remitente tiene que ser mailto: o https://", () => {
-    expect(getWebPushConfig({ publicKey: "a", privateKey: "b", subject: "avisos@ejemplo.test" })).toBeNull();
-    expect(getWebPushConfig({ publicKey: "a", privateKey: "b", subject: "https://admin.ejemplo.test" })).toEqual({ publicKey: "a", privateKey: "b", subject: "https://admin.ejemplo.test" });
+  it.each([
+    [{ privateKey: PRIV, subject: SUBJECT }, "missing_public"],
+    [{ publicKey: " ", privateKey: PRIV, subject: SUBJECT }, "missing_public"],
+    [{ publicKey: PUB, subject: SUBJECT }, "missing_private"],
+    [{ publicKey: PUB, privateKey: PRIV }, "missing_subject"],
+    [{ publicKey: PUB, privateKey: PRIV, subject: "avisos@ejemplo.test" }, "bad_subject_format"],
+    [{ publicKey: PUB, privateKey: PRIV, subject: "http://admin.ejemplo.test" }, "bad_subject_format"],
+    [{ publicKey: `"${PUB}"`, privateKey: PRIV, subject: SUBJECT }, "bad_public_key_format"],
+    [{ publicKey: `A${"A".repeat(86)}`, privateKey: PRIV, subject: SUBJECT }, "bad_public_key_format"],
+    [{ publicKey: PUB.slice(0, 80), privateKey: PRIV, subject: SUBJECT }, "bad_public_key_format"],
+    [{ publicKey: PUB, privateKey: `${PRIV}+/`, subject: SUBJECT }, "bad_private_key_format"],
+    [{ publicKey: PUB, privateKey: "corta", subject: SUBJECT }, "bad_private_key_format"],
+  ])("%j → %s", (source, reason) => {
+    expect(diagnoseWebPushConfig(source)).toEqual({ config: null, reason });
+    expect(getWebPushConfig(source)).toBeNull();
   });
 
-  it("en las pruebas las llaves no existen: el aviso queda «no configurado»", () => {
+  it("en las pruebas las llaves no sirven: el aviso queda «no configurado» y el motivo se anota una sola vez, sin valores", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(getWebPushConfig()).toBeNull();
+    const status = getWebPushStatus();
+    expect(status.config).toBeNull();
+    expect(status.reason).not.toBeNull();
+    getWebPushStatus();
+    const calls = warn.mock.calls.filter((call) => String(call[0]).includes("[WEB_PUSH]"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toEqual({ reason: status.reason });
+    warn.mockRestore();
   });
 });
 

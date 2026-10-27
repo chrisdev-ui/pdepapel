@@ -12,13 +12,18 @@ import { testPrisma } from "./helpers/database";
  */
 
 const mocks = vi.hoisted(() => ({
-  enqueue: vi.fn(),
   push: vi.fn(),
   rateLimit: vi.fn(),
+  qstash: null as unknown as ReturnType<typeof import("../helpers/qstash-fake").createStrictQStash>,
 }));
 
 vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: vi.fn().mockResolvedValue({ outcome: "escalated_no_match" }) }));
-vi.mock("@/lib/whatsapp/queue", () => ({ enqueueWhatsAppWebhookEvent: mocks.enqueue }));
+// La cola real con un QStash falso que rechaza las llaves que el real rechaza.
+vi.mock("@upstash/qstash", async () => {
+  const { createStrictQStash } = await import("../helpers/qstash-fake");
+  mocks.qstash = createStrictQStash();
+  return { Client: mocks.qstash.Client, Receiver: mocks.qstash.Receiver };
+});
 vi.mock("@/lib/web-push", async (importOriginal) => ({ ...(await importOriginal<object>()), sendWebPushToStore: mocks.push }));
 vi.mock("@/lib/rate-limit", async (importOriginal) => ({ ...(await importOriginal<object>()), consumeRateLimit: mocks.rateLimit }));
 vi.mock("@/lib/store-access", async (importOriginal) => ({ ...(await importOriginal<object>()), requireStoreOwner: vi.fn().mockResolvedValue("owner") }));
@@ -103,7 +108,7 @@ describe("comandos por WhatsApp desde el chat consigo misma", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.enqueue.mockResolvedValue(true);
+    mocks.qstash?.published.splice(0);
     mocks.push.mockResolvedValue({ configured: true, devices: 1, delivered: 1, removed: 0, failed: 0 });
     mocks.rateLimit.mockResolvedValue({ allowed: true, remaining: 10, retryAfterSeconds: 600 });
     await testPrisma.whatsAppAdminCommand.deleteMany({ where: { storeId } });
@@ -130,7 +135,7 @@ describe("comandos por WhatsApp desde el chat consigo misma", () => {
   it("una entrega firmada guarda el comando, aprende el número del negocio y va a la fila propia", async () => {
     const result = await ingestWhatsAppWebhook(selfEcho("wamid.self1", "/ayuda"), { signed: true });
     expect(result.queued).toBe(true);
-    expect(mocks.enqueue).toHaveBeenCalledWith(result.eventId, `self:${storeId}`);
+    expect(mocks.qstash.published.map((message) => message.flowControl?.key)).toEqual([`whatsapp-conversation-self-${storeId}`]);
     expect(await commands()).toMatchObject([{ echoId: "wamid.self1", command: "ayuda", status: "RECEIVED" }]);
     const connection = await testPrisma.marketplaceConnection.findUniqueOrThrow({ where: { id: connectionId } });
     expect(connection).toMatchObject({ selfPhone: BUSINESS, selfBsuid: BUSINESS_BSUID });
@@ -139,7 +144,7 @@ describe("comandos por WhatsApp desde el chat consigo misma", () => {
   it("sin firma no guarda comandos ni aprende nada, y el evento se cierra sin crear conversación", async () => {
     const result = await ingestWhatsAppWebhook(selfEcho("wamid.forged", "/estado " + orderNumber));
     expect(result).toMatchObject({ queued: false, selfChat: true });
-    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.qstash.published).toEqual([]);
     expect(await commands()).toEqual([]);
     const event = await testPrisma.marketplaceWebhookEvent.findUniqueOrThrow({ where: { id: result.eventId } });
     expect(event).toMatchObject({ status: "PROCESSED", lastError: SELF_CHAT_EVENT_NOTE });
@@ -150,7 +155,7 @@ describe("comandos por WhatsApp desde el chat consigo misma", () => {
 
   it("un eco hacia una clienta que empieza con «/» nunca es comando: se archiva como respuesta de Paula", async () => {
     const result = await ingestWhatsAppWebhook(customerEcho("wamid.cust1", `/estado ${orderNumber}`), { signed: true });
-    expect(mocks.enqueue).toHaveBeenCalledWith(result.eventId, CUSTOMER_BSUID);
+    expect(mocks.qstash.published.map((message) => message.flowControl?.key)).toEqual([`whatsapp-conversation-${CUSTOMER_BSUID}`]);
     expect(await commands()).toEqual([]);
     await processWhatsAppWebhookEvent(result.eventId);
     const rows = await testPrisma.conversationMessage.findMany({ where: { conversation: { storeId } }, select: { sentBy: true } });

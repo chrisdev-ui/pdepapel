@@ -13,7 +13,7 @@ import {
 import { markOwnerActivity } from "@/lib/whatsapp/owner-activity";
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import { recordSelfChatCommands } from "@/lib/whatsapp/admin-commands";
-import { businessPhoneOf, scanSelfChat } from "@/lib/whatsapp/self-chat";
+import { businessPhoneOf, scanSelfChat, selfChatLane } from "@/lib/whatsapp/self-chat";
 import {
   classifyWhatsAppWebhookEvent,
   getWhatsAppWebhookConversationKey,
@@ -115,7 +115,7 @@ export async function ingestWhatsAppWebhook(body: string, options: { signed?: bo
     let queued = false;
     if (!selfChat.closed && connection) {
       // Solo comandos: a su fila, sin pasar por ignorados ni por la marca del eco de Paula.
-      queued = await enqueueWhatsAppWebhookEvent(event.id, `self:${connection.storeId}`).catch((error: unknown) => {
+      queued = await enqueueWhatsAppWebhookEvent(event.id, selfChatLane(connection.storeId)).catch((error: unknown) => {
         console.error("[WHATSAPP_WEBHOOK] No se pudo encolar el comando", {
           eventId: event.id,
           message: error instanceof Error ? error.message : "unknown",

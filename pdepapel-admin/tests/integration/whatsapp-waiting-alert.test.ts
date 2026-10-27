@@ -41,7 +41,8 @@ const MIN = 60 * 1000;
 const DAY = new Date("2026-10-14T20:00:00Z");
 const bogota = (hhmm: string) => new Date(`2026-10-14T${hhmm}:00-05:00`);
 const ago = (now: Date, minutes: number) => new Date(now.getTime() - minutes * MIN);
-const VAPID = { NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY: "BTestPublicKey", WEB_PUSH_VAPID_PRIVATE_KEY: "test-private-key", WEB_PUSH_VAPID_SUBJECT: "mailto:avisos@ejemplo.test" };
+// Llaves ficticias con la forma de una VAPID real (pública 87 caracteres con «B», privada 43): la configuración valida la forma.
+const VAPID = { NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY: `B${"A".repeat(86)}`, WEB_PUSH_VAPID_PRIVATE_KEY: "A".repeat(43), WEB_PUSH_VAPID_SUBJECT: "mailto:avisos@ejemplo.test" };
 
 let fixture: InventoryFixture;
 let store = "";
@@ -275,7 +276,7 @@ describe("POST/GET/DELETE /api/[storeId]/web-push", () => {
   it("la dueña registra el aparato (sin duplicar) y lo quita", async () => {
     const status = await call("GET");
     expect(status.status).toBe(200);
-    expect(await status.json()).toEqual({ configured: true, publicKey: VAPID.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY, devices: 0, max: 10 });
+    expect(await status.json()).toEqual({ configured: true, reason: null, publicKey: VAPID.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY, devices: 0, max: 10 });
 
     expect((await call("POST", subscription("a"))).status).toBe(200);
     expect((await call("POST", subscription("a"))).status).toBe(200);
@@ -315,7 +316,7 @@ describe("POST/GET/DELETE /api/[storeId]/web-push", () => {
     const saved = process.env.WEB_PUSH_VAPID_PRIVATE_KEY;
     delete process.env.WEB_PUSH_VAPID_PRIVATE_KEY;
     try {
-      expect(await (await call("GET")).json()).toMatchObject({ configured: false, publicKey: null });
+      expect(await (await call("GET")).json()).toMatchObject({ configured: false, reason: "missing_private", publicKey: null });
       expect((await call("POST", subscription("c"))).status).toBe(400);
     } finally {
       process.env.WEB_PUSH_VAPID_PRIVATE_KEY = saved;

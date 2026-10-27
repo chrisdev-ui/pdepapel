@@ -13,6 +13,9 @@ import type { WhatsAppWebhookPayload } from "@/lib/whatsapp/webhook";
  * clienta nunca es un comando: la clienta ya lo vio.
  */
 
+/** Fila de QStash de los comandos de una tienda (sin «:», que QStash rechaza). */
+export const selfChatLane = (storeId: string) => `self-${storeId}`;
+
 export interface SelfChatIdentity {
   phone: string | null;
   bsuid: string | null;
