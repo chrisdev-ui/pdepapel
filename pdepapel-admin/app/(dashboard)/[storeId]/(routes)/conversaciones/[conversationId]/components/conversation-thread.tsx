@@ -329,7 +329,7 @@ export function ConversationThread({
   const [loading, setLoading] = useState(false);
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const isResolved = conversation.status === ConversationStatus.RESOLVED;
-  // Solo se ofrece crear el pedido si de verdad llegó un carrito.
+  // Con carrito, el borrador sale del carrito; sin él, sale vacío (también para clientas sin teléfono visible).
   const hasCart = conversation.messages.some((message) => message.cart !== null);
 
   const createOrder = async () => {
@@ -344,7 +344,9 @@ export function ConversationThread({
         title: data.existing ? "Este chat ya tenía un pedido" : "Pedido creado en borrador",
         description: data.existing
           ? "Te llevo al pedido que ya existía."
-          : "Quedó con los productos del carrito. Faltan dirección, envío y pago.",
+          : hasCart
+            ? "Quedó con los productos del carrito. Faltan dirección, envío y pago."
+            : "Quedó ligado a este chat. Agrega productos, ciudad y dirección, y confírmalo.",
         variant: "success",
       });
     } catch (error) {
@@ -513,11 +515,11 @@ export function ConversationThread({
             >
               <Receipt className="mr-2 h-4 w-4" /> Ver pedido
             </Button>
-          ) : hasCart ? (
-            <Button variant="outline" size="sm" disabled={loading} onClick={createOrder}>
-              <Receipt className="mr-2 h-4 w-4" /> Crear pedido
+          ) : (
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" disabled={loading} onClick={createOrder}>
+              <Receipt className="mr-2 h-4 w-4" aria-hidden="true" /> Crear pedido
             </Button>
-          ) : null}
+          )}
           <Button
             variant="outline"
             size="sm"

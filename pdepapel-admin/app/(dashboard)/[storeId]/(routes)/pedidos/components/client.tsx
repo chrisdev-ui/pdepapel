@@ -149,7 +149,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
 
   // Las pestañas de excepción solo aparecen cuando tienen pedidos (o están abiertas).
   const visibleViews = ORDER_VIEWS.filter(
-    (item) => !(item.id === "con-novedad" || item.id === "sin-cuadrar") || counts[item.id] > 0 || view === item.id,
+    (item) => !(item.id === "con-novedad" || item.id === "sin-cuadrar" || item.id === "borradores-viejos") || counts[item.id] > 0 || view === item.id,
   );
 
   return (

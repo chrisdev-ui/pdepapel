@@ -177,7 +177,7 @@ export function getStatusActions(
   switch (from) {
     case OrderStatus.DRAFT:
       if (isQuote) push(OrderStatus.QUOTATION, "Enviar cotización", true);
-      else push(OrderStatus.PENDING, "Activar pedido", true);
+      else push(OrderStatus.PENDING, "Confirmar pedido", true);
       push(OrderStatus.PAID, "Marcar como pagado", false, "pay");
       break;
     case OrderStatus.QUOTATION:

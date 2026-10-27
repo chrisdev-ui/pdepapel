@@ -68,12 +68,12 @@ describe("las reglas que la reordenación NO puede cambiar", () => {
     ctx: { type: OrderType; paymentMethod: PaymentMethod | null },
   ) => getStatusActions(status, ctx).map((a) => a.label);
 
-  it("Borrador: activar, marcar pagado y cancelar", () => {
+  it("Borrador: confirmar, marcar pagado y cancelar", () => {
     expect(getAllowedTransitions(OrderStatus.DRAFT, standard)).toEqual(
       expect.arrayContaining([OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CANCELLED]),
     );
     expect(labels(OrderStatus.DRAFT, standard)).toEqual(
-      expect.arrayContaining(["Activar pedido", "Marcar como pagado", "Cancelar pedido"]),
+      expect.arrayContaining(["Confirmar pedido", "Marcar como pagado", "Cancelar pedido"]),
     );
   });
 

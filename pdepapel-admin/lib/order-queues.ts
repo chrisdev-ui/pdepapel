@@ -27,6 +27,7 @@ export type OrderView =
   | "con-novedad"
   | "sin-cuadrar"
   | "cotizaciones"
+  | "borradores-viejos"
   | "todos";
 
 export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
@@ -38,6 +39,7 @@ export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
   { id: "con-novedad", label: "Con novedad" },
   { id: "sin-cuadrar", label: "Inventario sin cuadrar" },
   { id: "cotizaciones", label: "Cotizaciones" },
+  { id: "borradores-viejos", label: "Borradores viejos" },
   { id: "todos", label: "Todos" },
 ];
 
@@ -298,7 +300,18 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
       return queue === "issue" || (queue === "in-transit" && Boolean(order && isShippingStale(order, now)));
     case "cotizaciones":
       return queue === "quote";
+    case "borradores-viejos":
+      return isStaleDraft(order, now);
   }
+}
+
+/** Un borrador quieto más de esto se lista para limpiar a mano; nunca se borra solo. */
+export const STALE_DRAFT_AFTER_DAYS = 7;
+
+export function isStaleDraft(order: QueueableOrder | undefined, now = new Date()): boolean {
+  if (!order || order.status !== OrderStatus.DRAFT || !order.createdAt) return false;
+  const created = order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt);
+  return now.getTime() - created.getTime() > STALE_DRAFT_AFTER_DAYS * 24 * 60 * 60 * 1000;
 }
 
 export function isExpiringSoon(expiresAt?: Date | string | null, now = new Date(), days = 2): boolean {

@@ -4,11 +4,14 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
-import { createOrderFromConversationCart } from "@/lib/whatsapp/cart-orders";
+import { createOrderFromConversationCart, findLatestCart } from "@/lib/whatsapp/cart-orders";
+import { createWhatsAppDraftOrder } from "@/lib/whatsapp/draft-orders";
 
 /**
- * Convierte el carrito de una conversación en un pedido en borrador. Solo la
- * dueña: el bot nunca crea pedidos, porque llegan sin dirección ni pago.
+ * «Crear pedido» en una conversación: con carrito del catálogo, el borrador
+ * sale del carrito; sin carrito, un borrador vacío ligado a la conversación
+ * (con su teléfono, o sin él si la clienta solo tiene nombre de usuario) que
+ * Paula completa en el panel. Solo la dueña: el bot nunca crea pedidos.
  */
 export async function POST(
   _req: Request,
@@ -23,11 +26,20 @@ export async function POST(
     }
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await createOrderFromConversationCart({
-      storeId: params.storeId,
-      conversationId: params.conversationId,
-      createdBy: userId,
-    });
+    const found = await findLatestCart(params.storeId, params.conversationId);
+    if (!found) throw ErrorFactory.NotFound("La conversación no existe en esta tienda");
+    const result = found.items
+      ? await createOrderFromConversationCart({
+          storeId: params.storeId,
+          conversationId: params.conversationId,
+          createdBy: userId,
+        })
+      : await createWhatsAppDraftOrder({
+          storeId: params.storeId,
+          conversationId: params.conversationId,
+          origin: "conversaciones",
+          createdBy: userId,
+        });
 
     return NextResponse.json(
       { orderId: result.orderId, existing: result.existing },

@@ -63,6 +63,7 @@ import { DiscountsSection } from "./order-form/discounts-section";
 import { GiftSection } from "./order-form/gift-section";
 import { HistoryCard } from "./order-form/history-card";
 import { RiskReviewCard } from "./order-form/risk-review-card";
+import { WhatsAppDraftCard } from "./order-form/whatsapp-draft-card";
 import { CancelAsFraudDialog, canCancelAsFraud, deleteWarning } from "../../components/cancel-as-fraud";
 import { ItemsSection } from "./order-form/items-section";
 import { LeaveGuard } from "./order-form/leave-guard";
@@ -1027,6 +1028,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               poder fijarse. */}
           <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
             {initialData && <RiskReviewCard storeId={storeId} order={initialData} className="order-first lg:order-none" />}
+            {initialData && <WhatsAppDraftCard order={initialData} className="order-first lg:order-none" />}
             {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
             <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
   <SummaryCard

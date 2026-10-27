@@ -500,6 +500,21 @@ export async function PATCH(
       }
     }
 
+    // «Confirmar pedido» de un borrador: como al crearlo activo, necesita
+    // productos y que alcancen. El borrador no reservó nada, así que se mira
+    // todo lo que va a quedar, venga o no en el cuerpo.
+    if (originalStatus === OrderStatus.DRAFT && isActiveStatus) {
+      if (orderItems.length === 0) {
+        throw ErrorFactory.InvalidRequest("Agrega al menos un producto antes de confirmar el pedido.");
+      }
+      await validateStockAvailability(
+        prismadb,
+        orderItems
+          .filter((item: any) => item.productId)
+          .map((item: any) => ({ productId: item.productId as string, quantity: Number(item.quantity) || 1 })),
+      );
+    }
+
     // Un pedido de cápsulas no sale sin cerrar su sorteo: la caja sale de lo que se sacó.
     if (targetStatus === OrderStatus.SENT && order.status !== OrderStatus.SENT) {
       await assertCapsuleDrawsClosed(prismadb, [params.orderId]);
@@ -556,6 +571,12 @@ export async function PATCH(
               "No se pueden agregar items manuales a una orden activa (PENDING, PAID, ACCEPTED).",
             );
           }
+          // El borrador de WhatsApp se arma solo con productos de la tienda: el valor acordado por chat no es un precio.
+          if (order.draftOrigin) {
+            throw ErrorFactory.InvalidRequest(
+              "Este pedido de WhatsApp lleva productos de la tienda, con su precio. Para cobrar menos, aplica un descuento.",
+            );
+          }
           if (!item.name || item.price === undefined) {
             throw ErrorFactory.InvalidRequest(
               "Los items manuales requieren nombre y precio.",
@@ -587,8 +608,9 @@ export async function PATCH(
           const product = productMap.get(item.productId);
           const priceInfo = pricesMap.get(item.productId);
           // Priority: 1. Sent item.price (preserves historical order item price/custom admin price) -> 2. Active discount price -> 3. Base product price
+          // Un borrador de WhatsApp siempre cobra el precio de la tienda (con su oferta); la rebaja va como descuento.
           const effectivePrice =
-            item.price !== undefined && item.price !== null
+            item.price !== undefined && item.price !== null && !order.draftOrigin
               ? Number(item.price)
               : (priceInfo?.price ?? product?.price ?? 0);
           return {

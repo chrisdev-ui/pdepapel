@@ -1290,6 +1290,11 @@ model Order {
   whatsappOptInSource  WhatsAppOptInSource?
   whatsappOptInBy      String?              @db.VarChar(191)
   whatsappOptOutAt     DateTime?
+  /// Borrador creado desde WhatsApp (`/pedido`) o desde Conversaciones: el valor que se
+  /// acordó por chat (pesos, sin productos todavía) y de dónde salió. Null en los demás.
+  draftAgreedAmount    Int?
+  /// `whatsapp_command` | `conversaciones`.
+  draftOrigin          String?              @db.VarChar(24)
 
   quoteRequests     QuoteRequest[]
   conversations     Conversation[]
@@ -4138,29 +4143,37 @@ model WebPushSubscription {
 /// de entregas firmadas. Sin texto, teléfono ni nombre de clientas: el
 /// argumento es como mucho un número de pedido.
 model WhatsAppAdminCommand {
-  id        String    @id @default(uuid())
-  storeId   String
+  id            String    @id @default(uuid())
+  storeId       String
   /// wamid del eco: un reenvío del mismo mensaje no corre dos veces.
-  echoId    String    @unique @db.VarChar(191)
+  echoId        String    @unique @db.VarChar(191)
   /// Primera palabra sin la barra, en minúsculas («estado», «ayuda», o la desconocida, recortada).
-  command   String    @db.VarChar(32)
+  command       String    @db.VarChar(32)
   /// Número de pedido de `/estado`; nada para los demás.
-  args      String?   @db.VarChar(64)
-  /// RECEIVED → RUNNING → DONE | STALE | RATE_LIMITED | FAILED.
-  status    String    @default("RECEIVED") @db.VarChar(16)
+  args          String?   @db.VarChar(64)
+  /// RECEIVED → RUNNING → DONE | STALE | RATE_LIMITED | FAILED; `/guia` pasa por
+  /// AWAITING_CONFIRM → CONFIRMING → DONE, o EXPIRED.
+  status        String    @default("RECEIVED") @db.VarChar(16)
   /// ok | unknown_command | missing_order | order_not_found | stale | rate_limited | error.
-  outcome   String?   @db.VarChar(32)
+  outcome       String?   @db.VarChar(32)
   /// La respuesta tal cual llegó en el aviso push.
-  reply     String?   @db.Text
-  orderId   String?
+  reply         String?   @db.Text
+  orderId       String?
   /// Aparatos a los que llegó el aviso.
-  delivered Int       @default(0)
+  delivered     Int       @default(0)
   /// Hora del mensaje según WhatsApp.
-  sentAt    DateTime
-  createdAt DateTime  @default(now())
-  doneAt    DateTime?
+  sentAt        DateTime
+  createdAt     DateTime  @default(now())
+  doneAt        DateTime?
+  /// `/guia`: sha256 del código de 4 cifras con el id de la fila (nunca el código), cuándo
+  /// vence, cuántos `/confirmar` fallaron y la tarifa cotizada que se usará al confirmar.
+  codeHash      String?   @db.VarChar(64)
+  codeExpiresAt DateTime?
+  codeAttempts  Int       @default(0)
+  quote         Json?
 
   store Store @relation(fields: [storeId], references: [id])
 
   @@index([storeId, createdAt])
+  @@index([storeId, command, status])
 }
