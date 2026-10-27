@@ -48,4 +48,4 @@ Variables que manda el panel: {{1}} el primer nombre de la clienta, {{2}} el nú
 2. Probar con un pedido propio que tenga la casilla marcada: crear la guía y revisar que llegue el WhatsApp y el correo.
 3. Revisar la calidad de las plantillas en WhatsApp Manager la primera semana.
 
-Sin pie de «BAJA»: el chat todavía no lee esa palabra (pendiente para el próximo lote). Mientras tanto, si una clienta pide no recibir avisos, Paula los quita desde el pedido («Quitar avisos por WhatsApp»).
+Desde el 2026-10-27 el chat lee «BAJA», «STOP» o «no más avisos»: anota la baja en sus pedidos y le confirma una vez. Las plantillas siguen sin pie de «BAJA»: agregarlo es una versión nueva de la plantilla en Meta. Paula también puede quitar los avisos desde el pedido («Quitar avisos por WhatsApp»).
