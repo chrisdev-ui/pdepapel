@@ -123,6 +123,9 @@ export async function POST(req: Request) {
           : []),
       ];
 
+      // Sin identificador no se busca: un OR vacío o con un campo undefined llegó a caer en el primer envío (antes del 2026-09-10).
+      if (identifiers.length === 0) return { type: "NOT_FOUND" } as const;
+
       const shipping = await tx.shipping.findFirst({
         where: {
           ...(scopedStoreId ? { storeId: scopedStoreId } : {}),

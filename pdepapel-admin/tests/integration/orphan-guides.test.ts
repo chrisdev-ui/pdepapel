@@ -174,6 +174,22 @@ describe("guías de EnvioClick sin pedido", () => {
     expect((await listOrphanGuides(testPrisma, f.store.id)).some((g) => g.idOrder === "71006")).toBe(false);
   });
 
+  it("un aviso de una guía hecha fuera del panel (sin referencia) no se pega a ningún pedido: queda como guía sin pedido", async () => {
+    const order = await paidOrder({ shipping: "manual" });
+    const shipping = await testPrisma.shipping.findFirstOrThrow({ where: { orderId: order.id } });
+    process.env.ENVIOCLICK_WEBHOOK_SECRET ||= "secreto-de-pruebas-envioclick-1234";
+    const { POST } = await import("@/app/api/webhook/envioclick/route");
+    const token = process.env.ENVIOCLICK_WEBHOOK_SECRET;
+    for (const extra of [{}, { myShipmentReference: null }, { myShipmentReference: "" }]) {
+      const response = await POST(new Request(`http://admin.test/api/webhook/envioclick?token=${token}&store=${f.store.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idOrder: 71008, trackingCode: "0340AJENA001", events: [{ statusStep: "Entregado", timestamp: "2026-10-23 10:00:00" }], ...extra }) }));
+      expect(response.status).toBe(200);
+    }
+    expect(await testPrisma.shippingTrackingEvent.count({ where: { shippingId: shipping.id } })).toBe(0);
+    const after = await testPrisma.shipping.findUniqueOrThrow({ where: { id: shipping.id }, select: { status: true, trackingCode: true } });
+    expect(after).toEqual({ status: shipping.status, trackingCode: shipping.trackingCode });
+    expect(await testPrisma.shippingWebhookEvent.count({ where: { storeId: f.store.id, idOrder: "71008", reason: "shipping_not_found" } })).toBe(3);
+  });
+
   it("«Crear pedido desde esta guía»: el pedido nuevo queda con la guía y no se crea otra en EnvioClick", async () => {
     session.userId = ownerId;
     await orphan("71007", [["Pendiente de recolección", "2026-10-26 00:00:00"]]);

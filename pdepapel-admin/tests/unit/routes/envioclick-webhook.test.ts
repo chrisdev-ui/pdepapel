@@ -217,6 +217,34 @@ describe("POST /api/webhook/envioclick", () => {
   });
 });
 
+describe("una guía hecha fuera del panel no cae en un pedido cualquiera", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Antes del 2026-09-10 el OR llevaba `{ myShipmentReference: undefined }`, que Prisma
+  // trata como «sin condición»: los avisos de guías ajenas caían en el primer envío
+  // (183 eventos en ORD-…-556, 71 en ORD-…-765).
+  it.each([
+    ["sin referencia", {}],
+    ["referencia null", { myShipmentReference: null }],
+    ["referencia vacía", { myShipmentReference: "" }],
+  ])("%s: busca solo por idOrder", async (_label, extra) => {
+    const tx = txClient(null);
+    mocks.transaction.mockImplementation(async (fn: (client: unknown) => unknown) => fn(tx));
+    expect((await post({ idOrder: 4687105, events: [], ...extra })).status).toBe(200);
+    const where = tx.shipping.findFirst.mock.calls[0][0].where;
+    expect(where.OR).toEqual([{ envioClickIdOrder: 4687105 }]);
+    expect(JSON.stringify(where)).not.toContain("myShipmentReference");
+  });
+
+  it("idOrder null y sin referencia: no busca nada que pueda coincidir", async () => {
+    const tx = txClient(null);
+    mocks.transaction.mockImplementation(async (fn: (client: unknown) => unknown) => fn(tx));
+    const response = await post({ idOrder: null, myShipmentReference: "", events: [] });
+    expect(response.status).toBe(200);
+    expect(tx.shipping.findFirst).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /api/webhook/envioclick", () => {
   it("does not confirm the endpoint to an unauthenticated caller", async () => {
     expect((await GET(new Request(url()))).status).toBe(401);
