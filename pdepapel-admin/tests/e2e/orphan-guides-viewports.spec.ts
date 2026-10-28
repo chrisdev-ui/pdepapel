@@ -17,6 +17,7 @@ import { createTestPrismaClient } from "./helpers/test-database";
  *
  *   npm run test:e2e:seed-admin
  *   npm run test:e2e:prod -- tests/e2e/orphan-guides-viewports.spec.ts
+ *   (E2E_MANUAL_SHOTS=1 copia las capturas a content/manual/img)
  */
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
@@ -192,8 +193,11 @@ test.describe("guías hechas en EnvioClick", () => {
     await suggestion.click();
     await row.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(SHOTS, "manual-guias-vincular.jpg"), type: "jpeg", quality: 80 });
-    for (const name of ["manual-guias-inicio", "manual-guias-envios", "manual-guias-vincular"]) {
-      copyFileSync(path.join(SHOTS, `${name}.jpg`), path.join(MANUAL_IMG, `${name.replace("manual-", "")}.jpg`));
+    // Solo al rehacer el manual: copiarlas siempre dejaría el árbol con cambios en cada corrida.
+    if (process.env.E2E_MANUAL_SHOTS === "1") {
+      for (const name of ["manual-guias-inicio", "manual-guias-envios", "manual-guias-vincular"]) {
+        copyFileSync(path.join(SHOTS, `${name}.jpg`), path.join(MANUAL_IMG, `${name.replace("manual-", "")}.jpg`));
+      }
     }
   });
 
