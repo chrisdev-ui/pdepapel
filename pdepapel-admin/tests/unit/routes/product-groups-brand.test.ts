@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Los SKU repetidos tienen su prueba con base real (tests/integration/product-group-sku-guard.test.ts).
+vi.mock("@/lib/variant-skus", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/variant-skus")>()),
+  assertNewVariantSkusFree: vi.fn(),
+}));
 vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: {} } }));
 vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/cache", () => ({
@@ -64,6 +69,7 @@ const existingVariant = {
 function makeTx(brand: { name: string; isArchived: boolean } | null) {
   return {
     brand: { findFirst: vi.fn().mockResolvedValue(brand) },
+    category: { findUnique: vi.fn().mockResolvedValue({ name: "Cuadernos" }) },
     productGroup: {
       create: vi.fn().mockResolvedValue({ id: "group-new", name: "Cuaderno" }),
       findFirst: vi.fn().mockResolvedValue({ id: "group-1", slug: "cuaderno", brandId: "brand-old" }),

@@ -21,6 +21,11 @@ vi.mock("@/lib/cloudinary-cleanup", () => ({
   deleteCloudinaryImages: vi.fn().mockResolvedValue({ deleted: 0, kept: 0 }),
 }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Los SKU repetidos tienen su prueba con base real (tests/integration/product-group-sku-guard.test.ts).
+vi.mock("@/lib/variant-skus", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/variant-skus")>()),
+  assertNewVariantSkusFree: vi.fn(),
+}));
 vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/product-slugs", () => ({
@@ -48,7 +53,7 @@ const tx = {
   productGroup: {
     create: vi.fn().mockResolvedValue({ id: "group-1", name: "Cartuchera" }),
   },
-  category: { findFirst: vi.fn().mockResolvedValue({ id: "cat-1" }) },
+  category: { findFirst: vi.fn().mockResolvedValue({ id: "cat-1" }), findUnique: vi.fn().mockResolvedValue({ name: "Cartucheras" }) },
   color: { findMany: vi.fn().mockResolvedValue([attribute("c1", "Rosa")]) },
   design: { findMany: vi.fn().mockResolvedValue([attribute("d1", "Panda")]) },
   size: { findMany: vi.fn().mockResolvedValue([attribute("s1", "Única")]) },
