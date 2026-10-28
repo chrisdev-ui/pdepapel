@@ -162,7 +162,7 @@ async function main() {
         const finalMilestone = milestoneForStatus(adopted.status);
         if (finalMilestone) await claimSilent(tx, match, finalMilestone, at);
         console.log(`  ✓ ${match.orderNumber}: ${adopted.previousStatus} → ${adopted.status}, sin avisar.`);
-      });
+      }, { maxWait: 15_000, timeout: 120_000 }); // Desde fuera de Railway cada consulta tarda; los 5 s por defecto no alcanzan para copiar los eventos.
       written += 1;
     }
     console.log(`PROD_WRITE_ROWS=${written}`);
