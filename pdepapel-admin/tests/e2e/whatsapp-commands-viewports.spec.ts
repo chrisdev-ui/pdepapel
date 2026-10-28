@@ -88,8 +88,8 @@ test.describe("Comandos por WhatsApp en el panel", () => {
       await signIn(page, `/${storeId}/conversaciones/comandos`);
       await expect(page.getByRole("heading", { name: "Comandos por WhatsApp" })).toBeVisible({ timeout: 90_000 });
       await expect(page.getByText("/estado", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("Respondido")).toBeVisible();
-      await expect(page.getByText("Llegó tarde")).toBeVisible();
+      await expect(page.getByText("Respondido", { exact: true })).toBeVisible();
+      await expect(page.getByText("Llegó tarde", { exact: true })).toBeVisible();
       await expect(page.getByText("Aviso en 2 aparatos")).toBeVisible();
       const usage = page.getByTestId("command-usage");
       await expect(usage).toContainText("Últimos 14 días");
