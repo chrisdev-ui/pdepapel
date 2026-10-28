@@ -12,6 +12,7 @@
  * Escritura (después del despliegue del código, con el token de Christian):
  *   npm run prod:approve -- "<motivo>"
  *   npm run prod:write -- scripts/adopt-orphan-guides-silent.ts --apply --expect new
+ * Con `--orders=ORD-a,ORD-b` solo esos pedidos (aborta si alguno no coincide).
  *
  * Antes de escribir anota en `ops/prod-writes.log` las líneas DESHACER de cada
  * pedido. Una adopción que movería inventario se deshace sola (no es para un
@@ -133,7 +134,16 @@ async function main() {
       const local = /@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? "");
       if (!local && !user.startsWith("pdepapel_ro@")) throw new Error("el ensayo contra producción corre solo con pdepapel_ro.");
     }
-    const matches = await findMatches(db);
+    // --orders A,B: solo esos pedidos (un caso dudoso se deja como guía sin pedido).
+    const ordersArg = args.find((arg) => arg.startsWith("--orders="))?.slice("--orders=".length);
+    const only = ordersArg ? new Set(ordersArg.split(",").map((order) => order.trim()).filter(Boolean)) : null;
+    const allMatches = await findMatches(db);
+    if (only) {
+      const missing = Array.from(only).filter((order) => !allMatches.some((match) => match.orderNumber === order));
+      if (missing.length > 0) throw new Error(`no están entre las coincidencias: ${missing.join(", ")}`);
+    }
+    const matches = only ? allMatches.filter((match) => only.has(match.orderNumber)) : allMatches;
+    if (only) console.log(`Solo ${matches.length} de ${allMatches.length} (--orders); quedan sin tocar: ${allMatches.filter((match) => !only.has(match.orderNumber)).map((match) => match.orderNumber).join(", ") || "ninguno"}.`);
     console.log(`${apply ? "APLICAR" : "ENSAYO"}: ${matches.length} pedido(s) con el número de una guía sin pedido.`);
     for (const m of matches) {
       console.log(`  ${m.orderNumber} ← guía ${m.idOrder} (${m.trackingCode}) · envío ${m.shipping.status} → ${m.guideStatus} · pedido ${m.orderStatus}`);
