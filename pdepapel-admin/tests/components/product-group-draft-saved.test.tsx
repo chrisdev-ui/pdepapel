@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * Otra pestaña guardó este mismo grupo: esta deja de guardar su borrador (que
  * tiene los mismos SKU), lo borra y ofrece abrir lo guardado. Así un segundo
  * «Guardar» no vuelve a mandar el mismo grupo desde un borrador viejo.
+ *
+ * El aviso de la propia pestaña no cuenta: con una sola pestaña abierta, cada
+ * guardado mostraba «Este grupo se guardó en otra pestaña» (regresión de
+ * b6710ce7). La «otra pestaña» se simula con un segundo `createDraftBroadcast`.
  */
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -38,7 +42,11 @@ vi.mock("axios", () => ({
 }));
 
 import { ProductGroupForm } from "@/app/(dashboard)/[storeId]/(routes)/productos/components/product-group-form";
-import { announceDraftSaved } from "@/lib/draft-broadcast";
+import { announceDraftSaved, createDraftBroadcast } from "@/lib/draft-broadcast";
+
+const otherTab = createDraftBroadcast("otra-pestana");
+const wait = () => new Promise((resolve) => setTimeout(resolve, 50));
+const notices = () => mocks.toast.mock.calls.map(([arg]) => arg?.title).filter((title) => typeof title === "string" && title.includes("otra pestaña"));
 
 class ObservadorVacio {
   observe() {}
@@ -65,7 +73,7 @@ describe("grupo nuevo guardado en otra pestaña", () => {
     expect(key).toBe("product-group-form-store-1-new");
     expect(mocks.persist.at(-1)?.enabled).toBe(true);
 
-    announceDraftSaved(key, "grupo-9");
+    otherTab.announceDraftSaved(key, "grupo-9");
 
     await waitFor(() => expect(mocks.clearStorage).toHaveBeenCalled());
     await waitFor(() => expect(mocks.persist.at(-1)?.enabled).toBe(false));
@@ -76,9 +84,41 @@ describe("grupo nuevo guardado en otra pestaña", () => {
 
   it("el aviso de otro borrador (otra llave) no lo toca", async () => {
     render(<ProductGroupForm categories={[]} sizes={[]} colors={[]} designs={[]} suppliers={[]} />);
-    announceDraftSaved("product-group-form-store-1-otro", "grupo-1");
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    otherTab.announceDraftSaved("product-group-form-store-1-otro", "grupo-1");
+    await wait();
     expect(mocks.clearStorage).not.toHaveBeenCalled();
     expect(mocks.persist.at(-1)?.enabled).toBe(true);
+  });
+
+  it("lo que avisa esta misma pestaña al guardar no muestra el aviso ni apaga el borrador", async () => {
+    render(<ProductGroupForm categories={[]} sizes={[]} colors={[]} designs={[]} suppliers={[]} />);
+    announceDraftSaved(mocks.persist[0].key, "grupo-9");
+    await wait();
+    expect(notices()).toEqual([]);
+    expect(mocks.clearStorage).not.toHaveBeenCalled();
+    expect(mocks.persist.at(-1)?.enabled).toBe(true);
+  });
+});
+
+describe("editar un grupo existente", () => {
+  const group = (id: string) => ({ id, name: `Grupo ${id}`, description: "", products: [], images: [] }) as never;
+
+  it("cada grupo usa su propia llave; guardar el grupo B en otra pestaña no toca el A", async () => {
+    render(<ProductGroupForm initialData={group("grupo-a")} categories={[]} sizes={[]} colors={[]} designs={[]} suppliers={[]} />);
+    expect(mocks.persist[0].key).toBe("product-group-form-store-1-grupo-a");
+    otherTab.announceDraftSaved("product-group-form-store-1-grupo-b", "grupo-b");
+    await wait();
+    expect(notices()).toEqual([]);
+    expect(mocks.persist.at(-1)?.enabled).toBe(true);
+  });
+
+  it("guardar el mismo grupo en esta pestaña no avisa; en otra pestaña sí", async () => {
+    render(<ProductGroupForm initialData={group("grupo-a")} categories={[]} sizes={[]} colors={[]} designs={[]} suppliers={[]} />);
+    const key = mocks.persist[0].key;
+    announceDraftSaved(key, "grupo-a");
+    await wait();
+    expect(notices()).toEqual([]);
+    otherTab.announceDraftSaved(key, "grupo-a");
+    await waitFor(() => expect(notices()).toEqual(["Este grupo se guardó en otra pestaña"]));
   });
 });
