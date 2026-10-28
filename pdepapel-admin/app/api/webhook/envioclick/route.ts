@@ -5,8 +5,9 @@ import prismadb from "@/lib/prismadb";
 import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { mapEnvioClickStatus } from "@/lib/shipment-status";
 import { nextShipmentStatus } from "@/lib/shipment-milestones";
-import { queueShipmentStatusChange } from "@/lib/shipment-notifications";
-import { isDismissedGuide } from "@/lib/orphan-guides";
+import { queueShipmentMilestone, queueShipmentStatusChange } from "@/lib/shipment-notifications";
+import { adoptOrphanGuideFromWebhook, isDismissedGuide } from "@/lib/orphan-guides";
+import { milestoneForStatus } from "@/lib/shipment-milestones";
 import {
   InvalidWebhookPayloadError,
   parseProviderDate,
@@ -251,9 +252,22 @@ export async function POST(req: Request) {
             ...(dismissed ? { resolvedAt: new Date(), resolution: "DISMISSED" } : {}),
           },
         });
+        // Guía hecha en envioclick.com cuyo número Paula ya escribió a mano
+        // en un pedido: se adopta sola, con las mismas guardas que al guardar.
+        if (!dismissed && orphanId) {
+          const adopted = await adoptOrphanGuideFromWebhook(prismadb, { scopedStoreId: scopedStoreId ?? null, idOrder: orphanId, trackingCode });
+          if (adopted) {
+            console.log("[ENVIOCLICK_WEBHOOK] Guía adoptada por número de guía:", { idOrder: orphanId, orderId: adopted.orderId, status: adopted.status });
+            if (adopted.stockProductIds.length > 0) await invalidateStoreProductsCache(adopted.storeId, { productIds: adopted.stockProductIds });
+            const milestone = milestoneForStatus(adopted.status);
+            if (milestone) {
+              queueShipmentMilestone({ orderId: adopted.orderId, storeId: adopted.storeId, milestone, source: "webhook EnvioClick (guía adoptada)" });
+            }
+          }
+        }
       } catch (error) {
         console.error(
-          "[ENVIOCLICK_WEBHOOK] No se pudo guardar el aviso huérfano:",
+          "[ENVIOCLICK_WEBHOOK] No se pudo guardar o adoptar el aviso huérfano:",
           error,
         );
       }

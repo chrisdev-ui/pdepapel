@@ -7,6 +7,9 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { invalidateStoreProductsCache } from "@/lib/cache";
+import { autoAdoptOrphanGuide } from "@/lib/orphan-guides";
+import { milestoneForStatus } from "@/lib/shipment-milestones";
 import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 export async function POST(
@@ -83,6 +86,17 @@ export async function POST(
 
     if (shipping.trackingCode) {
       queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "guía manual" });
+      // Si ese número es el de una guía hecha en envioclick.com, se adopta y
+      // la clienta recibe el hito al que llegó (si no lo tiene ya).
+      const adopted = await autoAdoptOrphanGuide(prismadb, { storeId: params.storeId, orderId: params.orderId, resolvedBy: userId }).catch((error) => {
+        console.error("[CREATE_MANUAL_SHIPPING] No se pudo adoptar la guía de EnvioClick:", error);
+        return null;
+      });
+      if (adopted?.stockProductIds.length) await invalidateStoreProductsCache(params.storeId, { productIds: adopted.stockProductIds });
+      const milestone = adopted && adopted.status !== adopted.previousStatus ? milestoneForStatus(adopted.status) : null;
+      if (milestone && milestone !== "guia_creada") {
+        queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone, source: "guía de EnvioClick adoptada" });
+      }
     }
     return NextResponse.json(shipping, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error: any) {

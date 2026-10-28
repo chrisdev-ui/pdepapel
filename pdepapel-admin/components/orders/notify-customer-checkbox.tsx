@@ -15,11 +15,14 @@ export function NotifyCustomerCheckbox({
   onCheckedChange,
   disabled,
   className,
+  help = NOTIFY_CUSTOMER_HELP,
 }: {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
   className?: string;
+  /** La ayuda debajo de la casilla, cuando el caso pide otra (p. ej. al vincular una guía). */
+  help?: string;
 }) {
   const id = useId();
   const helpId = `${id}-ayuda`;
@@ -36,7 +39,7 @@ export function NotifyCustomerCheckbox({
         {NOTIFY_CUSTOMER_LABEL}
       </label>
       <p id={helpId} className="text-xs text-muted-foreground">
-        {NOTIFY_CUSTOMER_HELP}
+        {help}
       </p>
     </div>
   );

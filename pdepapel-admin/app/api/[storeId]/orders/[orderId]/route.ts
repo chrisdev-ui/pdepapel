@@ -60,6 +60,7 @@ import {
 import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { autoAdoptOrphanGuide } from "@/lib/orphan-guides";
 import { getInPersonOrderGuard } from "@/lib/in-person-orders";
 import {
   assertWelcomeBenefitEligibility,
@@ -1212,6 +1213,20 @@ export async function PATCH(
       }
     }
 
+    // Número de guía escrito a mano que es el de una guía hecha en
+    // envioclick.com: la guía se adopta sola (estado, seguimiento, avisos).
+    let adoptedGuide: Awaited<ReturnType<typeof autoAdoptOrphanGuide>> = null;
+    if (shipping?.trackingCode && shipping.trackingCode !== originalTrackingCode) {
+      try {
+        adoptedGuide = await autoAdoptOrphanGuide(prismadb, { storeId: params.storeId, orderId: params.orderId, resolvedBy: userId });
+        if (adoptedGuide?.stockProductIds.length) {
+          await invalidateStoreProductsCache(params.storeId, { productIds: adoptedGuide.stockProductIds });
+        }
+      } catch (adoptError) {
+        console.error("[ORDER_PATCH] No se pudo adoptar la guía de EnvioClick:", adoptError);
+      }
+    }
+
     if (!notifyCustomer) {
       try {
         await recordSilentStatusChanges(prismadb, {
@@ -1248,7 +1263,10 @@ export async function PATCH(
 
         // Status change notification
         // Sin enlace de «guardar en tu cuenta»: desde el panel nunca se creó.
-        if (!silent && status && current.status !== originalStatus) {
+        // Un pedido que avanzó solo por la guía adoptada no manda el correo de
+        // estado: igual que el webhook, la clienta recibe el hito del envío.
+        const movedByAdoption = Boolean(adoptedGuide) && updatedOrder.status === originalStatus;
+        if (!silent && status && current.status !== originalStatus && !movedByAdoption) {
           await sendOrderEmail(params.orderId, current.status, {
             notifyAdmin: false,
             accountClaim: false,
@@ -1263,6 +1281,13 @@ export async function PATCH(
             : null;
         if (milestone) {
           await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone, source: "pedido del panel", ...(silent ? { silent, createdBy: userId } : {}) });
+        }
+
+        // La guía adoptada avanzó el envío: el hito nuevo, si la clienta no lo
+        // tiene (la llave del aviso evita repetir «guía creada»).
+        const adoptedMilestone = adoptedGuide && adoptedGuide.status !== adoptedGuide.previousStatus ? milestoneForStatus(adoptedGuide.status) : null;
+        if (adoptedMilestone && adoptedMilestone !== milestone) {
+          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: adoptedMilestone, source: "guía de EnvioClick adoptada", ...(silent ? { silent, createdBy: userId } : {}) });
         }
       } catch (emailError) {
         console.error("Email sending failed:", emailError);

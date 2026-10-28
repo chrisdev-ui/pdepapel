@@ -1,4 +1,5 @@
 import { NotificationChannel, OrderNotificationStatus, OrderStatus, Prisma, ShippingProvider, type PrismaClient } from "@prisma/client";
+import { buildDedupeKey, SILENT_NOTICE_REASON } from "@/lib/shipment-notification-keys";
 
 import { runInBackground } from "@/lib/background";
 import type { DeliveryOutcome, EmailRole } from "@/lib/email-delivery";
@@ -38,7 +39,6 @@ export interface NotifyShipmentInput {
   silent?: boolean;
 }
 
-export const SILENT_NOTICE_REASON = "Cambio de estado sin avisar";
 
 export interface NotifyShipmentResult {
   email: Partial<Record<EmailRole, OrderNotificationStatus | "duplicate">>;
@@ -46,12 +46,10 @@ export interface NotifyShipmentResult {
   skipped?: string;
 }
 
+export { buildDedupeKey, SILENT_NOTICE_REASON };
+
 const MAX_REASON = 500;
 
-export function buildDedupeKey(input: { shippingId: string; milestone: ShipmentMilestone; trackingCode: string | null; channel: NotificationChannel; role: string; suffix?: string }): string {
-  const tracking = (input.trackingCode ?? "-").replace(/\s+/g, "").slice(0, 60);
-  return [input.shippingId, input.milestone, tracking, input.channel, input.role, input.suffix].filter(Boolean).join(":").slice(0, 191);
-}
 
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";

@@ -12,9 +12,10 @@ const ROOT = join(__dirname, "..", "..", "..");
 const SOURCES = ["app", "lib"];
 // Definiciones, y `orphan-guides`: vincula dentro de la transacción de quien
 // llama, así que el aviso lo manda quien llama después de confirmar (y
-// `linkOrphanGuide(` está en MOVES para exigírselo).
+// `linkOrphanGuide(` está en MOVES para exigírselo). Las adopciones de guía
+// (al guardar el número a mano y desde el webhook) también mueven el envío.
 const DEFINITIONS = new Set(["lib/shipping-helpers.ts", "lib/shipment-status-apply.ts", "lib/orphan-guides.ts"]);
-const MOVES = /\b(createGuideForOrder|applyShipmentStatus|linkOrphanGuide)\(/;
+const MOVES = /\b(createGuideForOrder|applyShipmentStatus|linkOrphanGuide|adoptOrphanGuide|autoAdoptOrphanGuide|adoptOrphanGuideFromWebhook)\(/;
 const NOTIFIES = /\b(notifyShipmentMilestone|queueShipmentMilestone|queueShipmentStatusChange|queueAppliedShipmentChanges)\(/;
 
 function walk(dir: string): string[] {
