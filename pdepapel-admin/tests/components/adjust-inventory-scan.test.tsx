@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   scanned: { id: "p-scan", name: "Washi tape nube", sku: "WAS-1", stock: 0, price: 6500, images: [] },
 }));
 
-vi.mock("axios", () => ({ default: { post: vi.fn(), isAxiosError: () => false } }));
+vi.mock("axios", () => ({ default: { post: vi.fn(), get: vi.fn(async () => ({ data: { stock: 0, reservedUnits: 0 } })), isAxiosError: () => false } }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/components/ui/async-product-select", () => ({

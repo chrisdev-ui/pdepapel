@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
+import { availabilityLabel, stockFigures } from "@/lib/stock-figures";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
@@ -79,11 +80,38 @@ export function AdjustInventoryModal({ isOpen, onClose, onConfirm, defaultProduc
     if (next.sign !== "both") setRequestedAction(next.sign);
   };
 
+  // Lo que se ve del producto se vuelve a leer cada vez que se abre el modal o
+  // se elige otro: un número de hace un rato (otra pestaña, una recepción
+  // reciente) llevaba a registrar contra un stock viejo.
+  const [fresh, setFresh] = useState<Pick<AsyncProductOption, "stock" | "reservedUnits"> | null>(null);
+  useEffect(() => {
+    if (!isOpen || !productId) {
+      setFresh(null);
+      return;
+    }
+    let cancelled = false;
+    setFresh(null);
+    axios
+      .get<{ stock: number; reservedUnits?: number | null }>(`/api/${storeId}/products/${productId}`)
+      .then((response) => {
+        if (!cancelled) setFresh({ stock: response.data.stock, reservedUnits: response.data.reservedUnits ?? 0 });
+      })
+      .catch(() => {
+        // Sin la lectura nueva se usa lo que trajo el buscador.
+        if (!cancelled && product?.id === productId) setFresh({ stock: product.onHand ?? product.stock, reservedUnits: product.reservedUnits ?? 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se relee al abrir o al cambiar de producto, no en cada render del buscador
+  }, [isOpen, productId, storeId]);
+
   const delta = sign === "subtract" ? -Math.abs(quantity) : Math.abs(quantity);
-  const currentStock = product?.stock ?? null;
+  // Un movimiento cambia el stock físico: la cuenta «queda» parte de ahí.
+  const currentStock = fresh ? stockFigures(fresh).onHand : null;
   const resultingStock = currentStock === null ? null : currentStock + delta;
   const wouldGoNegative = resultingStock !== null && resultingStock < 0;
-  const canSubmit = Boolean(productId) && Boolean(reason) && quantity > 0 && !wouldGoNegative && !loading;
+  const canSubmit = Boolean(productId) && Boolean(reason) && quantity > 0 && fresh !== null && !wouldGoNegative && !loading;
 
   async function onSubmit() {
     if (!canSubmit || !reason) return;
@@ -172,8 +200,8 @@ export function AdjustInventoryModal({ isOpen, onClose, onConfirm, defaultProduc
             />
           </div>
           {product ? (
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {product.sku} · {product.stock.toLocaleString("es-CO")} unidades hoy
+            <p className="text-xs tabular-nums text-muted-foreground" data-testid="adjust-product-stock" aria-live="polite">
+              {product.sku} · {fresh ? availabilityLabel(fresh) : "Leyendo existencias…"}
             </p>
           ) : null}
         </div>

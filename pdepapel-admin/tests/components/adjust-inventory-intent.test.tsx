@@ -10,11 +10,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 const mocks = vi.hoisted(() => ({
   post: vi.fn(async () => ({ data: {} })),
+  // El modal vuelve a leer el producto elegido: aquí, las mismas 37 unidades.
+  get: vi.fn(async () => ({ data: { stock: 37, reservedUnits: 0 } })),
   toast: vi.fn(),
   scanned: { id: "p-1", name: "Lápiz mecánico 0.5 pastel", sku: "LAP-MEC-05", stock: 37, price: 4200, images: [] },
 }));
 
-vi.mock("axios", () => ({ default: { post: mocks.post, isAxiosError: () => false } }));
+vi.mock("axios", () => ({ default: { post: mocks.post, get: mocks.get, isAxiosError: () => false } }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/components/ui/async-product-select", () => ({
@@ -60,18 +62,19 @@ describe("Registrar movimiento · la intención manda", () => {
     expect(screen.queryByRole("button", { name: "Sumar" })).not.toBeInTheDocument();
   });
 
-  it("muestra en qué queda el stock antes de registrar", () => {
+  it("muestra en qué queda el stock antes de registrar", async () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Escanear" }));
     // Conteo físico, sumando 1 sobre 37 unidades.
-    expect(screen.getByText("37 → 38")).toBeInTheDocument();
+    expect(await screen.findByText("37 → 38")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Restar" }));
     expect(screen.getByText("37 → 36")).toBeInTheDocument();
   });
 
-  it("no deja restar más de lo que hay", () => {
+  it("no deja restar más de lo que hay", async () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Escanear" }));
+    await screen.findByText("37 → 38");
     fireEvent.click(screen.getByRole("button", { name: /Pérdida/ }));
     const quantity = screen.getByLabelText("Unidades");
     fireEvent.change(quantity, { target: { value: "99" } });
@@ -82,6 +85,7 @@ describe("Registrar movimiento · la intención manda", () => {
   it("el motivo es una categoría y el texto libre queda como nota", async () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Escanear" }));
+    await screen.findByText("37 → 38");
     // Sin motivo no se puede registrar.
     expect(screen.getByRole("button", { name: "Registrar movimiento" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Reconteo de estante" }));

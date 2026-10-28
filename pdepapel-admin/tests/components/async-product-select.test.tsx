@@ -206,7 +206,7 @@ describe("AsyncProductSelect", () => {
     await user.click(screen.getByRole("combobox"));
 
     expect(await screen.findByText("Cartuchera Wisdom · Rosa pastel · S")).toBeInTheDocument();
-    expect(screen.getByText("CAR-ROS · 0 und · $ 13.000")).toHaveClass("font-mono");
+    expect(screen.getByText("CAR-ROS · Disponible 0 · $ 13.000")).toHaveClass("font-mono");
     expect(screen.getAllByText("Variante")).toHaveLength(2);
     const groupRow = document.querySelector('[data-group-row="g1"]') as HTMLElement;
     expect(groupRow).not.toBeNull();
@@ -227,7 +227,7 @@ describe("AsyncProductSelect", () => {
     cleanup();
     render(<AsyncProductSelect value={selectedProduct.id} onChange={() => undefined} details="cost" modal />);
     const trigger = screen.getByRole("combobox");
-    expect(trigger).toHaveTextContent(`SKU: ${selectedProduct.sku} · Stock: 12 · Costo: $ 21.500`);
+    expect(trigger).toHaveTextContent(`SKU: ${selectedProduct.sku} · Disponible 12 · Costo: $ 21.500`);
     expect(trigger).not.toHaveTextContent("38.500");
     expect(trigger).not.toHaveTextContent("GTIN");
     listState.rows = [];

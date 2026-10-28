@@ -154,6 +154,8 @@ export async function GET(
     const page1 = (hasMore ? products.slice(0, limit) : products).map(
       ({ brandRef: _brandRef, productGroup, ...product }) => ({
         ...product,
+        // Lo físico, explícito: el selector muestra «Disponible» (físico − apartados) y «Stock · Apartados».
+        onHand: product.stock,
         brand: mercadoLibreBrandName({ ...product, brandRef: _brandRef, productGroup }),
         brandLine: mercadoLibreLineName({ brandRef: _brandRef, productGroup }),
         productGroup: productGroup
@@ -263,6 +265,7 @@ async function searchForSale(storeId: string, rawQuery: string, limit: number) {
       // Lo apartado no se vende en caja: el buscador y el tope del carrito ven lo
       // disponible; `reservedUnits` va aparte para mostrar «· N apartados».
       stock: availableStock(row),
+      onHand: row.stock,
       price: Number(row.price),
       offerPrice: pricing ? Number(pricing.price) : Number(row.price),
       offerLabel: pricing?.offerLabel ?? null,

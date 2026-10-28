@@ -69,6 +69,14 @@ describe("GET /products/search: la caché no mezcla roles", () => {
     expect((await call("q=lib&mode=venta")).data[0].soldCount).toBe(42);
   });
 
+  it("el stock físico va explícito (`onHand`): en caja `stock` es lo disponible, en el selector es el físico", async () => {
+    const reserved = { ...product, id: "p2", sku: "LIB-2", stock: 14, reservedUnits: 9 };
+    mocks.findFirst.mockResolvedValue(reserved);
+    mocks.findMany.mockResolvedValue([reserved]);
+    expect((await call("q=lib2")).data[0]).toMatchObject({ stock: 14, reservedUnits: 9, onHand: 14 });
+    expect((await call("q=lib2&mode=venta")).data[0]).toMatchObject({ stock: 5, reservedUnits: 9, onHand: 14 });
+  });
+
   it("el tamaño de página va en la llave, y la purga de productos cubre todas las variantes", async () => {
     await call("q=lib&limit=5");
     await call("q=lib&limit=20");

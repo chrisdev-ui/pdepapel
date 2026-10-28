@@ -1,4 +1,3 @@
-import { reservedSuffix } from "@/lib/reservation-labels";
 import { Check, ChevronsUpDown, Package } from "lucide-react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -26,6 +25,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { describeVariantBeyondName } from "@/lib/product-variant";
 import { cn, currencyFormatter } from "@/lib/utils";
 import axios from "axios";
+import { availabilityLabel } from "@/lib/stock-figures";
 
 export type AsyncProductOption = {
   id: string;
@@ -35,6 +35,8 @@ export type AsyncProductOption = {
   stock: number;
   /** Unidades apartadas (Apartados): se muestran junto al stock. */
   reservedUnits?: number;
+  /** Stock físico. El buscador lo manda explícito; sin él, `stock` es el físico (ficha del producto). */
+  onHand?: number;
   price?: number | null;
   acqPrice?: number | null;
   transportationCost?: number | null;
@@ -99,7 +101,7 @@ const getProductDetails = (product: AsyncProductOption) =>
     product.gtin ? `GTIN: ${product.gtin}` : null,
     product.isKit ? "Kit" : null,
     product.category?.name,
-    `Stock: ${product.stock}`,
+    availabilityLabel(product),
     product.price !== undefined && product.price !== null
       ? currencyFormatter(product.price)
       : null,
@@ -110,7 +112,7 @@ const getProductDetails = (product: AsyncProductOption) =>
 const getCostDetails = (product: AsyncProductOption) =>
   [
     `SKU: ${product.sku}`,
-    `Stock: ${product.stock}`,
+    availabilityLabel(product),
     product.acqPrice !== undefined && product.acqPrice !== null
       ? `Costo: ${currencyFormatter(product.acqPrice)}`
       : null,
@@ -147,7 +149,7 @@ function useIsPhone(enabled: boolean) {
 const getRowDetails = (product: AsyncProductOption) =>
   [
     product.sku,
-    `${product.stock} und${reservedSuffix(product.reservedUnits)}`,
+    availabilityLabel(product),
     product.price !== undefined && product.price !== null ? currencyFormatter(product.price) : null,
   ]
     .filter(Boolean)
