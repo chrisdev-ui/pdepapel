@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { parsePresaleInput } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -64,6 +65,8 @@ export async function POST(
         createdBy: userId,
       },
     });
+    // La ficha y el catálogo de la tienda muestran la preventa: sin esto quedaban viejos hasta el próximo cambio del producto.
+    await invalidateStoreProductsCache(params.storeId, { productIds: [product.id] });
 
     return NextResponse.json(presale, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

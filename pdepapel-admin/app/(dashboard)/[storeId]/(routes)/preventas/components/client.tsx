@@ -84,11 +84,11 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
 
   const onNotifyDelay = async (row: PresaleRow) => {
     const confirmed = await requestConfirmation({
-      title: `¿Avisar del retraso de «${row.productName}»?`,
+      title: `¿Anotar el aviso de retraso de «${row.productName}»?`,
       description:
-        `Se le escribe a ${row.customerCount} clienta(s) para decirles que la fecha se movió, sin prometer una nueva. ` +
-        "Queda anotado que tú avisaste hoy. Las devoluciones de dinero se hacen a mano en Bold o Wompi.",
-      confirmLabel: "Avisar",
+        `El panel no les escribe: avísales tú a las ${row.customerCount} clienta(s) por WhatsApp o correo que la fecha se movió, sin prometer una nueva. ` +
+        "Aquí queda anotado que avisaste hoy. Las devoluciones de dinero se hacen a mano en Bold o Wompi.",
+      confirmLabel: "Anotar aviso",
     });
     if (!confirmed) return;
 
@@ -99,13 +99,13 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
       );
       router.refresh();
       toast({
-        title: "Aviso enviado",
-        description: `Se le avisó a ${result.notified} clienta(s). Queda registrado.`,
+        title: "Aviso anotado",
+        description: `Quedó registrado que avisaste a ${result.notified} clienta(s).`,
         variant: "success",
       });
     } catch (error) {
       toast({
-        title: "No se pudo avisar",
+        title: "No se pudo anotar el aviso",
         description: getErrorMessage(error),
         variant: "destructive",
       });

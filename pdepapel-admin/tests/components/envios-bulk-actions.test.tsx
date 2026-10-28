@@ -32,6 +32,7 @@ const dispatchShipment = (id: string): DispatchShipment => ({
     status: OrderStatus.PAID,
     type: OrderType.STANDARD,
     paymentMethod: PaymentMethod.Bold,
+    heldByPresale: false,
     orderItems: [],
   },
 });

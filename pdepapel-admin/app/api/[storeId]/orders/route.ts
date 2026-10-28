@@ -58,6 +58,7 @@ import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { isUnreleasedPreorderLine, stockLinesOnPayment, stockLinesOnReversal } from "@/lib/presale";
 import {
   ORDER_STATUS_LABELS,
   canTransition,
@@ -869,7 +870,7 @@ async function createOrder(
 
       // Batch update stock if order is paid
       if (status === OrderStatus.PAID) {
-        const stockMovements = createdOrder.orderItems
+        const stockMovements = (await stockLinesOnPayment(tx, createdOrder.id, createdOrder.orderItems))
           .filter((item) => item.productId && item.product)
           .map((item) => ({
             productId: item.productId as string,
@@ -1163,7 +1164,7 @@ export async function DELETE(
         const stockMovements = [];
 
         for (const order of paidOrders) {
-          for (const item of order.orderItems) {
+          for (const item of await stockLinesOnReversal(tx, order.id, order.orderItems)) {
             if (item.productId && item.product) {
               stockMovements.push({
                 productId: item.productId,
@@ -1416,7 +1417,8 @@ export async function PATCH(
           }[] = [];
           ordersBecomingPaid.forEach((order) => {
             order.orderItems.forEach((item) => {
-              if (item.productId) {
+              // Una línea de preventa sin liberar no pide stock: la mercancía todavía no llega.
+              if (item.productId && !isUnreleasedPreorderLine(item)) {
                 stockValidationUpdates.push({
                   productId: item.productId,
                   quantity: item.quantity,
@@ -1444,7 +1446,7 @@ export async function PATCH(
 
           if (holdsStock && !heldStock) {
             // Will be paid - decrement stock (Sale)
-            order.orderItems.forEach((item) => {
+            (await stockLinesOnPayment(tx, order.id, order.orderItems)).forEach((item) => {
               if (item.productId && item.product) {
                 stockUpdates.push({
                   productId: item.productId,
@@ -1461,7 +1463,7 @@ export async function PATCH(
             });
           } else if (heldStock && !holdsStock) {
             // Was paid, now unpaid - increment stock (Restock/Cancel)
-            order.orderItems.forEach((item) => {
+            (await stockLinesOnReversal(tx, order.id, order.orderItems)).forEach((item) => {
               if (item.productId && item.product) {
                 stockUpdates.push({
                   productId: item.productId,

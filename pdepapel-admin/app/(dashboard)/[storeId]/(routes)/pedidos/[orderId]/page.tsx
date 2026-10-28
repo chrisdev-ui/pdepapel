@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isOrderHeldByPresale } from "@/lib/presale-hold";
 import { getDaneLocations } from "@/actions/get-dane-locations";
 import { getOrderCapsuleSection } from "@/lib/capsule-order-section";
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
@@ -99,6 +100,7 @@ export default async function OrderPage({
                   {
                     ...order,
                     openInventoryIssues: order.inventoryIssues.length,
+                    heldByPresale: isOrderHeldByPresale(order),
                   },
                   params.storeId,
                 )
@@ -109,6 +111,7 @@ export default async function OrderPage({
               ? buildOrderTimeline({
                   ...order,
                   openInventoryIssues: order.inventoryIssues.length,
+                  heldByPresale: isOrderHeldByPresale(order),
                 })
               : []
           }

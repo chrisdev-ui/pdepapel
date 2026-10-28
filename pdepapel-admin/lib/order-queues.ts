@@ -1,5 +1,6 @@
 import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus, type Prisma } from "@prisma/client";
 import { isFlagged, parseRiskReasons } from "@/lib/order-risk";
+import { ORDER_READY_TO_DISPATCH } from "@/lib/presale-hold";
 
 /**
  * Colas de trabajo de Pedidos: el estado real del pedido se traduce en lo que
@@ -11,6 +12,7 @@ export type OrderQueue =
   | "awaiting-payment" // pago en línea que el cliente aún no completa
   | "dispatch" // pagado (o contra entrega) sin guía
   | "pickup" // pagado, «Recoge en tienda», sin entregar
+  | "presale" // pagado, esperando la mercancía de una preventa: no se despacha nada
   | "in-transit" // con guía, no entregado
   | "issue" // novedad de transportadora
   | "delivered"
@@ -82,6 +84,8 @@ export interface QueueableOrder {
   } | null;
   /** Líneas de inventario que fallaron al mover y siguen sin resolver. */
   openInventoryIssues?: number;
+  /** Trae una línea de preventa sin liberar: el pedido completo espera (`lib/presale-hold.ts`). */
+  heldByPresale?: boolean;
 }
 
 /**
@@ -168,6 +172,7 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
 
   if (status === OrderStatus.PAID || status === OrderStatus.SENT) {
     if (inStore || digital) return "completed";
+    if (status === OrderStatus.PAID && order.heldByPresale && !hasGuide) return "presale";
     // Para recoger: no se despacha ni lleva guía. Entregado (pedido «Enviado»
     // o envío fuera de «Preparando») ya no es trabajo pendiente.
     if (isPickupOrder(order)) {
@@ -191,6 +196,7 @@ export function dispatchQueueWhere(storeId: string, now = new Date()): Prisma.Or
   return {
     storeId,
     AND: [
+      ORDER_READY_TO_DISPATCH,
       // Sin envío o con «Recoge en tienda» es «Por entregar en tienda», no «Por despachar».
       {
         shipping: {
@@ -220,6 +226,7 @@ export function pickupQueueWhere(storeId: string, now = new Date()): Prisma.Orde
   return {
     storeId,
     AND: [
+      ORDER_READY_TO_DISPATCH,
       { OR: [{ shipping: null }, { shipping: { provider: ShippingProvider.NONE, status: ShippingStatus.Preparing } }] },
       {
         OR: [
@@ -251,6 +258,8 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
       return { label: "Crear guía", primary: false };
     case "pickup":
       return { label: "Marcar entregado", primary: true };
+    case "presale":
+      return { label: "Ver preventa", primary: false };
     case "in-transit":
       return { label: "Ver seguimiento", primary: false };
     case "issue":
@@ -266,7 +275,7 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
 }
 
 /** Colas en las que el pedido todavía no termina: entregado, completado y cerrado no. */
-const ACTIVE_QUEUES: OrderQueue[] = ["verify", "awaiting-payment", "dispatch", "pickup", "in-transit", "issue", "quote"];
+const ACTIVE_QUEUES: OrderQueue[] = ["verify", "awaiting-payment", "dispatch", "pickup", "presale", "in-transit", "issue", "quote"];
 
 export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: QueueableOrder, now = new Date()): boolean {
   switch (view) {

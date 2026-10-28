@@ -1,4 +1,5 @@
 import { ShippingStatus } from "@prisma/client";
+import { isOrderHeldByPresale } from "@/lib/presale-hold";
 
 import { DISPATCH_WINDOW_DAYS } from "@/lib/dashboard-today";
 import prismadb from "@/lib/prismadb";
@@ -117,6 +118,8 @@ export async function getDispatchQueue(storeId: string) {
               name: true,
               sku: true,
               productId: true,
+              isPreorder: true,
+              preorderReleasedAt: true,
               product: {
                 select: {
                   name: true,
@@ -141,7 +144,10 @@ export async function getDispatchQueue(storeId: string) {
   return shipments.flatMap(({ order, ...shipment }) => {
     if (!order) return [];
     const { payment, ...rest } = order;
-    const candidate = { ...shipment, order: { ...rest, paymentMethod: payment?.method ?? null } };
+    const candidate = {
+      ...shipment,
+      order: { ...rest, paymentMethod: payment?.method ?? null, heldByPresale: isOrderHeldByPresale(rest) },
+    };
     return isReadyToDispatch(candidate, now) ? [candidate] : [];
   });
 }

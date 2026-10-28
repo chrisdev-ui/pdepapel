@@ -49,6 +49,7 @@ import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { loadCapsuleReceipt } from "@/lib/capsule-receipt";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { stockLinesOnPayment, stockLinesOnReversal } from "@/lib/presale";
 import {
   canTransition,
   describeForbiddenTransition,
@@ -1044,7 +1045,7 @@ export async function PATCH(
         // Prepare stock updates for decrementing (Sales)
         const stockMovements = await explodeKitMovements(
           tx,
-          updated.orderItems
+          (await stockLinesOnPayment(tx, updated.id, updated.orderItems))
             .filter((item) => item.productId) // Exclude manual items
             .map((item) => ({
               productId: item.productId as string,
@@ -1135,7 +1136,7 @@ export async function PATCH(
         // Restock items
         const stockMovements = await explodeKitMovements(
           tx,
-          await withoutDrawnCapsuleUnits(tx, updated.orderItems
+          await withoutDrawnCapsuleUnits(tx, (await stockLinesOnReversal(tx, updated.id, updated.orderItems))
             .filter((item) => item.productId)
             .map((item) => ({
               productId: item.productId as string,
@@ -1359,7 +1360,7 @@ export async function DELETE(
       // PAGADO y ENVIADO descuentan igual (`isPaidLike`); un CANCELADO ya la
       // devolvio al cancelarse y no debe devolverla dos veces.
       if (isPaidLike(order.status)) {
-        const stockMovements = order.orderItems
+        const stockMovements = (await stockLinesOnReversal(tx, order.id, order.orderItems))
           .filter((item) => item.productId) // Exclude manual items
           .map((item) => ({
             productId: item.productId as string,

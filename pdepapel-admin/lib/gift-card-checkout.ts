@@ -6,7 +6,7 @@ import { calculateOrderFinancials } from "@/lib/financial";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
-import { settlePresaleLinesOnPayment } from "@/lib/presale";
+import { stockLinesOnPayment } from "@/lib/presale";
 
 type Tx = Prisma.TransactionClient;
 
@@ -17,6 +17,8 @@ type SettleableOrder = {
   total: number;
   userId: string | null;
   orderItems: {
+    id: string;
+    isPreorder: boolean;
     productId: string | null;
     quantity: number;
     product?: { acqPrice: number | null; price: number } | null;
@@ -38,9 +40,7 @@ export async function settleFullyCoveredOrder(
   order: SettleableOrder,
   input: { createdBy: string; shippingCost: number },
 ) {
-  await settlePresaleLinesOnPayment(tx, order.id);
-
-  const movements = order.orderItems
+  const movements = (await stockLinesOnPayment(tx, order.id, order.orderItems))
     .filter((item) => item.productId && item.product)
     .map((item) => ({
       productId: item.productId as string,

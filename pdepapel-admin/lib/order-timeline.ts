@@ -307,6 +307,16 @@ export function getNextStepCard(
           "Con la guía creada podrás imprimir la etiqueta y el cliente recibirá el seguimiento.",
         tone: "sky",
       };
+    case "presale":
+      return {
+        queue,
+        title: "Esperando la mercancía de la preventa",
+        description:
+          "Este pedido trae un producto en preventa: no se despacha nada hasta que llegue y liberes la preventa, ni lo que ya está en bodega.",
+        primary: { label: "Ir a Preventas", href: `/${storeId}/preventas` },
+        consequence: "Al liberar la preventa, el pedido pasa a «Por despachar».",
+        tone: "sky",
+      };
     case "pickup":
       return {
         queue,

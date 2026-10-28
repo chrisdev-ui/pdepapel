@@ -37,32 +37,11 @@ export { PRESALE_STATUS_LABELS } from "@/lib/presale-labels";
 
 // --- Regla 5: el freno es del PEDIDO, no de la línea ------------------------
 
-/**
- * Pedidos con al menos una línea de preventa sin liberar.
- *
- * Se usa en negativo para excluirlos del despacho. Va por `some` a propósito:
- * basta UNA línea sin liberar para frenar el pedido completo.
- */
-export const ORDER_HAS_UNRELEASED_PRESALE: Prisma.OrderWhereInput = {
-  orderItems: { some: { isPreorder: true, preorderReleasedAt: null } },
-};
-
-/**
- * Lo que hay que añadir a cualquier consulta de «listo para despachar» para
- * que un pedido frenado por preventa no aparezca ni cuente como atrasado.
- */
-export const ORDER_READY_TO_DISPATCH: Prisma.OrderWhereInput = {
-  NOT: ORDER_HAS_UNRELEASED_PRESALE,
-};
-
-/** ¿Este pedido, ya cargado con sus líneas, está frenado por una preventa? */
-export function isOrderHeldByPresale(order: {
-  orderItems: { isPreorder: boolean; preorderReleasedAt: Date | null }[];
-}): boolean {
-  return order.orderItems.some(
-    (item) => item.isPreorder && item.preorderReleasedAt === null,
-  );
-}
+export {
+  isOrderHeldByPresale,
+  ORDER_HAS_UNRELEASED_PRESALE,
+  ORDER_READY_TO_DISPATCH,
+} from "@/lib/presale-hold";
 
 // --- Vencimiento -----------------------------------------------------------
 
@@ -519,6 +498,39 @@ export async function releasePresaleLinesOnCancellation(
   }
 
   return restock;
+}
+
+// --- Pagos y reversos a mano -------------------------------------------------
+
+/**
+ * Las líneas que mueven inventario cuando un pedido pasa a pagado a mano
+ * (PATCH, en bloque, creado ya pagado, tarjeta de regalo). Mismo criterio que
+ * el webhook: una línea de preventa sin liberar suma cupo y no descuenta.
+ */
+export async function stockLinesOnPayment<T extends { id: string; isPreorder: boolean }>(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  items: T[],
+): Promise<T[]> {
+  if (!items.some((item) => item.isPreorder)) return items;
+  const dispatchNow = await settlePresaleLinesOnPayment(tx, orderId);
+  return items.filter((item) => !item.isPreorder || dispatchNow.has(item.id));
+}
+
+/** Espejo de `stockLinesOnPayment` al volver de pagado (o borrar): solo reingresa lo liberado. */
+export async function stockLinesOnReversal<T extends { id: string; isPreorder: boolean }>(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  items: T[],
+): Promise<T[]> {
+  if (!items.some((item) => item.isPreorder)) return items;
+  const restock = await releasePresaleLinesOnCancellation(tx, orderId);
+  return items.filter((item) => !item.isPreorder || restock.has(item.id));
+}
+
+/** Una línea de preventa que todavía espera mercancía: no pide stock en bodega. */
+export function isUnreleasedPreorderLine(item: { isPreorder?: boolean | null; preorderReleasedAt?: Date | null }): boolean {
+  return Boolean(item.isPreorder) && !item.preorderReleasedAt;
 }
 
 // --- Regla 3: Mercado Libre queda fuera ------------------------------------

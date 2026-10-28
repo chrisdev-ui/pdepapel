@@ -3,7 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { getPresaleReleasePreview, releasePresale } from "@/lib/presale-release";
+import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 
@@ -67,6 +69,9 @@ export async function POST(
       presaleId: params.presaleId,
       releasedBy: userId,
     });
+    // Liberar mueve stock y apaga la preventa: la ficha pasa a venta normal.
+    const released = await prismadb.productPresale.findUnique({ where: { id: params.presaleId }, select: { productId: true } });
+    if (released) await invalidateStoreProductsCache(params.storeId, { productIds: [released.productId] });
 
     return NextResponse.json(result, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

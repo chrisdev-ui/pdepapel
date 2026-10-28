@@ -1,6 +1,6 @@
 -- Preventa: vender un producto antes de tenerlo en bodega.
 --
--- NO APLICADA TODAVÍA. Christian pidió dejar esto como diff revisable.
+-- Aplicada en producción (la tabla existe; verificado de solo lectura el 2026-10-28).
 --
 -- Qué añade:
 --   * tabla `ProductPresale` (una campaña por producto y por vez);

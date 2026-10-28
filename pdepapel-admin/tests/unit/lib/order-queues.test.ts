@@ -26,6 +26,20 @@ describe("order queues", () => {
     expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "ABC" } }))).toBe("in-transit");
   });
 
+  it("un pagado con línea de preventa sin liberar espera: cola «presale», fuera de «Por despachar» y de «Por atender»", () => {
+    const held = order({ status: OrderStatus.PAID, heldByPresale: true });
+    expect(getOrderQueue(held)).toBe("presale");
+    expect(orderMatchesView("presale", "por-despachar", held)).toBe(false);
+    expect(orderMatchesView("presale", "por-atender", held)).toBe(false);
+    expect(orderMatchesView("presale", "todos", held)).toBe(true);
+    expect(getNextStep("presale")).toEqual({ label: "Ver preventa", primary: false });
+    // Para recoger también espera; con guía ya creada sigue su curso.
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, heldByPresale: true, shipping: pickup() }))).toBe("presale");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, heldByPresale: true, shipping: { status: ShippingStatus.Preparing, provider: ShippingProvider.ENVIOCLICK, trackingCode: "ABC" } }))).toBe("in-transit");
+    // Sin pagar todavía es una transferencia por verificar, como cualquiera.
+    expect(getOrderQueue(order({ heldByPresale: true }))).toBe("verify");
+  });
+
   it("ages paid orders without a guide out of dispatch after 30 days", () => {
     const old = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
     const recent = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);

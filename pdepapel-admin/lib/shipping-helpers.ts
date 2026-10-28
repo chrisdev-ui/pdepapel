@@ -9,6 +9,7 @@ import {
 } from "@/constants/shipping";
 import { capsulePackageFor } from "@/lib/capsule-quote";
 import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
+import { PRESALE_HOLD_GUIDE_MESSAGE, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 import prismadb from "@/lib/prismadb";
 import { getShippingContact } from "@/lib/gift-orders";
 import { getStoreSender } from "@/lib/store-sender";
@@ -74,6 +75,10 @@ export async function createGuideForOrder(
   // Use provided client (transaction) or default prismadb
   const db = prismaClient || prismadb;
   await assertCapsuleDrawsClosed(db, [orderId]);
+  // Regla 5 de la preventa: con una línea sin liberar no sale nada del pedido.
+  if ((await db.orderItem.count({ where: { orderId, ...UNRELEASED_PRESALE_LINE } })) > 0) {
+    throw ErrorFactory.Conflict(PRESALE_HOLD_GUIDE_MESSAGE);
+  }
 
   // 1. Obtener orden completa (o usar datos proporcionados)
   const order =

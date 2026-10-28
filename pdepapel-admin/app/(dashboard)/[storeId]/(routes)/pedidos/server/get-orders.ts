@@ -1,6 +1,7 @@
 "use server";
 
 import { requireStoreRead } from "@/lib/store-access";
+import { UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 
 import { listOrderPage, type OrderListQuery } from "@/lib/order-list";
 import prismadb from "@/lib/prismadb";
@@ -49,7 +50,7 @@ const ORDER_ROW_SELECT = {
   },
   shipping: { select: { status: true, provider: true, trackingCode: true, courier: true, updatedAt: true } },
   payment: { select: { method: true } },
-  _count: { select: { inventoryIssues: { where: { resolvedAt: null } } } },
+  _count: { select: { inventoryIssues: { where: { resolvedAt: null } }, orderItems: { where: UNRELEASED_PRESALE_LINE } } },
 } as const;
 
 export async function getOrders(storeId: string, query: OrderListQuery) {
@@ -72,6 +73,7 @@ export async function getOrders(storeId: string, query: OrderListQuery) {
         // Solo lectura: sin contacto de la clienta ni utilidad del pedido.
         ...(access.role === "viewer" ? scrubOrder(order) : order),
         openInventoryIssues: _count.inventoryIssues,
+        heldByPresale: _count.orderItems > 0,
       },
     ];
   });
