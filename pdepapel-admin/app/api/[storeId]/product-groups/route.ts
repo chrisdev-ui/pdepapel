@@ -1,4 +1,5 @@
 import { inheritedTransport } from "@/lib/product-costs";
+import { assertNewVariantSkusFree, generateUniqueVariantSku } from "@/lib/variant-skus";
 import { scrubProductGroups } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
@@ -154,6 +155,10 @@ export async function POST(
         variants,
       });
       const attributes = await loadVariantAttributes(tx, params.storeId, variants);
+      // Antes de crear nada: un borrador ya guardado o un SKU que ya existe se rechaza entero.
+      await assertNewVariantSkusFree(tx, { storeId: params.storeId, skus: variants.filter((variant) => !variant.id).map((variant) => variant.sku) });
+      const skuCategory = categoryId ? await tx.category.findUnique({ where: { id: categoryId }, select: { name: true } }) : null;
+      const takenSkus = new Set<string>();
 
       // 1. Create Product Group
       const group = await tx.productGroup.create({
@@ -230,11 +235,16 @@ export async function POST(
           }
           await syncVariantGallery(tx, { productId: existing.id, ...gallery });
         } else {
-          if (!variant.sku) {
-            throw ErrorFactory.InvalidRequest(
-              `La variante «${variantLabel(variant)}» no tiene SKU.`,
-            );
-          }
+          // El SKU del formulario ya se revisó arriba; sin SKU, lo pone el servidor.
+          const sku =
+            variant.sku?.trim() ||
+            (await generateUniqueVariantSku(tx, {
+              categoryName: skuCategory?.name ?? "",
+              designName: designObj.name,
+              colorName: colorObj.name,
+              sizeName: sizeObj.value || sizeObj.name,
+              taken: takenSkus,
+            }));
           const variantName = data.name ?? name;
           const baseSlug =
             generateProductSlug({
@@ -253,7 +263,7 @@ export async function POST(
             data: {
               ...data,
               name: variantName,
-              sku: variant.sku,
+              sku,
               slug,
               stock: 0,
               storeId: params.storeId,

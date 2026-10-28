@@ -47,7 +47,7 @@ describe("generateVariants", () => {
     });
 
     expect(variant.name).toBe("Troqueles de figuras en maletín x8 de 1 cm");
-    expect(variant.sku).toMatch(/-M-P-\d{4}$/);
+    expect(variant.sku).toMatch(/-M-P-[0-9A-Z]{6}$/);
   });
 
   it("uses a readable size when customers genuinely choose it", () => {
@@ -62,7 +62,7 @@ describe("generateVariants", () => {
     });
 
     expect(variant.name).toBe("Camiseta estampada Gatito Rosa M");
-    expect(variant.sku).toMatch(/-M-P-\d{4}$/);
+    expect(variant.sku).toMatch(/-M-P-[0-9A-Z]{6}$/);
   });
 
   it("includes only the variant characteristics confirmed by the admin", () => {

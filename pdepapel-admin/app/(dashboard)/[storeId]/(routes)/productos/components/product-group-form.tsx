@@ -76,6 +76,9 @@ import {
   INITIAL_TRANSPORTATION_COST,
 } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { ToastAction } from "@/components/ui/toast";
+import { announceDraftSaved, onDraftSaved } from "@/lib/draft-broadcast";
+import { GROUP_ALREADY_SAVED, SKU_EXISTS } from "@/lib/variant-skus";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useToast } from "@/hooks/use-toast";
@@ -934,9 +937,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   ]);
 
   // Form Persistence
+  const draftKey = `product-group-form-${params.storeId}-${initialData?.id ?? (adoptOnLoad ? `desde-${adoptOnLoad.id}` : "new")}`;
+  // Otra pestaña guardó este mismo borrador: esta deja de guardar su copia (mismos SKU).
+  const [savedElsewhere, setSavedElsewhere] = useState(false);
   const { clearStorage } = useFormPersist({
     form,
-    key: `product-group-form-${params.storeId}-${initialData?.id ?? (adoptOnLoad ? `desde-${adoptOnLoad.id}` : "new")}`,
+    key: draftKey,
+    enabled: !savedElsewhere,
     // El borrador nunca restaura filas traídas de productos reales: se
     // vuelven a traer, así no se adopta nada que Paula no eligió hoy.
     sanitizeDraft: (draft) => {
@@ -952,6 +959,30 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       return clean;
     },
   });
+  const openSavedGroup = useCallback(
+    (groupId: string | null | undefined) => {
+      if (groupId) router.push(`/${params.storeId}/productos/grupo/${groupId}`);
+    },
+    [router, params.storeId],
+  );
+
+  useEffect(
+    () =>
+      onDraftSaved(draftKey, (message) => {
+        clearStorage();
+        setSavedElsewhere(true);
+        toast({
+          title: initialData ? "Este grupo se guardó en otra pestaña" : "Este grupo ya se guardó en otra pestaña",
+          description: "Esta copia ya no se guarda como borrador. Ábrelo para seguir con lo guardado.",
+          ...(message.savedId
+            ? { action: <ToastAction altText="Ver grupo" onClick={() => openSavedGroup(message.savedId)}>Ver grupo</ToastAction> }
+            : {}),
+        });
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `clearStorage` y `toast` son estables para esta llave
+    [draftKey, openSavedGroup, initialData],
+  );
+
   // Fotos del grupo marcadas con la papelera: se quitan al guardar, nunca antes.
   const [pendingImageRemovals, setPendingImageRemovals] = useState<string[]>([]);
   const [pendingOwnRemovals, setPendingOwnRemovals] = useState<OwnPhotoRemoval[]>([]);
@@ -1080,6 +1111,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         ...archivePayload(archiveMode ?? "per-variant"),
       };
 
+      let savedId: string | null = initialData?.id ?? null;
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/product-groups/${initialData.id}`,
@@ -1092,13 +1124,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
           },
         );
       } else {
-        await axios.post(`/api/${params.storeId}/product-groups`, payload);
+        const created = await axios.post<{ id: string }>(`/api/${params.storeId}/product-groups`, payload);
+        savedId = created.data?.id ?? null;
       }
 
       setPendingImageRemovals([]);
       setPendingOwnRemovals([]);
       setBlockedSave(false);
       clearStorage(); // Clear storage on success
+      announceDraftSaved(draftKey, savedId);
       router.push(`/${params.storeId}/productos`);
       router.refresh();
       toast({
@@ -1106,10 +1140,38 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         variant: "success",
       });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      const details = axios.isAxiosError(error) && error.response?.status === 409
+        ? (error.response.data?.details as { code?: string; groupId?: string; productId?: string } | undefined)
+        : undefined;
+      if (details?.code === GROUP_ALREADY_SAVED) {
+        // El mismo borrador ya está guardado: no se crea otra vez y el borrador se descarta.
+        clearStorage();
+        announceDraftSaved(draftKey, details.groupId ?? null);
+        toast({
+          title: "Este grupo ya se guardó",
+          description: "No se creó otra vez. Ábrelo para revisarlo o seguir editándolo.",
+          action: <ToastAction altText="Ver grupo" onClick={() => openSavedGroup(details.groupId)}>Ver grupo</ToastAction>,
+        });
+      } else if (details?.code === SKU_EXISTS) {
+        toast({
+          variant: "destructive",
+          description: getErrorMessage(error),
+          ...(details.productId
+            ? {
+                action: (
+                  <ToastAction altText="Ver producto" onClick={() => router.push(`/${params.storeId}/productos/${details.productId}`)}>
+                    Ver producto
+                  </ToastAction>
+                ),
+              }
+            : {}),
+        });
+      } else {
+        toast({
+          description: getErrorMessage(error),
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

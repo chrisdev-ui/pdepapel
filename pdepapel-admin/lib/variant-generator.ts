@@ -58,19 +58,28 @@ export function cleanSlugFull(text: string): string {
     .replace(/^-+|-+$/g, ""); // strip leading/trailing
 }
 
+/** Cola de 6 caracteres en base 36 (≈2.200 millones): con 4 cifras, dos variantes iguales chocaban 1 de cada 9.000. */
+export const SKU_SUFFIX_LENGTH = 6;
+
+export function skuSuffix(random: () => number = Math.random): string {
+  let out = "";
+  for (let i = 0; i < SKU_SUFFIX_LENGTH; i += 1) out += Math.floor(random() * 36).toString(36);
+  return out.toUpperCase();
+}
+
 export function generateSemanticSKU(
   categoryName: string,
   designName: string,
   colorName: string,
   sizeName: string,
+  random: () => number = Math.random,
 ): string {
   const catSlug = cleanSlug(categoryName);
   const desSlug = cleanSlug(designName);
   const colSlug = cleanSlug(colorName);
   const sizeSlug = cleanSlugFull(sizeName);
-  const sequence = Math.floor(1000 + Math.random() * 9000);
 
-  return `${catSlug}-${desSlug}-${colSlug}-${sizeSlug}-${sequence}`;
+  return `${catSlug}-${desSlug}-${colSlug}-${sizeSlug}-${skuSuffix(random)}`;
 }
 
 export function generateVariants(params: GenerationParams): GeneratedVariant[] {
@@ -85,8 +94,8 @@ export function generateVariants(params: GenerationParams): GeneratedVariant[] {
   } = params;
   const variants: GeneratedVariant[] = [];
 
-  // Format: CATEGORY(3) - DESIGN(3) - COLOR(3) - SIZE(Full) - RANDOM(4)
-  // Example: TSH - SUM - RED - XL - 8821
+  // Format: CATEGORY(3) - DESIGN(3) - COLOR(3) - SIZE(Full) - RANDOM(6, base 36)
+  // Example: TSH - SUM - RED - XL - 8K2Q1Z
 
   for (const design of designs) {
     for (const color of colors) {

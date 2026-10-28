@@ -1,4 +1,5 @@
 import { inheritedTransport } from "@/lib/product-costs";
+import { assertNewVariantSkusFree, generateUniqueVariantSku } from "@/lib/variant-skus";
 import { scrubProductGroup } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
@@ -297,6 +298,13 @@ export async function PATCH(
       // 4. Atributos y subcategoría de todas las filas de una vez (y de esta tienda).
       await assertStoreCategory(tx, params.storeId, categoryId);
       const attributes = await loadVariantAttributes(tx, params.storeId, variants);
+      // Antes de crear las variantes nuevas: un SKU que ya existe se rechaza entero.
+      await assertNewVariantSkusFree(tx, {
+        storeId: params.storeId,
+        skus: variants.filter((variant) => !(variant.id && referenced.get(variant.id))).map((variant) => variant.sku),
+      });
+      const skuCategory = categoryId ? await tx.category.findUnique({ where: { id: categoryId }, select: { name: true } }) : null;
+      const takenSkus = new Set<string>();
 
       // 5. Altas y cambios, fila por fila (una transacción serializable no
       //    gana nada con Promise.all y sí pierde el orden de los errores).
@@ -370,11 +378,16 @@ export async function PATCH(
           nextArchived.set(existing.id, data.isArchived);
           await syncVariantGallery(tx, { productId: existing.id, ...gallery });
         } else {
-          if (!variant.sku) {
-            throw ErrorFactory.InvalidRequest(
-              `La variante «${variantLabel(variant)}» no tiene SKU.`,
-            );
-          }
+          // El SKU del formulario ya se revisó arriba; sin SKU, lo pone el servidor.
+          const sku =
+            variant.sku?.trim() ||
+            (await generateUniqueVariantSku(tx, {
+              categoryName: skuCategory?.name ?? "",
+              designName: designObj.name,
+              colorName: colorObj.name,
+              sizeName: sizeObj.value || sizeObj.name,
+              taken: takenSkus,
+            }));
           const variantName = data.name ?? name;
           const baseSlug =
             generateProductSlug({
@@ -395,7 +408,7 @@ export async function PATCH(
             data: {
               ...data,
               name: variantName,
-              sku: variant.sku,
+              sku,
               slug,
               stock: 0,
               storeId: params.storeId,
