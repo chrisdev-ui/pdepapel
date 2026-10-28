@@ -198,6 +198,9 @@ export async function runGuideConfirm(input: { storeId: string; code: string | n
     select: { id: true, orderId: true, codeHash: true, codeAttempts: true, quote: true },
   });
   if (pending.length === 0) {
+    // Un «/confirmar» repetido que llega cuando el primero ya la tomó: decirle «pide /guia otra vez» invitaría a una segunda guía.
+    const inFlight = await prismadb.whatsAppAdminCommand.count({ where: { storeId: input.storeId, command: "guia", status: "CONFIRMING", codeExpiresAt: { gt: new Date(input.now.getTime() - 5 * 60_000) } } });
+    if (inFlight > 0) return { status: "DONE", outcome: "claimed_elsewhere", reply: "Esa guía ya se está creando.", url };
     return { status: "DONE", outcome: "no_pending_guide", reply: "No hay ninguna guía esperando confirmación (o el código venció). Pide /guia otra vez.", url };
   }
   const match = pending.find((row) => row.codeHash && row.codeHash === hashGuideCode(row.id, input.code!));
