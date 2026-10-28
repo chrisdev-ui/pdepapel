@@ -91,6 +91,10 @@ test.describe("Comandos por WhatsApp en el panel", () => {
       await expect(page.getByText("Respondido")).toBeVisible();
       await expect(page.getByText("Llegó tarde")).toBeVisible();
       await expect(page.getByText("Aviso en 2 aparatos")).toBeVisible();
+      const usage = page.getByTestId("command-usage");
+      await expect(usage).toContainText("Últimos 14 días");
+      await expect(usage).toContainText("/estado");
+      await expect(usage).toContainText("bien");
       const link = page.getByRole("link", { name: "Ver pedido" });
       if (await link.count()) {
         const box = await link.first().boundingBox();
