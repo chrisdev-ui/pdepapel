@@ -574,14 +574,27 @@
       </ol>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/envios-estado" alt="Cambiar el estado de varios envíos a la vez desde la barra de selección." loading="lazy" width="1440" height="900"></div><figcaption>Cambiar el estado de varios envíos a la vez desde la barra de selección.</figcaption></figure>
       <div class="note tip"><strong>Con novedad</strong><p>Esta vista reúne entregas fallidas, devoluciones y excepciones. Revísala a diario: casi siempre hay que llamar al cliente o a la transportadora.</p></div>
-      <h3>Guías de EnvioClick sin pedido</h3>
-      <p>Si una guía se hizo directo en envioclick.com (por ejemplo, una venta cerrada por WhatsApp), EnvioClick avisa sus movimientos pero el panel no sabe de qué pedido es: la clienta no recibe avisos y la venta no cuenta en inventario ni en ventas. Esas guías aparecen arriba en Envíos, en <strong>Guías de EnvioClick sin pedido</strong>, y en Inicio.</p>
+      <h3 id="guias-envioclick">Guías creadas en EnvioClick</h3>
+      <p>Hay tres formas de hacer una guía y las tres valen: desde el pedido en el panel, con <a href="#guia-whatsapp"><em>/guia</em> por WhatsApp</a> o directo en envioclick.com. Si la haces en envioclick.com, el panel la une al pedido así:</p>
+      <ul class="list">
+        <li><strong>Escribiste el número de guía en el pedido</strong> (como siempre): se une sola. El pedido toma la guía y su estado real, y la clienta recibe solo el aviso que todavía no tenga (si el pedido ya decía «guía creada», no se lo repite).</li>
+        <li><strong>No lo escribiste</strong>: la guía aparece en Inicio como «guía de EnvioClick sin pedido». Se une en dos toques:</li>
+      </ul>
       <ol class="steps">
-        <li><strong>Vincular a un pedido</strong>: escribe el número del pedido (ORD-…). La guía queda en el pedido con su estado real y la clienta recibe un solo aviso, el de ese estado.</li>
-        <li><strong>Crear pedido desde esta guía</strong>: abre un pedido nuevo; al guardarlo queda con esa guía. No cotices ni crees otra guía.</li>
-        <li><strong>Descartar</strong>: para guías de prueba o anuladas. Sale de la lista y no vuelve.</li>
+        <li>En <strong>Inicio</strong>, en la fila «guía de EnvioClick sin pedido», pulsa <strong>Vincular</strong>. Te lleva a Envíos, a la tarjeta <strong>Guías de EnvioClick sin pedido</strong>.</li>
+        <li>En la guía, pulsa <strong>Vincular a un pedido</strong>. Aparecen los pedidos sugeridos: los que no tienen guía, de los 14 días antes de la guía, el más cercano primero (si un pedido ya tiene ese mismo número de guía, va primero y dice «Mismo número de guía»). Cada uno muestra número, fecha, ciudad, total y las 4 últimas cifras del celular.</li>
+        <li>Toca el pedido. Si no está en la lista, búscalo por número de pedido, nombre o últimas cifras del celular.</li>
+        <li><strong>Avisar a la clienta</strong> viene marcado. Quítalo si el pedido ya se entregó o ya le avisaste: así no le llega nada.</li>
+        <li>Pulsa <strong>Vincular</strong>. El aviso de arriba dice a qué estado quedó el pedido (por ejemplo «Entregado»).</li>
       </ol>
-      <div class="note tip"><strong>Mejor desde el panel</strong><p>Si creas la guía desde el pedido, nada de esto hace falta: el aviso sale solo.</p></div>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/guias-inicio" alt="Inicio con la fila «guía de EnvioClick sin pedido» y su botón Vincular." loading="lazy" width="1440" height="900"></div><figcaption>Inicio: la fila «guía de EnvioClick sin pedido» y su botón Vincular.</figcaption></figure>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/guias-envios" alt="La tarjeta «Guías de EnvioClick sin pedido» en Envíos." loading="lazy" width="1440" height="900"></div><figcaption>En Envíos, la tarjeta con las guías que todavía no están en un pedido.</figcaption></figure>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/guias-vincular" alt="Vincular a un pedido: el pedido sugerido elegido y la casilla «Avisar a la clienta»." loading="lazy" width="1440" height="900"></div><figcaption>Vincular a un pedido: elige el sugerido, decide «Avisar a la clienta» y pulsa Vincular.</figcaption></figure>
+      <ul class="list">
+        <li>Si el pedido ya tiene <strong>otro</strong> número de guía, no se vincula: el aviso lo dice. Corrige el número en el pedido o elige otro pedido.</li>
+        <li><strong>Crear pedido desde esta guía</strong>: para la venta que todavía no tiene pedido. Al guardarlo queda con esa guía; no cotices ni crees otra.</li>
+        <li><strong>Ocultar (no es de un pedido)</strong>: solo para guías de prueba o anuladas. Pide confirmación porque después <strong>ya no se puede vincular</strong> a un pedido.</li>
+      </ul>
     </section>
 
     <!-- 9 -->
