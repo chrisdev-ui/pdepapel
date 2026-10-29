@@ -196,3 +196,69 @@ export async function recordPaidOrderInGoogleAnalytics(
 
   return "sent";
 }
+
+/**
+ * «preorder_deposit_paid»: el anticipo de una preventa, por Measurement
+ * Protocol. NO es `purchase` (la venta se cuenta una vez, al pagar el saldo) y
+ * por eso conserva `analyticsClientId`: la compra del saldo lo necesita.
+ */
+export async function recordDepositInGoogleAnalytics(orderId: string): Promise<"sent" | "skipped"> {
+  const measurementId = env.GA4_MEASUREMENT_ID;
+  const apiSecret = env.GA4_API_SECRET;
+  if (!measurementId || !apiSecret) return "skipped";
+
+  const order = await prismadb.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      depositAmount: true,
+      analyticsClientId: true,
+      analyticsSessionId: true,
+      analyticsDepositTrackedAt: true,
+      orderItems: {
+        select: {
+          name: true,
+          price: true,
+          brandName: true,
+          product: { select: { category: { select: { name: true } }, sku: true } },
+          productId: true,
+          quantity: true,
+          sku: true,
+        },
+      },
+    },
+  });
+  if (!order || order.status !== OrderStatus.DEPOSIT_PAID || order.analyticsDepositTrackedAt || !order.analyticsClientId) {
+    return "skipped";
+  }
+  const clientId = normalizeGoogleAnalyticsClientId(order.analyticsClientId);
+  if (!clientId) return "skipped";
+
+  const base = buildGoogleAnalyticsPurchasePayload({
+    clientId,
+    sessionId: normalizeGoogleAnalyticsSessionId(order.analyticsSessionId),
+    items: order.orderItems,
+    orderNumber: `${order.orderNumber}-A`,
+    total: Number(order.depositAmount ?? 0),
+  });
+  const { coupon: _coupon, shipping: _shipping, payment_type: _paymentType, ...params } = base.events[0].params as Record<string, unknown>;
+  const payload = { ...base, events: [{ name: "preorder_deposit_paid", params }] };
+
+  const query = new URLSearchParams({ api_secret: apiSecret, measurement_id: measurementId });
+  const response = await fetch(`${GOOGLE_ANALYTICS_MEASUREMENT_PROTOCOL_URL}?${query.toString()}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(3_000),
+  });
+  if (!response.ok) throw new Error(`GA4 Measurement Protocol respondió ${response.status}`);
+
+  await prismadb.order.updateMany({
+    where: { id: order.id, analyticsDepositTrackedAt: null },
+    data: { analyticsDepositTrackedAt: new Date() },
+  });
+  return "sent";
+}

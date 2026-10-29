@@ -76,7 +76,11 @@ export async function createGuideForOrder(
   const db = prismaClient || prismadb;
   await assertCapsuleDrawsClosed(db, [orderId]);
   // Regla 5 de la preventa: con una línea sin liberar no sale nada del pedido.
-  if ((await db.orderItem.count({ where: { orderId, ...UNRELEASED_PRESALE_LINE } })) > 0) {
+  const loadedItems: { isPreorder?: boolean; preorderReleasedAt?: Date | null }[] | undefined = orderData?.orderItems;
+  const heldByPresale = Array.isArray(loadedItems)
+    ? loadedItems.some((item) => Boolean(item.isPreorder) && !item.preorderReleasedAt)
+    : (await db.orderItem.count({ where: { orderId, ...UNRELEASED_PRESALE_LINE } })) > 0;
+  if (heldByPresale) {
     throw ErrorFactory.Conflict(PRESALE_HOLD_GUIDE_MESSAGE);
   }
 

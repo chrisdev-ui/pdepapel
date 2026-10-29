@@ -30,6 +30,7 @@ const LOW_MARGIN_SELECT = {
   acqPrice: true,
   transportationCost: true,
   isKit: true,
+  marginExceptionReason: true,
   categoryId: true,
   productGroupId: true,
   category: { select: { name: true } },
@@ -82,6 +83,7 @@ export async function loadLowMargin(db: Pick<PrismaClient, "product" | "store">,
         offerLabel: best.offerLabel,
         cost: productUnitCost(product),
         isKit: product.isKit,
+        marginExceptionReason: product.marginExceptionReason,
       },
       minimoPct,
     );
@@ -91,8 +93,8 @@ export async function loadLowMargin(db: Pick<PrismaClient, "product" | "store">,
   }
 
   const counts = Object.fromEntries(LOW_MARGIN_SECTIONS.map((section) => [section, bySection.get(section)!.length])) as Record<LowMarginSection, number>;
-  // «Solo por Bold» va plegado: nunca es la sección que se abre sola.
-  const section = query.section ?? LOW_MARGIN_SECTIONS.find((candidate) => candidate !== "solo-bold" && counts[candidate] > 0) ?? null;
+  // «Solo por Bold» y «Con excepción» van plegadas: nunca son la sección que se abre sola.
+  const section = query.section ?? LOW_MARGIN_SECTIONS.find((candidate) => candidate !== "solo-bold" && candidate !== "con-excepcion" && counts[candidate] > 0) ?? null;
   const rows = section ? [...bySection.get(section)!].sort(compareLowMargin) : [];
   const pageCount = Math.max(1, Math.ceil(rows.length / LOW_MARGIN_PAGE_SIZE));
   const page = Math.min(query.page, pageCount);

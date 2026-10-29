@@ -82,6 +82,12 @@ export async function getProduct(id: string, storeId: string) {
         select: {
           id: true,
           expectedArrivalAt: true,
+          expectedArrivalText: true,
+          paymentMode: true,
+          depositType: true,
+          depositValue: true,
+          termsText: true,
+          balanceDueDays: true,
           unitLimit: true,
           committedUnits: true,
         },
@@ -212,9 +218,15 @@ export async function getProduct(id: string, storeId: string) {
     activePresale: activePresale
       ? {
           id: activePresale.id,
-          expectedArrivalAt: activePresale.expectedArrivalAt.toISOString(),
+          expectedArrivalAt: activePresale.expectedArrivalAt?.toISOString() ?? null,
+          expectedArrivalText: activePresale.expectedArrivalText,
           unitLimit: activePresale.unitLimit,
           committedUnits: activePresale.committedUnits,
+          paymentMode: activePresale.paymentMode,
+          depositType: activePresale.depositType,
+          depositValue: activePresale.depositValue,
+          termsText: activePresale.termsText,
+          balanceDueDays: activePresale.balanceDueDays,
         }
       : null,
     categories,

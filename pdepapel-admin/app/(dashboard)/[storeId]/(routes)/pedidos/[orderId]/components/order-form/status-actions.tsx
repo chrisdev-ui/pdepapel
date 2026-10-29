@@ -50,6 +50,7 @@ interface StatusActionsProps {
   loading: boolean;
   /** Solo las acciones normales; las destructivas van aparte. */
   variant: "card" | "care";
+  paymentPlan?: "FULL" | "DEPOSIT" | null;
   onTransition: (payload: TransitionPayload) => Promise<void> | void;
 }
 
@@ -81,6 +82,7 @@ export function StatusActions({
   loading,
   variant,
   onTransition,
+  paymentPlan = null,
 }: StatusActionsProps) {
   // Solo lectura: las transiciones se ven pero no se pueden pulsar.
   const canWrite = useCanWrite();
@@ -91,7 +93,7 @@ export function StatusActions({
   const [submitting, setSubmitting] = useState(false);
 
   const pickup = shippingProvider === ShippingProvider.NONE;
-  const actions = getStatusActions(status, { type, paymentMethod, shippingStatus, pickup }).filter(
+  const actions = getStatusActions(status, { type, paymentMethod, shippingStatus, pickup, paymentPlan }).filter(
     (action) => (variant === "care" ? action.destructive : !action.destructive),
   );
 

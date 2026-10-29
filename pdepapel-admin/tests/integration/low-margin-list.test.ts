@@ -79,7 +79,7 @@ describe("Margen bajo", () => {
     const data = await load();
     expect(data.minimoPct).toBe(40);
     // Componente del fixture: 10.000 con costo 4.000, cumple incluso con Bold. El kit lleva dos: costo 8.000.
-    expect(data.counts).toEqual({ "oferta-bajo-costo": 1, "bajo-costo": 1, "bajo-minimo": 1 + EXTRA_BELOW_MINIMUM, "solo-bold": 1, kits: 1 });
+    expect(data.counts).toEqual({ "oferta-bajo-costo": 1, "bajo-costo": 1, "bajo-minimo": 1 + EXTRA_BELOW_MINIMUM, "solo-bold": 1, kits: 1, "con-excepcion": 0 });
     expect(data.sinCosto).toBe(1);
     // Se abre la primera sección con algo, nunca «solo por Bold».
     expect(data.section).toBe("oferta-bajo-costo");

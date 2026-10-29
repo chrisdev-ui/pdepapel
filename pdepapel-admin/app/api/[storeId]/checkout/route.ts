@@ -1,5 +1,6 @@
 import {
   Coupon,
+  OrderPaymentPlan,
   OrderStatus,
   PaymentMethod,
   Product,
@@ -21,7 +22,18 @@ import {
   assertCouponHasUses,
 } from "@/lib/coupon-availability";
 import { priceLines } from "@/lib/product-pricing";
-import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
+import {
+  DEPOSIT_PAYMENT_METHODS,
+  DEPOSIT_PRESALE_ALONE_MESSAGE,
+  DEPOSIT_PRESALE_SHIPPING_LABEL,
+  getActivePresalesByProduct,
+  getDepositPresaleProductIds,
+  getPresaleCapacity,
+  presaleUnitDeposit,
+  presaleUnitsForOrder,
+} from "@/lib/presale";
+import { ensurePendingDepositCharge } from "@/lib/order-payment-charges";
+import { KNOWN_LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 import prismadb from "@/lib/prismadb";
 import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
@@ -298,7 +310,37 @@ async function createCheckout(
       );
     }
 
+    // Preventa con anticipo (lib/order-payments.ts): se compra sola, sin cupón
+    // ni tarjeta de regalo ni contra entrega, con las condiciones aceptadas, y
+    // el envío se cotiza y se cobra con el saldo cuando llega.
+    const depositPresaleProducts = await getDepositPresaleProductIds(
+      params.storeId,
+      typedOrderItems.map((item) => item.productId),
+    );
+    const isDepositCheckout = depositPresaleProducts.size > 0;
+    const preorderTermsVersion =
+      typeof (body as Record<string, unknown>).preorderTermsVersion === "string"
+        ? String((body as Record<string, unknown>).preorderTermsVersion).trim().slice(0, 20)
+        : "";
+    if (isDepositCheckout) {
+      if (typedOrderItems.some((item) => !depositPresaleProducts.has(item.productId))) {
+        throw ErrorFactory.InvalidRequest(DEPOSIT_PRESALE_ALONE_MESSAGE);
+      }
+      if (couponCode) throw ErrorFactory.InvalidRequest("Una preventa con anticipo no lleva cupón.");
+      if (giftCardParsed) throw ErrorFactory.InvalidRequest("El anticipo de una preventa no se paga con tarjeta de regalo.");
+      if (!DEPOSIT_PAYMENT_METHODS.includes(payment.method)) {
+        throw ErrorFactory.InvalidRequest("El anticipo se paga en línea o por transferencia bancaria.");
+      }
+      if (
+        (body as Record<string, unknown>).preorderTermsAccepted !== true ||
+        !(KNOWN_LEGAL_VERSIONS.terms as readonly string[]).includes(preorderTermsVersion)
+      ) {
+        throw ErrorFactory.InvalidRequest("Acepta las condiciones de la preventa para continuar.");
+      }
+    }
+
     const isCustomShipping =
+      isDepositCheckout ||
       shipping?.provider === "CUSTOM" ||
       shipping?.carrierName?.includes("Medellín") ||
       shipping?.carrierName?.includes("WhatsApp") ||
@@ -380,7 +422,18 @@ async function createCheckout(
       isCOD: shipping.isCOD || false,
     };
 
-    let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
+    let selectedQuote: any = isDepositCheckout
+      ? {
+          ...fallbackQuote,
+          provider: "CUSTOM",
+          totalCost: 0,
+          flete: 0,
+          carrier: DEPOSIT_PRESALE_SHIPPING_LABEL,
+          product: "Envío",
+          idRate: 0,
+          isCOD: false,
+        }
+      : fallbackQuote; // Default to provided shipping data (normalized)
 
     // La tarifa sale de una cotización vigente o de una nueva (`resolveStoreShippingRate`), nunca del cliente.
     // Contra entrega: la guía solo sale con un idRate cotizado con recaudo
@@ -514,8 +567,13 @@ async function createCheckout(
       // apartado por pedidos recientes sin pagar.
       const presale = activePresales.get(product.id);
       if (presale) {
-        const remaining = getPresaleCapacity(presale).remaining;
+        // Sin tope, el freno es por pedido (`PRESALE_MAX_PER_ORDER`).
+        const unlimited = presale.unitLimit === null;
+        const remaining = presaleUnitsForOrder(getPresaleCapacity(presale));
         if (remaining < requiredQuantity) {
+          if (unlimited) {
+            throw ErrorFactory.InvalidRequest(`De "${product.name}" se reservan hasta ${remaining} por pedido.`);
+          }
           throw ErrorFactory.InvalidRequest(
             remaining === 0
               ? `"${product.name}" ya no tiene reservas disponibles para la preventa.`
@@ -748,6 +806,21 @@ async function createCheckout(
       );
     }
 
+    // El anticipo acordado, copiado en el pedido: un cambio posterior de la
+    // campaña no cambia lo que esta clienta aceptó.
+    const depositAmount = isDepositCheckout
+      ? orderItems.reduce(
+          (sum: number, { productId, quantity = 1 }: { productId: string; quantity?: number }) =>
+            sum +
+            presaleUnitDeposit(
+              activePresales.get(productId)!,
+              pricedLines.get(productId)?.unitPrice ?? productMap.get(productId)!.price,
+            ) *
+              quantity,
+          0,
+        )
+      : null;
+
     const orderNumber = generateOrderNumber();
 
     let order: CheckoutOrder;
@@ -755,6 +828,8 @@ async function createCheckout(
     let giftCardId: string | null = null;
     let giftCardAmount = 0;
     let fullyCovered = false;
+    // El cobro del anticipo que firma la pasarela (`<orderNumber>-A`).
+    let depositCharge: { reference: string; amount: number } | null = null;
 
     const createNewOrder = (
       database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
@@ -772,6 +847,9 @@ async function createCheckout(
           status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
           giftCardId,
           giftCardAmount,
+          ...(isDepositCheckout
+            ? { paymentPlan: OrderPaymentPlan.DEPOSIT, depositAmount, preorderTermsVersion }
+            : {}),
           ...orderRisk,
           fullName,
           phone: normalizedPhone,
@@ -884,6 +962,10 @@ async function createCheckout(
       }
 
       const createdOrder = await createStandardOrder(tx);
+      if (isDepositCheckout && payment.method !== PaymentMethod.BankTransfer) {
+        const charge = await ensurePendingDepositCharge(tx, createdOrder, payment.method);
+        depositCharge = { reference: charge.gatewayReference!, amount: Math.round(charge.amount) };
+      }
       if (capsulePlan) {
         await reserveCapsuleOrder(tx, capsulePlan, { storeId: params.storeId, orderId: createdOrder.id });
       }
@@ -986,7 +1068,7 @@ async function createCheckout(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
       if (payment.method === PaymentMethod.Bold) {
-        const boldData = generateBoldCheckoutData(order);
+        const boldData = generateBoldCheckoutData(order, depositCharge);
         console.log(
           `✅ Bold pre-signed payload generated for order ${order.orderNumber}`,
         );
@@ -1003,7 +1085,7 @@ async function createCheckout(
         return NextResponse.json(order, { headers: corsHeaders });
       }
 
-      const url = await generateWompiPayment(order);
+      const url = await generateWompiPayment(order, depositCharge);
       console.log(
         `✅ Wompi payment URL generated for order ${order.orderNumber}`,
       );

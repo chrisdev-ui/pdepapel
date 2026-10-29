@@ -95,6 +95,8 @@ import {
   PresaleSection,
   type ProductPresaleSummary,
 } from "@/components/products/presale-section";
+import { PresaleWaitlistBlock } from "@/components/presales/presale-waitlist-block";
+import { presaleUnitDeposit } from "@/lib/presale-deposit";
 import { availableAtToInput } from "@/lib/product-availability";
 import {
   Tooltip,
@@ -136,6 +138,8 @@ import { getProductStatus, PRODUCT_STATUS } from "@/lib/product-status";
 import { isPriceBelowCost } from "@/lib/product-pricing-rules";
 import { generateProductSlug } from "@/lib/slugify";
 import { KitPriceSuggestion } from "./kit-price-calculator";
+import { MarginExceptionField } from "./margin-exception-field";
+import { marginExceptionApplies, marginExceptionFormIssue, marginExceptionSubmission } from "@/lib/margin-exception";
 
 const formSchema = z
   .object({
@@ -163,6 +167,9 @@ const formSchema = z
     price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
     /** Solo para liquidaciones: permite guardar por debajo del costo. No se guarda. */
     sellAtLoss: z.boolean().default(false).optional(),
+    /** «Precio bajo a propósito»: solo de la pantalla; se guarda el motivo. */
+    marginExceptionEnabled: z.boolean().default(false).optional(),
+    marginExceptionReason: z.string().nullable().optional(),
     categoryId: z.string().min(1, "Elige una subcategoría"),
     colorId: z.string().min(1, "Elige un color"),
     sizeId: z.string().min(1, "Elige un tamaño"),
@@ -427,6 +434,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             images: normalizeProductImages(initialData.images),
             transportationCost: initialData.transportationCost ?? null,
             sellAtLoss: false,
+            marginExceptionEnabled: Boolean(initialData.marginExceptionReason),
+            marginExceptionReason: initialData.marginExceptionReason ?? "",
             productGroupId: initialData.productGroupId || "",
             stock: initialData.stock,
             isKit: initialData.isKit || false,
@@ -483,6 +492,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             availableAt: "",
             transportationCost: seed?.transportationCost ?? null,
             sellAtLoss: false,
+            marginExceptionEnabled: false,
+            marginExceptionReason: "",
             productGroupId: productGroup?.id || "",
             kitDiscountPercent: 0,
             isKit: seed?.isKit ?? false,
@@ -626,6 +637,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     Number(watchedPrice) || 0,
     watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0,
   );
+  // La excepción solo se ofrece bajo el mínimo (y sobre el costo). Se valida y
+  // se manda al guardar, no aquí: el precio pasa por valores bajos al escribirlo.
+  const marginBelowMinimum = marginExceptionApplies(margin, priceBelowCost);
+  const watchedMarginExceptionEnabled = form.watch("marginExceptionEnabled");
+  const watchedMarginExceptionReason = form.watch("marginExceptionReason");
+  const marginExceptionNote =
+    marginBelowMinimum && watchedMarginExceptionEnabled && !marginExceptionFormIssue(true, watchedMarginExceptionReason)
+      ? (watchedMarginExceptionReason ?? "").trim()
+      : null;
   const slugPreview = useMemo(
     () => generateProductSlug({ name: form.watch("name") || "" }) || "producto",
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -744,6 +764,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         window.setTimeout(focusFirstInvalidField, 0);
         return;
       }
+      const marginException = marginExceptionSubmission({
+        applies: marginBelowMinimum,
+        enabled: data.marginExceptionEnabled,
+        reason: data.marginExceptionReason,
+      });
+      if (!marginException.ok) {
+        form.setError("marginExceptionReason", { type: "manual", message: marginException.message });
+        window.setTimeout(focusFirstInvalidField, 0);
+        return;
+      }
       try {
         setLoading(true);
         const { sellAtLoss, ...rest } = data;
@@ -752,6 +782,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           images,
           allowBelowCost: Boolean(sellAtLoss),
         };
+        delete payload.marginExceptionEnabled;
+        if (marginException.value === undefined) delete payload.marginExceptionReason;
+        else payload.marginExceptionReason = marginException.value;
         if (!initialData && !identifierTouched && !data.gtin && !data.mpn) {
           // Sin código y sin decisión explícita: el servidor aplica «sin código».
           delete payload.hasNoProductIdentifier;
@@ -809,6 +842,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       form,
       identifierTouched,
       refreshSlug,
+      marginBelowMinimum,
     ],
   );
   /** Archivar o restaurar desde el encabezado, sin pasar por Guardar. */
@@ -1832,7 +1866,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           {!margin.shippingIncluded && !watchedIsKit && (
                             <FormDescription className="text-xs">Envío no registrado: el margen real puede ser menor.</FormDescription>
                           )}
-                          {margin.minimum?.below && margin.profit >= 0 && (
+                          {marginExceptionNote ? (
+                            <FormDescription className="text-xs text-muted-foreground" data-testid="margin-exception-note">
+                              Margen bajo a propósito: {marginExceptionNote}
+                            </FormDescription>
+                          ) : margin.minimum?.below && margin.profit >= 0 && (
                             <FormDescription className="text-xs font-medium text-amber-800">
                               Por debajo del margen mínimo de la tienda ({margin.minimum.marginPct.toLocaleString("es-CO")} %)
                               {margin.minimum.price !== null ? `: para llegar, ${currencyFormatter(margin.minimum.price)}.` : "."}
@@ -1862,6 +1900,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </FormItem>
                   )}
                 />
+                <MarginExceptionField visible={marginBelowMinimum} disabled={loading} />
                 {priceBelowCost && (
                   <FormField
                     control={form.control}
@@ -2602,7 +2641,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               productId={initialData?.id ?? null}
               presale={activePresale}
               isKit={Boolean(initialData?.isKit)}
-            />
+              isArchived={Boolean(initialData?.isArchived)}
+            >
+              {activePresale && initialData?.id ? (
+                <PresaleWaitlistBlock
+                  storeId={String(params.storeId)}
+                  productId={initialData.id}
+                  presaleId={activePresale.id}
+                  unitDeposit={
+                    activePresale.paymentMode === "DEPOSIT"
+                      ? presaleUnitDeposit(activePresale, Number(initialData.price) || 0)
+                      : null
+                  }
+                />
+              ) : null}
+            </PresaleSection>
             <SectionCard
               id="descripcion"
               title="Descripción"

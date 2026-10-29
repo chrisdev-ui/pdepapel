@@ -1,6 +1,7 @@
 import { availableStock } from "@/lib/available-stock";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { productAvailabilityWhere } from "@/lib/product-availability";
+import { PRESALE_FEED_INCLUDE, presaleFeedDecision } from "@/lib/presale-feed";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 
 import type { Prisma } from "@prisma/client";
@@ -62,6 +63,7 @@ export const GOOGLE_MERCHANT_FEED_HEADERS = [
   "size",
   "pattern",
   "excluded_destination",
+  "availability_date",
 ] as const;
 
 /** COP sin decimales cuando el monto es entero; si no, dos decimales. */
@@ -85,6 +87,7 @@ export const GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE = {
   productGroup: { include: { brandRef: { select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } } } } },
   brandRef: { select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } } },
   images: { orderBy: GALLERY_ORDER },
+  ...PRESALE_FEED_INCLUDE,
 } satisfies Prisma.ProductInclude;
 
 /** Marca de los feeds: la enlazada (aunque esté oculta en la tienda), nunca una archivada ni el texto anterior. */
@@ -139,9 +142,11 @@ export function buildGoogleMerchantFeed(
 ): GoogleMerchantFeed {
   const generatedAt = options.generatedAt ?? new Date();
   const groupsWithDuplicateVariants = findGroupsWithDuplicateVariants(products);
-  const exported = options.links
+  // Preventa sin fecha: fuera del feed (lib/presale-feed.ts).
+  const exported = (options.links
     ? products.filter((product) => options.links!.has(product.id))
-    : products;
+    : products
+  ).filter((product) => presaleFeedDecision(product).kind !== "skip");
 
   const missingImages: GoogleMerchantFeedReport["missingImages"] = [];
   const rewrittenImages: GoogleMerchantFeedReport["rewrittenImages"] = [];
@@ -188,7 +193,9 @@ export function buildGoogleMerchantFeed(
         ? "no"
         : "";
     if (identifierExists === "no") withoutIdentifier += 1;
-    const availability = availableStock(product) > 0 ? "in_stock" : "out_of_stock";
+    const presale = presaleFeedDecision(product);
+    const availability =
+      presale.kind === "preorder" ? "preorder" : availableStock(product) > 0 ? "in_stock" : "out_of_stock";
     if (availability === "out_of_stock") outOfStock += 1;
     const itemGroupId =
       product.productGroupId &&
@@ -219,6 +226,7 @@ export function buildGoogleMerchantFeed(
       cleanFeedText(getGoogleMerchantSize(product.category?.name, product.size)),
       cleanFeedText(getGoogleMerchantPattern(product.name, product.design)),
       GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS.join(","),
+      presale.kind === "preorder" ? presale.availabilityDate : "",
     ].join("\t");
   });
 

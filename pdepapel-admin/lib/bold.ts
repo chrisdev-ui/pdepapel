@@ -89,11 +89,15 @@ export function getBoldWebhookSecretKey(): string {
 /**
  * Generates pre-signed Bold checkout payload for direct checkout creation
  */
-export function generateBoldCheckoutData(order: any) {
+export function generateBoldCheckoutData(
+  order: any,
+  /** Anticipo de preventa: su referencia (`-A`) y su valor, en lugar de los del pedido. */
+  charge: { reference: string; amount: number } | null = null,
+) {
   const boldConfig = getBoldConfig();
-  const boldOrderReference = getBoldOrderReference(order);
-  // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo.
-  const amount = Math.round(getAmountDue(order));
+  const boldOrderReference = charge?.reference ?? getBoldOrderReference(order);
+  // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo (o el anticipo).
+  const amount = charge ? Math.round(charge.amount) : Math.round(getAmountDue(order));
   const currency = "COP";
   const integritySignature = generateBoldIntegritySignature(
     boldOrderReference,

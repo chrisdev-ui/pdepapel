@@ -1,4 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
+import { presaleFeedDecision } from "@/lib/presale-feed";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 import {
   cleanFeedText,
@@ -78,6 +79,7 @@ export const META_CATALOG_FEED_HEADERS = [
   "size",
   "pattern",
   "google_product_category",
+  "availability_date",
 ] as const;
 
 export const META_CATALOG_FEED_NAME = "meta-catalog-feed";
@@ -150,9 +152,11 @@ export function buildMetaCatalogFeed(
   const generatedAt = options.generatedAt ?? new Date();
   const defaultBrand = options.defaultBrand ?? META_CATALOG_DEFAULT_BRAND;
   const groupsWithDuplicateVariants = findGroupsWithDuplicateVariants(products);
-  const linked = options.links
+  // Preventa sin fecha: fuera del feed (lib/presale-feed.ts).
+  const linked = (options.links
     ? products.filter((product) => options.links!.has(product.id))
-    : products;
+    : products
+  ).filter((product) => presaleFeedDecision(product).kind !== "skip");
 
   // Una foto marcada rota por image-health da 404: Meta y Pinterest no la
   // pueden bajar. Sin ninguna foto viva, `image_link` (obligatorio) queda
@@ -199,7 +203,9 @@ export function buildMetaCatalogFeed(
     if (identifierExists === "no") withoutIdentifier += 1;
     // Con espacio, no con guion bajo: es la diferencia que rechaza el catálogo
     // entero si se copia el feed de Google tal cual.
-    const availability = availableStock(product) > 0 ? "in stock" : "out of stock";
+    const presale = presaleFeedDecision(product);
+    const availability =
+      presale.kind === "preorder" ? "preorder" : availableStock(product) > 0 ? "in stock" : "out of stock";
     if (availability === "out of stock") outOfStock += 1;
     const itemGroupId =
       product.productGroupId &&
@@ -234,6 +240,7 @@ export function buildMetaCatalogFeed(
       cleanFeedText(getGoogleMerchantSize(product.category?.name, product.size)),
       cleanFeedText(getGoogleMerchantPattern(product.name, product.design)),
       googleCategory === null ? "" : String(googleCategory),
+      presale.kind === "preorder" ? presale.availabilityDate : "",
     ].join("\t");
   });
 

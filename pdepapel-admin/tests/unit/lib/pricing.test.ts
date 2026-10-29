@@ -235,6 +235,14 @@ describe("productos por debajo de un margen", () => {
       ["a", 10834, 834],
     ]);
   });
+
+  it("con excepción de margen no entra en ningún umbral y se cuenta aparte", () => {
+    const result = analyzeBelowMargin([...products, { ...product("x", "Cuadernos", 9000, 6000), marginExceptionReason: "Volumen" }, { ...product("y", "Cuadernos", 9000, 6000), marginExceptionReason: "  " }], [40]);
+    expect(result).toMatchObject({ evaluados: 6, conExcepcion: 1 });
+    const ids = result.porUmbral[0].categorias.flatMap((c) => c.productos.map((p) => p.id));
+    expect(ids).not.toContain("x");
+    expect(ids).toContain("y");
+  });
 });
 
 describe("margen de la ficha: la misma definición que el precio sugerido", () => {

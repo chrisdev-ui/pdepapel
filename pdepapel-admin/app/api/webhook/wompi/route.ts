@@ -13,7 +13,9 @@ import {
   type SettlementOrder,
   type SettlementOutcome,
 } from "@/lib/payment-settlement";
-import { OrderStatus } from "@prisma/client";
+import { OrderPaymentPlan, OrderStatus } from "@prisma/client";
+import { processDepositCharge } from "@/lib/deposit-charge-webhook";
+import { findChargeByReference } from "@/lib/order-payments";
 import { safeHexEquals } from "@/lib/webhook-auth";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -123,6 +125,27 @@ async function processWebhookPayment(
         typeof transaction.reference === "string"
           ? transaction.reference
           : null;
+      // El anticipo de una preventa trae su propia referencia (`<orderNumber>-A`).
+      let charge;
+      try {
+        charge = await findChargeByReference(typeof transaction.reference === "string" ? transaction.reference : null);
+      } catch (error) {
+        return NextResponse.json({ error: `Error finding deposit charge for wompi webhook: ${error}` }, { status: 500 });
+      }
+      if (charge) {
+        const status = String(transaction.status ?? "");
+        const result = await processDepositCharge({
+          provider: "Wompi",
+          charge,
+          event: status === "APPROVED" ? "approved" : status === "VOIDED" ? "voided" : status === "DECLINED" || status === "ERROR" ? "declined" : "pending",
+          transactionId: typeof transaction.id === "string" ? transaction.id : null,
+          amount: transaction,
+        });
+        context.orderId = result.orderId;
+        context.storeId = result.storeId;
+        return NextResponse.json(result.body, { status: result.status });
+      }
+
       let order: SettlementOrder | null;
       try {
         order = await loadOrderForSettlement({ id: transaction.reference });
@@ -141,6 +164,13 @@ async function processWebhookPayment(
         );
       context.orderId = order.id;
       context.storeId = order.storeId;
+
+      if (order.paymentPlan === OrderPaymentPlan.DEPOSIT) {
+        return NextResponse.json(
+          { error: `La orden ${order.orderNumber} es una preventa con anticipo: el cobro tiene que llegar con la referencia del anticipo` },
+          { status: 400 },
+        );
+      }
 
       if (wompiTransactionMatchesOrder(order, transaction)) {
         return await updateOrderData(order, transaction);

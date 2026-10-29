@@ -207,23 +207,26 @@ export type CheckoutOrderItem = OrderItem & {
 
 export async function generateWompiPayment(
   order: CheckoutOrder,
+  /** Anticipo de preventa: su referencia (`-A`) y su valor, en lugar de los del pedido. */
+  charge: { reference: string; amount: number } | null = null,
 ): Promise<string> {
   const expirationTime = new Date(
     new Date().setHours(new Date().getHours() + 1),
   ).toISOString();
 
   // Lo que cobra Wompi: el total menos lo que cubrió una tarjeta de regalo.
-  const amountInCents = getAmountDue(order) * 100;
+  const amountInCents = (charge ? Math.round(charge.amount) : getAmountDue(order)) * 100;
+  const reference = charge?.reference ?? order.id;
 
   const signatureIntegrity = await generateIntegritySignature({
-    reference: order.id,
+    reference,
     amountInCents,
     currency: "COP",
     integritySecret: env.WOMPI_INTEGRITY_KEY,
     expirationTime,
   });
 
-  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${order.id}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/pedido/${order.id}&expiration-time=${expirationTime}`;
+  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${encodeURIComponent(reference)}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/pedido/${order.id}&expiration-time=${expirationTime}`;
 
   return url;
 }
@@ -234,6 +237,8 @@ export function getReadableStatus(status: OrderStatus | ShippingStatus) {
       return "Pendiente de pago";
     case OrderStatus.PAID:
       return "Pago confirmado";
+    case OrderStatus.DEPOSIT_PAID:
+      return "Anticipo recibido";
     case OrderStatus.CANCELLED:
       return "Cancelada";
     case OrderStatus.CREATED:

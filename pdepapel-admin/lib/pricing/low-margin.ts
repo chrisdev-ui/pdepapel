@@ -12,10 +12,14 @@ import { marginOnPrice } from "./price-calculator";
 
 export type LowMarginClass = "oferta-bajo-costo" | "bajo-costo" | "bajo-minimo" | "solo-bold" | "cumple" | "sin-costo";
 
-/** Las secciones de la vista, en orden. «Kits» junta los kits de cualquier clase. */
-export type LowMarginSection = "oferta-bajo-costo" | "bajo-costo" | "bajo-minimo" | "solo-bold" | "kits";
+/**
+ * Las secciones de la vista, en orden. «Kits» junta los kits de cualquier
+ * clase. «Con excepción» junta lo que está bajo el mínimo a propósito (la
+ * dueña dejó un motivo en la ficha); bajo el costo sigue en su sección.
+ */
+export type LowMarginSection = "oferta-bajo-costo" | "bajo-costo" | "bajo-minimo" | "solo-bold" | "kits" | "con-excepcion";
 
-export const LOW_MARGIN_SECTIONS: readonly LowMarginSection[] = ["oferta-bajo-costo", "bajo-costo", "bajo-minimo", "solo-bold", "kits"];
+export const LOW_MARGIN_SECTIONS: readonly LowMarginSection[] = ["oferta-bajo-costo", "bajo-costo", "bajo-minimo", "solo-bold", "kits", "con-excepcion"];
 
 export interface LowMarginInput {
   id: string;
@@ -29,6 +33,8 @@ export interface LowMarginInput {
   /** Costo por unidad; null si falta el de compra (o el de alguna pieza de un kit). */
   cost: number | null;
   isKit: boolean;
+  /** Motivo de «Precio bajo a propósito» guardado en la ficha. */
+  marginExceptionReason?: string | null;
 }
 
 export interface LowMarginRow {
@@ -49,6 +55,8 @@ export interface LowMarginRow {
   precioParaMinimoConBold: number | null;
   clase: LowMarginClass;
   esKit: boolean;
+  /** Motivo de la excepción de margen; null sin excepción. */
+  excepcion: string | null;
 }
 
 export function classifyLowMargin(input: LowMarginInput, minMarginPct: number | null): LowMarginRow {
@@ -84,11 +92,17 @@ export function classifyLowMargin(input: LowMarginInput, minMarginPct: number | 
     precioParaMinimoConBold: cost === null || minMarginPct === null ? null : minimumPriceAfterBold(cost, minMarginPct),
     clase,
     esKit: input.isKit,
+    excepcion: input.marginExceptionReason?.trim() || null,
   };
 }
 
-/** La sección donde aparece una fila; null si no aparece (cumple o sin costo). Los kits van siempre a «Kits». */
-export function sectionOf(row: Pick<LowMarginRow, "clase" | "esKit">): LowMarginSection | null {
+/**
+ * La sección donde aparece una fila; null si no aparece (cumple o sin costo).
+ * Bajo el mínimo con excepción va a «Con excepción», sea kit o no; los demás
+ * kits van siempre a «Kits».
+ */
+export function sectionOf(row: Pick<LowMarginRow, "clase" | "esKit"> & { excepcion?: string | null }): LowMarginSection | null {
+  if (row.excepcion && (row.clase === "bajo-minimo" || row.clase === "solo-bold")) return "con-excepcion";
   if (row.esKit) return "kits";
   return row.clase === "cumple" || row.clase === "sin-costo" ? null : row.clase;
 }

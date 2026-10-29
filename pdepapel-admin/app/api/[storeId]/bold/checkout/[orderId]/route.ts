@@ -10,6 +10,7 @@ import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getAmountDue } from "@/lib/gift-card-amounts";
+import { resolveGatewayCharge } from "@/lib/order-payment-charges";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const getCorsHeaders = (request: Request) => ({
@@ -74,9 +75,11 @@ export async function POST(
       );
     }
 
-    const boldOrderReference = getBoldOrderReference(order);
-    // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo.
-    const amount = Math.round(getAmountDue(order));
+    // Preventa con anticipo: se firma el anticipo con su propia referencia.
+    const charge = await resolveGatewayCharge(order, PaymentMethod.Bold);
+    const boldOrderReference = charge?.reference ?? getBoldOrderReference(order);
+    // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo (o el anticipo).
+    const amount = charge ? charge.amount : Math.round(getAmountDue(order));
     if (amount <= 0) {
       throw ErrorFactory.Conflict(
         `La orden #${order.orderNumber || params.orderId} quedó cubierta con una tarjeta de regalo: no hay nada que pagar en línea.`,

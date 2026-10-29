@@ -74,6 +74,7 @@ import {
   resolveProductSearch,
   type ProductDecision,
 } from "@/lib/whatsapp/bot-products";
+import { findPresaleAnswer } from "@/lib/whatsapp/presale-answer";
 import {
   detectProductReference,
   parseShownProducts,
@@ -172,6 +173,7 @@ export type WhatsAppBotOutcome =
   | "replied_reference_lost"
   /** Llegó un adjunto sin texto: no hay nada que clasificar, va para Paula. */
   | "escalated_unprocessable_media"
+  | "escalated_catalog_cart"
   /** Ya llegó otro mensaje después: contesta ese, no este. */
   | "skipped_superseded"
   /** Otra corrida tenía el turno de envío y no lo soltó a tiempo: se reprogramó. */
@@ -892,6 +894,14 @@ async function decideAndAnswer(input: {
     return { outcome: "skipped_needs_owner" };
   }
 
+  // 2 bis (carrito). Un carrito del catálogo sin nota es una venta para Paula:
+  //    pasa a ella y el bot no manda nada (ni el menú de bienvenida ni «Recibí
+  //    lo que me enviaste»). Con nota, la nota llega como texto y sigue abajo.
+  if (input.bodilessType === "order") {
+    await escalate(conversation.id);
+    return { outcome: "escalated_catalog_cart" };
+  }
+
   // 2 bis (sin texto). Un sticker, una ubicación, un contacto o un tipo que no
   //    se puede leer. Si es lo primero que escribe, se saluda como a un «hola»;
   //    si no, va a Paula como una foto. Antes se descartaban sin respuesta.
@@ -1178,6 +1188,20 @@ async function decideAndAnswer(input: {
   const greetingKeyword = greetedProductQuestion ? matchWhatsAppKeyword(input.body, keywords) : null;
   const productBody = greetedProductQuestion ? greetedProductQuestion.rest : input.body;
   const withGreeting = (text: string) => (greetedProductQuestion ? `${GREETING_REPLY_PREFIX} ${text}` : text);
+
+  // 5 bis. Un producto en preventa: la búsqueda solo ve lo que hay en bodega
+  //    y lo daría por agotado. Texto plano (lib/whatsapp/presale-answer.ts).
+  const presaleAnswer = await findPresaleAnswer(conversation.storeId, productBody).catch((error: unknown) => {
+    console.error("[WHATSAPP_BOT] No se pudo revisar las preventas:", error);
+    return null;
+  });
+  if (presaleAnswer) {
+    const sent = await deliver(conversation.id, input.recipient, withGreeting(presaleAnswer), [], pacing(input));
+    if (sent.aborted) return abortedOutcome(sent);
+    if (sent.ok) return { outcome: "replied_product", trigger: "presale" };
+    await escalate(conversation.id);
+    return { outcome: "escalated_send_failed", trigger: "presale", error: sent.error };
+  }
 
   // 6. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
   //    hace falta un modelo para entender la pregunta, así que TODO lo que

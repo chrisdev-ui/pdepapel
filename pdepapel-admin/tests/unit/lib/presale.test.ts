@@ -173,8 +173,9 @@ describe("parsePresaleInput", () => {
     // ZodError es un JSON con los mensajes dentro y pasaba por casualidad.
     for (const [malo, esperado] of [
       [{ expectedArrivalAt: "2099-01-01", unitLimit: 5 }, /producto/i],
-      [{ productId: "p1", unitLimit: 5 }, /fecha/i],
-      [{ productId: "p1", expectedArrivalAt: "2099-01-01" }, /unidades/i],
+      // Fecha y tope son opcionales desde la preventa con anticipo: lo que falta ahora es el anticipo.
+      [{ productId: "p1", paymentMode: "DEPOSIT" }, /anticipo/i],
+      [{ productId: "p1", unitLimit: "cinco" }, /unidades/i],
     ] as [Record<string, unknown>, RegExp][]) {
       let capturado: unknown;
       try {

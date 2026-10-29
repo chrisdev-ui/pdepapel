@@ -44,3 +44,17 @@ describe("scrubProduct recursivo", () => {
     assertNoForbiddenKeys(scrubFairEvent(fair), "viewer");
   });
 });
+
+describe("excepción de margen para solo lectura", () => {
+  it("el motivo se ve; quién la marcó (id de Clerk) nunca", () => {
+    const product = { id: "p", name: "Calendario", marginExceptionReason: "Volumen", marginExceptionAt: new Date("2026-10-28T00:00:00.000Z"), marginExceptionBy: "user_owner" };
+    const group = { id: "g", products: [product] };
+    const clean = scrubProduct({ ...kit, ...product, kitComponents: [{ quantity: 1, component: product }] }) as Record<string, unknown>;
+    assertNoForbiddenKeys(clean, "viewer");
+    assertNoForbiddenKeys(scrubProductGroup(group), "viewer");
+    assertNoForbiddenKeys(scrubOrder({ id: "o", orderItems: [{ id: "i", product }] }), "viewer");
+    expect(clean.marginExceptionReason).toBe("Volumen");
+    expect(JSON.stringify(clean)).not.toContain("user_owner");
+  });
+});
+

@@ -38,6 +38,7 @@ const ALLOWED_WITHOUT_OWNER_GUARD: Record<string, string> = {
   "newsletter/subscriptions/route.ts": "suscripción al boletín desde la tienda",
   "newsletter/unsubscribe/route.ts": "baja del boletín con token, sin sesión",
   "orders/[orderId]/account/route.ts": "reclamo del pedido por la clienta",
+  "preorder-waitlist/public/route.ts": "lista de espera de una preventa desde la tienda, con el filtro del boletín",
   "products/[productId]/reviews/route.ts": "reseña escrita por la clienta",
   "products/[productId]/reviews/[reviewId]/route.ts":
     "la autora edita la suya; borrar lo permite la autora o la dueña, comprobado en línea",

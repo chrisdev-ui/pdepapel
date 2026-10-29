@@ -8,6 +8,8 @@ export interface MarginProduct {
   acqPrice: number | null;
   transportationCost: number | null;
   isKit: boolean;
+  /** «Precio bajo a propósito» en la ficha: no entra en el análisis. */
+  marginExceptionReason?: string | null;
 }
 
 export interface BelowMarginProduct {
@@ -41,15 +43,21 @@ const NO_CATEGORY = "Sin categoría";
  * Productos activos cuyo margen sobre el precio (con costo + envío por unidad)
  * queda por debajo de cada umbral, por categoría, con el precio al peso que
  * tendrían que tener para llegar. Los kits no entran (su costo es el de sus
- * piezas) y los productos sin costo de compra se cuentan aparte.
+ * piezas), tampoco los que tienen excepción de margen (precio bajo a
+ * propósito), y los productos sin costo de compra se cuentan aparte.
  */
 export function analyzeBelowMargin(products: readonly MarginProduct[], thresholds: readonly number[]) {
   const evaluated: { product: MarginProduct; cost: number; margin: number }[] = [];
   let kits = 0;
   let withoutCost = 0;
+  let withException = 0;
   for (const product of products) {
     if (product.isKit) {
       kits += 1;
+      continue;
+    }
+    if (product.marginExceptionReason?.trim()) {
+      withException += 1;
       continue;
     }
     const cost = landedCost(product.acqPrice, product.transportationCost);
@@ -89,5 +97,5 @@ export function analyzeBelowMargin(products: readonly MarginProduct[], threshold
       return { margenPct: threshold, debajo: categorias.reduce((sum, category) => sum + category.debajo, 0), categorias };
     });
 
-  return { evaluados: evaluated.length, sinCosto: withoutCost, kits, porUmbral };
+  return { evaluados: evaluated.length, sinCosto: withoutCost, kits, conExcepcion: withException, porUmbral };
 }

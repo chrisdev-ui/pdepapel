@@ -3,6 +3,8 @@ import { createCorsHeaders } from "@/lib/cors";
 import { validateStockAvailability } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, CheckoutOrder, generateWompiPayment } from "@/lib/utils";
+import { resolveGatewayCharge } from "@/lib/order-payment-charges";
+import { isUnreleasedPreorderLine } from "@/lib/presale";
 import { processOrderItemsInBatches } from "@/lib/server/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -95,8 +97,9 @@ export async function POST(
     }));
 
     // Validate stock using centralized logic (Supports Kits)
+    // Una línea de preventa sin liberar no pide stock en bodega: llega después.
     const stockValidationItems = order.orderItems
-      .filter((item: any) => item.productId)
+      .filter((item: any) => item.productId && !isUnreleasedPreorderLine(item))
       .map((item: any) => ({
         productId: item.productId as string,
         quantity: item.quantity,
@@ -108,7 +111,8 @@ export async function POST(
 
     // Sin correo: el «Pendiente de pago» ya salió al crear el pedido y cada
     // clic en «otra pasarela» lo repetía a la clienta y al panel.
-    const url = await generateWompiPayment(order as CheckoutOrder);
+    const charge = await resolveGatewayCharge(order, PaymentMethod.Wompi);
+    const url = await generateWompiPayment(order as CheckoutOrder, charge);
 
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {

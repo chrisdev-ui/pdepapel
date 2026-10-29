@@ -1,4 +1,4 @@
-import { OrderStatus, OrderType, PaymentMethod, PaymentWebhookEventStatus, type PaymentWebhookProvider } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentPlan, OrderStatus, OrderType, PaymentMethod, PaymentWebhookEventStatus, type PaymentWebhookProvider } from "@prisma/client";
 
 import { getBoldOrderReference, getBoldPaymentVoucher, type BoldPaymentVoucher } from "@/lib/bold";
 import { KEY_PROBE_REFERENCE, type GatewayFetchOptions, type GatewayLookup } from "@/lib/payment-gateway-lookup";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/payment-settlement";
 import { sendPaymentAlert, type PaymentAlertDeps } from "@/lib/payment-webhook-alert";
 import { RECONCILIATION_EVENT_PREFIX } from "@/lib/payment-webhook-events";
+import { processDepositCharge } from "@/lib/deposit-charge-webhook";
 import prismadb from "@/lib/prismadb";
 import { findWompiTransactionsByReference, type WompiApiConfig, type WompiTransaction } from "@/lib/wompi-api";
 
@@ -356,7 +357,17 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
       state[provider].skipped += 1;
       return;
     }
-    const reference = provider === "Bold" ? getBoldOrderReference(order) : order.id;
+    // Preventa con anticipo: se consulta el cobro del anticipo (`-A`) y se
+    // juzga contra el anticipo, nunca contra el total del pedido.
+    const depositCharge =
+      order.paymentPlan === OrderPaymentPlan.DEPOSIT
+        ? await prismadb.orderPayment.findFirst({ where: { orderId: order.id, kind: OrderPaymentKind.DEPOSIT } })
+        : null;
+    if (order.paymentPlan === OrderPaymentPlan.DEPOSIT && !depositCharge?.gatewayReference) {
+      counts.unchanged += 1;
+      return;
+    }
+    const reference = depositCharge?.gatewayReference ?? (provider === "Bold" ? getBoldOrderReference(order) : order.id);
     const result = await lookup(provider, reference);
     if (result.kind !== "found" && result.kind !== "none") return;
     counts.checked += 1;
@@ -364,10 +375,11 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
       counts.unchanged += 1;
       return;
     }
+    const judged = depositCharge ? { ...order, total: depositCharge.amount, giftCardAmount: 0 } : order;
     const decision =
       provider === "Wompi"
-        ? decideWompi(order, result.items as WompiTransaction[], now, windowMs)
-        : decideBold(order, result.items[0] as BoldPaymentVoucher, now, windowMs);
+        ? decideWompi(judged, result.items as WompiTransaction[], now, windowMs)
+        : decideBold(judged, result.items[0] as BoldPaymentVoucher, now, windowMs);
 
     if (decision.action === "none") {
       counts.unchanged += 1;
@@ -392,6 +404,33 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     }
 
     try {
+      if (depositCharge && decision.action === "paid") {
+        const voucher = decision.gateway as BoldPaymentVoucher & WompiTransaction;
+        const deposit = await processDepositCharge({
+          provider,
+          charge: depositCharge,
+          event: "approved",
+          transactionId: decision.transactionId,
+          amount: provider === "Bold" ? { total: voucher.total, tip: voucher.tip ?? voucher.tip_amount } : voucher,
+          source: "reconciliation",
+        });
+        if (deposit.body.success !== true) {
+          counts.alreadyApplied += 1;
+          return;
+        }
+        await log(PaymentWebhookEventStatus.PROCESSED, 200);
+        counts.paid += 1;
+        await sendPaymentAlert(
+          { provider: WEBHOOK_PROVIDER[provider], kind: "reconcile-applied", storeId: order.storeId, orderId: order.id, orderNumber: order.orderNumber },
+          deps.alerts,
+        );
+        return;
+      }
+      // Un rechazo del anticipo deja el pedido pendiente para reintentar, sin correo de pago completo.
+      if (depositCharge && decision.action === "declined") {
+        counts.awaitingRetry += 1;
+        return;
+      }
       const settlement = { order, provider, transactionId: decision.transactionId, detailsText: decision.detailsText, source: "reconciliation" as const };
       if (decision.action === "declined") {
         // Cubre el rechazo cuyo webhook nunca llegó: el correo sale una vez.

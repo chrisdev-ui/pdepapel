@@ -5,7 +5,7 @@ import {
   scrubProductGroup,
   VIEWER_HIDDEN_CAPSULE_FIELDS,
 } from "@/lib/viewer-payloads";
-import { INTERNAL_PRODUCT_FIELDS, PUBLIC_COLOR_SELECT, PUBLIC_PRODUCTS_CACHE_VERSION, SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
+import { INTERNAL_PRODUCT_FIELDS, PUBLIC_COLOR_SELECT, PUBLIC_PRODUCT_DETAIL_SELECT, PUBLIC_PRODUCT_SELECT, PUBLIC_PRODUCTS_CACHE_VERSION, SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { getReconciliationRowState, summarizeReconciliation } from "@/lib/fair-phases";
 
 /**
@@ -220,5 +220,17 @@ describe("la forma pública de un color (#3)", () => {
     // v8: `brand` es la marca enlazada (objeto) en vez del texto libre.
     // Leer una entrada vieja serviría la forma anterior hasta 15 minutos.
     expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v8");
+  });
+});
+
+describe("excepción de margen fuera de la tienda en línea", () => {
+  it("quién la marcó es interno del producto (solo lectura no lo recibe)", () => {
+    expect(INTERNAL_PRODUCT_FIELDS).toContain("marginExceptionBy");
+  });
+
+  it("los select públicos no traen ningún campo de la excepción", () => {
+    for (const select of [PUBLIC_PRODUCT_SELECT, PUBLIC_PRODUCT_DETAIL_SELECT]) {
+      expect(JSON.stringify(select)).not.toMatch(/marginException/);
+    }
   });
 });

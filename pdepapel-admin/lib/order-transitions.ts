@@ -1,4 +1,5 @@
 import {
+  OrderPaymentPlan,
   OrderStatus,
   OrderType,
   PaymentMethod,
@@ -22,12 +23,18 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   PAID: "Pagado",
   SENT: "Enviado",
   CANCELLED: "Cancelado",
+  DEPOSIT_PAID: "Anticipo recibido",
 };
 
-/** Estados en los que el dinero ya entró: los productos son un registro histórico. */
+/**
+ * Estados en los que el dinero ya entró (todo o el anticipo): los productos son
+ * un registro histórico y el inventario ya se apartó, así que cancelar lo
+ * devuelve. No es lo mismo que venta: eso es `REVENUE_ORDER_STATUSES`.
+ */
 export const PAID_LIKE_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
   OrderStatus.SENT,
+  OrderStatus.DEPOSIT_PAID,
 ];
 
 export function isPaidLike(status: OrderStatus): boolean {
@@ -41,6 +48,12 @@ export interface TransitionContext {
   shippingStatus?: ShippingStatus | null;
   /** Recoge en tienda: «Enviado» es entregarlo en el mostrador. */
   pickup?: boolean;
+  /**
+   * Preventa con anticipo: el anticipo y el saldo solo entran por sus propias
+   * acciones («Marcar anticipo recibido», «Marcar saldo recibido»), que dejan
+   * el cobro anotado. El cambio de estado genérico nunca los salta.
+   */
+  paymentPlan?: OrderPaymentPlan | null;
 }
 
 const QUOTE_OPEN: OrderStatus[] = [OrderStatus.QUOTATION, OrderStatus.VIEWED];
@@ -60,6 +73,7 @@ export function getAllowedTransitions(
   // Una compra de tarjeta de regalo no se envía: el código sale por correo al
   // confirmar el pago, así que «Enviado» no existe para ella.
   const isDigital = context.type === OrderType.GIFT_CARD;
+  const isDepositPlan = context.paymentPlan === OrderPaymentPlan.DEPOSIT;
   switch (from) {
     case OrderStatus.DRAFT:
       return [
@@ -89,6 +103,7 @@ export function getAllowedTransitions(
       return [OrderStatus.QUOTATION, OrderStatus.DRAFT, OrderStatus.CANCELLED];
     case OrderStatus.CREATED:
     case OrderStatus.PENDING:
+      if (isDepositPlan) return [OrderStatus.CANCELLED];
       return [
         OrderStatus.PAID,
         ...(isCod && !isDigital ? [OrderStatus.SENT] : []),
@@ -103,7 +118,11 @@ export function getAllowedTransitions(
       ];
     case OrderStatus.SENT:
       return [...(isCod ? [OrderStatus.PAID] : []), OrderStatus.CANCELLED];
+    case OrderStatus.DEPOSIT_PAID:
+      return [OrderStatus.CANCELLED];
     case OrderStatus.CANCELLED:
+      // Una preventa con anticipo cancelada no se revive: el anticipo ya se devolvió o se retuvo.
+      if (isDepositPlan) return [];
       return [OrderStatus.PENDING, ...(isQuote ? [OrderStatus.DRAFT] : [])];
     default:
       return [];
@@ -127,6 +146,14 @@ export function describeForbiddenTransition(
 ): string {
   if (context?.type === OrderType.GIFT_CARD && to === OrderStatus.SENT) {
     return "Una compra de tarjeta de regalo no se envía: el código sale por correo al confirmar el pago. Solo se puede cancelar, y solo si la tarjeta no se ha usado.";
+  }
+  if (to === OrderStatus.DEPOSIT_PAID) {
+    return "El anticipo se registra con «Marcar anticipo recibido», que deja anotado el cobro.";
+  }
+  if (from === OrderStatus.DEPOSIT_PAID) {
+    return to === OrderStatus.PAID
+      ? "El saldo se registra con «Marcar saldo recibido», que deja anotado el cobro."
+      : "Un pedido con anticipo solo avanza con «Marcar saldo recibido» o se cancela con «Cancelar preventa».";
   }
   if (isPaidLike(from) && !isPaidLike(to) && to !== OrderStatus.CANCELLED) {
     return `Un pedido ${ORDER_STATUS_LABELS[from].toLowerCase()} solo puede pasar a enviado o cancelarse. Para revertir un pago, cancela el pedido (el inventario vuelve) y crea uno nuevo.`;
@@ -231,7 +258,9 @@ export function getStatusActions(
   }
   push(
     OrderStatus.CANCELLED,
-    isPaidLike(from)
+    from === OrderStatus.DEPOSIT_PAID
+      ? "Cancelar preventa"
+      : isPaidLike(from)
       ? isDigital
         ? "Cancelar y anular la tarjeta"
         : "Cancelar y devolver el inventario"
@@ -379,4 +408,5 @@ export const ORDER_STATUS_TONE: Record<OrderStatus, StatusTone> = {
   PAID: "mint",
   SENT: "sky",
   CANCELLED: "slate",
+  DEPOSIT_PAID: "lavender",
 };

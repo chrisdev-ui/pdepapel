@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import { ProductPresaleStatus } from "@prisma/client";
-import { AlertTriangle, BellRing, PackageCheck } from "lucide-react";
+import { AlertTriangle, BellRing, PackageCheck, XCircle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { describePresaleArrival, describePresaleDeposit } from "@/lib/presale-copy";
 import { PRESALE_STATUS_LABELS } from "@/lib/presale-labels";
 import { formatAvailableAt } from "@/lib/product-availability";
 import { currencyFormatter } from "@/lib/utils";
@@ -82,6 +83,26 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
     }
   };
 
+  const onCancel = async (row: PresaleRow) => {
+    const confirmed = await requestConfirmation({
+      title: `¿Cancelar la preventa de «${row.productName}»?`,
+      description:
+        "La tienda deja de aceptar reservas de este producto. Solo se puede si no queda ningún pedido esperando esta mercancía: esos se cancelan primero desde cada pedido.",
+      confirmLabel: "Cancelar preventa",
+    });
+    if (!confirmed) return;
+    try {
+      setLoading(row.id);
+      await axios.post(`/api/${storeId}/presales/${row.id}/cancel`);
+      router.refresh();
+      toast({ title: "Preventa cancelada", variant: "success" });
+    } catch (error) {
+      toast({ title: "No se pudo cancelar la preventa", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const onNotifyDelay = async (row: PresaleRow) => {
     const confirmed = await requestConfirmation({
       title: `¿Anotar el aviso de retraso de «${row.productName}»?`,
@@ -114,12 +135,14 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
     }
   };
 
+  const activeCount = data.rows.filter((row) => row.status === ProductPresaleStatus.ACTIVE).length;
+
   return (
     <>
       {confirmationDialog}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Heading
-          title={`Preventas (${data.rows.filter((row) => row.status === ProductPresaleStatus.ACTIVE).length} activas)`}
+          title={`Preventas (${activeCount} ${activeCount === 1 ? "activa" : "activas"})`}
           description="Lo que ya cobraste y todavía no has despachado. Cuando llegue la mercancía, libera aquí y los pedidos entran al despacho normal."
         />
         {data.overdueCount > 0 ? (
@@ -133,7 +156,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
       </div>
       <Separator />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 sm:grid-cols-2 ${canWrite ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         <Card>
           <CardContent className="space-y-1 p-4">
             <p className="text-xs font-medium text-muted-foreground">
@@ -158,10 +181,19 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
               {currencyFormatter(data.collected)}
             </p>
             <p className="text-xs text-muted-foreground">
-              pendiente de entregar
+              pagado completo, pendiente de entregar
             </p>
           </CardContent>
         </Card>
+        ) : null}
+        {canWrite ? (
+          <Card>
+            <CardContent className="space-y-1 p-4">
+              <p className="text-xs font-medium text-muted-foreground">Anticipos recibidos</p>
+              <p className="text-2xl font-bold tracking-tight">{currencyFormatter(data.depositsReceived)}</p>
+              <p className="text-xs text-muted-foreground">plata de las clientas, no venta: falta el saldo</p>
+            </CardContent>
+          </Card>
         ) : null}
         <Card>
           <CardContent className="space-y-1 p-4">
@@ -205,31 +237,41 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                       <Badge variant={STATUS_VARIANT[row.status]}>
                         {PRESALE_STATUS_LABELS[row.status]}
                       </Badge>
-                      {row.isOverdue ? (
+                      {row.isOverdue && row.expectedArrivalAt ? (
                         <Badge variant="destructive">
                           Vencida · prometida el{" "}
                           {formatAvailableAt(row.expectedArrivalAt)}
                         </Badge>
                       ) : null}
+                      {row.paymentMode === "DEPOSIT" ? <Badge variant="secondary">Con anticipo</Badge> : null}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {row.productSku ?? "sin SKU"} · llega el{" "}
-                      {formatAvailableAt(row.expectedArrivalAt)}
+                      {row.productSku ?? "sin SKU"} · {describePresaleArrival(row)}
                     </p>
                     <p className="text-sm">
-                      <strong>{row.committedUnits}</strong> de {row.unitLimit}{" "}
-                      reservadas · {row.customerCount} clienta
+                      <strong>{row.committedUnits}</strong>
+                      {row.unitLimit === null
+                        ? row.committedUnits === 1 ? " reservada, sin tope" : " reservadas, sin tope"
+                        : ` de ${row.unitLimit} reservadas`}
+                      {" · "}
+                      {row.customerCount} clienta
                       {row.customerCount === 1 ? "" : "s"}
                       {canWrite ? (
                         <>
                           {" · "}
                           <strong>{currencyFormatter(row.collected)}</strong>
+                          {row.depositOrders > 0 ? (
+                            <> · {row.depositOrders} con anticipo ({currencyFormatter(row.depositsReceived)})</>
+                          ) : null}
                         </>
                       ) : null}
                     </p>
+                    {row.paymentMode === "DEPOSIT" ? (
+                      <p className="text-xs text-muted-foreground">{describePresaleDeposit(row, currencyFormatter)}</p>
+                    ) : null}
                     <p className="text-xs text-muted-foreground">
                       {row.pendingUnits > 0
-                        ? `Faltan ${row.pendingUnits} unidades por entregar · hay ${row.productStock} en bodega`
+                        ? `${row.pendingUnits === 1 ? "Falta 1 unidad" : `Faltan ${row.pendingUnits} unidades`} por entregar · hay ${row.productStock} en bodega`
                         : "Todo entregado"}
                     </p>
                     {/* El contador se suma al confirmarse el pago y, si ese
@@ -277,6 +319,12 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                       >
                         <BellRing className="mr-2 h-4 w-4" aria-hidden="true" />
                         Notificar retraso
+                      </Button>
+                    ) : null}
+                    {canWrite && row.status === ProductPresaleStatus.ACTIVE && row.pendingUnits === 0 ? (
+                      <Button variant="ghost" size="sm" className="min-h-11" disabled={loading !== null} onClick={() => onCancel(row)}>
+                        <XCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Cancelar preventa
                       </Button>
                     ) : null}
                     {canWrite && row.status === ProductPresaleStatus.ACTIVE ? (

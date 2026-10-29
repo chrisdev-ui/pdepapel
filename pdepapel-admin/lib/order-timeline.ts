@@ -260,8 +260,20 @@ export function getNextStepCard(
   now = new Date(),
 ): NextStepCard | null {
   const queue = getOrderQueue(order, now);
+  const depositPlan = order.paymentPlan === "DEPOSIT";
   switch (queue) {
     case "verify":
+      if (depositPlan) {
+        return {
+          queue,
+          title: "Siguiente paso: verificar el anticipo",
+          description:
+            "Es una preventa con anticipo. Revisa el comprobante y anótalo con «Marcar anticipo recibido»: el pedido queda apartado y espera la mercancía.",
+          primary: { label: "Ir al estado del pedido", href: "#estado-del-pedido" },
+          consequence: "El anticipo no es venta: no descuenta inventario de la preventa ni fija la fecha de pago.",
+          tone: "cream",
+        };
+      }
       return {
         queue,
         title: "Siguiente paso: verificar la transferencia",
@@ -314,8 +326,21 @@ export function getNextStepCard(
         description:
           "Este pedido trae un producto en preventa: no se despacha nada hasta que llegue y liberes la preventa, ni lo que ya está en bodega.",
         primary: { label: "Ir a Preventas", href: `/${storeId}/preventas` },
-        consequence: "Al liberar la preventa, el pedido pasa a «Por despachar».",
+        consequence:
+          order.status === OrderStatus.DEPOSIT_PAID
+            ? "Al liberar la preventa, toca cobrar el saldo y el envío; después pasa a «Por despachar»."
+            : "Al liberar la preventa, el pedido pasa a «Por despachar».",
         tone: "sky",
+      };
+    case "balance":
+      return {
+        queue,
+        title: "Siguiente paso: cobrar el saldo",
+        description:
+          "La mercancía ya llegó. Cotiza el envío, escríbele a la clienta el saldo más el envío y, cuando pague, anótalo con «Marcar saldo recibido».",
+        primary: { label: "Ir al estado del pedido", href: "#estado-del-pedido" },
+        consequence: "Al anotar el saldo el pedido queda pagado y entra a «Por despachar».",
+        tone: "lavender",
       };
     case "pickup":
       return {

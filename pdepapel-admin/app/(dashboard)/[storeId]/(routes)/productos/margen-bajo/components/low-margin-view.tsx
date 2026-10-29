@@ -19,6 +19,7 @@ function sectionLabel(section: LowMarginSection, minimoPct: number | null) {
     "bajo-minimo": `Bajo ${minimum} % antes de Bold`,
     "solo-bold": `Bajo ${minimum} % solo por Bold`,
     kits: "Kits",
+    "con-excepcion": "Con excepción",
   }[section];
 }
 
@@ -34,6 +35,8 @@ function sectionNote(section: LowMarginSection, minimoPct: number | null) {
       return `Antes de Bold llegan al ${minimoPct} %. Bold cobra un fijo de ${money(BOLD_FIXED_WITH_VAT)} por pago (con IVA) además del porcentaje; aquí ese fijo se carga entero a una sola unidad, como si el pedido trajera solo ese producto. En un pedido con más productos se reparte, y en transferencia o efectivo no se cobra.`;
     case "kits":
       return "El costo de un kit es la suma de sus piezas. Un kit armado para rotar inventario puede quedar bajo el mínimo a propósito.";
+    case "con-excepcion":
+      return `Bajo el ${minimoPct ?? 40} % a propósito: en su ficha está marcado «Precio bajo a propósito» con un motivo. No cuentan en las demás secciones.`;
   }
 }
 
@@ -66,6 +69,8 @@ export function LowMarginView({ storeId, data }: { storeId: string; data: LowMar
   const visible: LowMarginSection[] = minimoPct === null ? ["oferta-bajo-costo", "bajo-costo", "kits"] : ["oferta-bajo-costo", "bajo-costo", "bajo-minimo", "kits"];
   const productHref = (row: LowMarginRow) => `/${storeId}/productos/${row.id}`;
   const showMinimum = minimoPct !== null;
+  const showReason = section === "con-excepcion";
+  const folded = (["solo-bold", "con-excepcion"] as const).filter((id) => id !== section && (id === "solo-bold" || counts[id] > 0));
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,22 +88,24 @@ export function LowMarginView({ storeId, data }: { storeId: string; data: LowMar
       <TabNav
         label="Secciones de margen bajo"
         activeId={section ?? ""}
-        items={[...visible, ...(section === "solo-bold" ? (["solo-bold"] as const) : [])].map((id) => ({ id, label: `${sectionLabel(id, minimoPct)} (${counts[id]})`, href: href(id) }))}
+        items={[...visible, ...(section === "solo-bold" || section === "con-excepcion" ? [section] : [])].map((id) => ({ id, label: `${sectionLabel(id, minimoPct)} (${counts[id]})`, href: href(id) }))}
       />
 
-      {minimoPct !== null && section !== "solo-bold" ? (
-        <details className="rounded-2xl border bg-white p-4 text-sm">
-          <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-primary">
-            {sectionLabel("solo-bold", minimoPct)} ({counts["solo-bold"]})
-          </summary>
-          <p className="mt-2 text-muted-foreground">{sectionNote("solo-bold", minimoPct)}</p>
-          {counts["solo-bold"] > 0 ? (
-            <Link href={href("solo-bold")} className="mt-2 inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline">
-              Ver la lista ({counts["solo-bold"]})
-            </Link>
-          ) : null}
-        </details>
-      ) : null}
+      {minimoPct !== null
+        ? folded.map((id) => (
+            <details key={id} className="rounded-2xl border bg-white p-4 text-sm">
+              <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-primary">
+                {sectionLabel(id, minimoPct)} ({counts[id]})
+              </summary>
+              <p className="mt-2 text-muted-foreground">{sectionNote(id, minimoPct)}</p>
+              {counts[id] > 0 ? (
+                <Link href={href(id)} className="mt-2 inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline">
+                  Ver la lista ({counts[id]})
+                </Link>
+              ) : null}
+            </details>
+          ))
+        : null}
 
       {section ? (
         <section aria-labelledby="margen-bajo-seccion" className="flex flex-col gap-3">
@@ -135,6 +142,12 @@ export function LowMarginView({ storeId, data }: { storeId: string; data: LowMar
                           <dd>{minimumValue(row, section)}</dd>
                         </>
                       ) : null}
+                      {showReason ? (
+                        <>
+                          <dt className="text-muted-foreground">Motivo</dt>
+                          <dd className="break-words">{row.excepcion ?? "—"}</dd>
+                        </>
+                      ) : null}
                     </dl>
                   </li>
                 ))}
@@ -151,6 +164,7 @@ export function LowMarginView({ storeId, data }: { storeId: string; data: LowMar
                       <th scope="col" className="px-4 py-3 text-right font-medium">Margen</th>
                       <th scope="col" className="px-4 py-3 text-right font-medium">Con Bold (1 unidad)</th>
                       {showMinimum ? <th scope="col" className="px-4 py-3 text-right font-medium">{minimumColumn(section, minimoPct)}</th> : null}
+                      {showReason ? <th scope="col" className="px-4 py-3 font-medium">Motivo</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -167,6 +181,7 @@ export function LowMarginView({ storeId, data }: { storeId: string; data: LowMar
                         <td className="px-4 py-3 text-right tabular-nums">{percent(row.margenPct)}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{percent(row.margenBoldPct)}</td>
                         {showMinimum ? <td className="px-4 py-3 text-right tabular-nums">{minimumValue(row, section)}</td> : null}
+                        {showReason ? <td className="max-w-xs px-4 py-3 break-words">{row.excepcion ?? "—"}</td> : null}
                       </tr>
                     ))}
                   </tbody>

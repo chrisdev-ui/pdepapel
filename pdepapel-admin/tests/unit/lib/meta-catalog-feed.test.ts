@@ -177,6 +177,7 @@ describe("buildMetaCatalogFeed", () => {
       "size",
       "pattern",
       "google_product_category",
+      "availability_date",
     ]);
     expect(row).toMatchObject({
       id: "SKU-1",
@@ -430,15 +431,15 @@ describe("google_product_category en el feed de Meta", () => {
     ],
   } as never);
 
-  it("encabezado y fila: las 20 columnas de antes, byte a byte, y el ID de Google al final", () => {
+  it("encabezado y fila: las 20 columnas de antes, byte a byte, el ID de Google y availability_date (vacía sin preventa) al final", () => {
     // Las 20 primeras columnas son la salida exacta del feed antes de agregar
     // la columna, generada con el código anterior para este mismo producto.
     const [header, row] = buildMetaCatalogFeed([fixture], { generatedAt: new Date("2026-10-23T12:00:00.000Z") }).tsv.split("\n");
     expect(header).toMatchInlineSnapshot(
-      `"id	title	description	availability	condition	price	sale_price	sale_price_effective_date	link	image_link	additional_image_link	brand	gtin	mpn	identifier_exists	item_group_id	product_type	color	size	pattern	google_product_category"`,
+      `"id	title	description	availability	condition	price	sale_price	sale_price_effective_date	link	image_link	additional_image_link	brand	gtin	mpn	identifier_exists	item_group_id	product_type	color	size	pattern	google_product_category	availability_date"`,
     );
     expect(row).toMatchInlineSnapshot(
-      `"BOL-CAP-AZU-S-L-0001	Bolígrafo gel Capibara x3	Tinta azul, punta 0.5.	in stock	new	12000.00 COP			https://papeleriapdepapel.com/producto/boligrafo-gel-capibara-x3	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/portada.png	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/detalle.jpg	Kiut		KT-55		grupo-1	Escritura > Bolígrafos / Lapiceros				982"`,
+      `"BOL-CAP-AZU-S-L-0001	Bolígrafo gel Capibara x3	Tinta azul, punta 0.5.	in stock	new	12000.00 COP			https://papeleriapdepapel.com/producto/boligrafo-gel-capibara-x3	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/portada.png	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/detalle.jpg	Kiut		KT-55		grupo-1	Escritura > Bolígrafos / Lapiceros				982	"`,
     );
   });
 

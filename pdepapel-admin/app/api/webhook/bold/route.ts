@@ -11,7 +11,9 @@ import {
   unappliedSettlementMessage,
   type SettlementOutcome,
 } from "@/lib/payment-settlement";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { OrderPaymentPlan, OrderStatus, PaymentMethod } from "@prisma/client";
+import { processDepositCharge } from "@/lib/deposit-charge-webhook";
+import { findChargeByReference } from "@/lib/order-payments";
 import {
   InvalidWebhookPayloadError,
   readWebhookStoreId,
@@ -191,6 +193,21 @@ async function processBoldPayment(
     );
   }
 
+  // El anticipo de una preventa trae su propia referencia (`<orderNumber>-A`).
+  const charge = await findChargeByReference(String(orderReference), scopedStoreId);
+  if (charge) {
+    const result = await processDepositCharge({
+      provider: "Bold",
+      charge,
+      event: targetStatus === OrderStatus.PAID ? "approved" : targetStatus === "declined" ? "declined" : "voided",
+      transactionId,
+      amount: { total: transaction.amount?.total, tip: transaction.amount?.tip, currency: transaction.amount?.currency },
+    });
+    context.orderId = result.orderId;
+    context.storeId = result.storeId;
+    return NextResponse.json(result.body, { status: result.status });
+  }
+
   const order = await loadOrderForSettlement({
     ...(scopedStoreId ? { storeId: scopedStoreId } : {}),
     OR: [{ id: orderReference }, { orderNumber: orderReference }],
@@ -204,6 +221,15 @@ async function processBoldPayment(
   }
   context.orderId = order.id;
   context.storeId = order.storeId;
+
+  // Un pedido con anticipo solo se cobra por la referencia de su anticipo: un
+  // pago con la referencia del pedido no es de este flujo y no se aplica.
+  if (order.paymentPlan === OrderPaymentPlan.DEPOSIT) {
+    return NextResponse.json(
+      { error: `La orden ${order.orderNumber} es una preventa con anticipo: el cobro tiene que llegar con la referencia del anticipo` },
+      { status: 400 },
+    );
+  }
 
   if (order.payment?.method !== PaymentMethod.Bold) {
     return NextResponse.json(

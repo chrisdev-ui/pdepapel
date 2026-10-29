@@ -58,7 +58,13 @@ import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
-import { isUnreleasedPreorderLine, stockLinesOnPayment, stockLinesOnReversal } from "@/lib/presale";
+import {
+  DEPOSIT_PRESALE_ALONE_MESSAGE,
+  getDepositPresaleProductIds,
+  isUnreleasedPreorderLine,
+  stockLinesOnPayment,
+  stockLinesOnReversal,
+} from "@/lib/presale";
 import {
   ORDER_STATUS_LABELS,
   canTransition,
@@ -273,6 +279,21 @@ async function createOrder(
     if (!orderItems || orderItems.length === 0) {
       throw ErrorFactory.InvalidRequest(
         "La orden debe tener al menos un producto",
+      );
+    }
+
+    // Una preventa con anticipo solo entra por la caja (`/checkout`, que copia
+    // el anticipo y cobra con su referencia) o por «Marcar anticipo recibido»:
+    // por aquí quedaría como un pedido de precio completo.
+    const depositPresaleProducts = await getDepositPresaleProductIds(
+      params.storeId,
+      orderItems.map((item: { productId?: string | null }) => item.productId).filter(Boolean) as string[],
+    );
+    if (depositPresaleProducts.size > 0) {
+      throw ErrorFactory.InvalidRequest(
+        isStoreOwner
+          ? "Este producto está en preventa con anticipo: anota el anticipo desde su lista de espera con «Marcar anticipo recibido»."
+          : DEPOSIT_PRESALE_ALONE_MESSAGE,
       );
     }
 
@@ -1370,6 +1391,7 @@ export async function PATCH(
             !canTransition(order.status, status, {
               type: order.type,
               paymentMethod: order.payment?.method ?? null,
+              paymentPlan: order.paymentPlan,
             }),
         );
         if (rejected.length > 0) {

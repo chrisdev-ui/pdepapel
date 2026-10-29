@@ -208,6 +208,18 @@ describe("margenesBajoMinimo", () => {
     amountsComeFromTool(text, result);
   });
 
+  it("un producto con precio bajo a propósito (excepción de margen) no entra y se dice cuántos", async () => {
+    const excepted = { ...product("c6", "Calendario de adviento", "cuadernos", 15000, 12000), marginExceptionReason: "Estrategia de volumen" };
+    const db = { ...fakeDb(), product: { findMany: async () => [...PRODUCTS, excepted] } } as unknown as CopilotDb;
+    const result = await computeBelowMargin(db, "store", { margenes: [35, 40] });
+    expect(result.datos).toMatchObject({ evaluados: 6, conExcepcion: 1 });
+    const text = composeBelowMarginAnswer(result);
+    expect(text).toContain("- Por debajo del 35 %: **2 productos** de 6 en 2 subcategorías.");
+    expect(text).not.toContain("Calendario de adviento");
+    expect(text).toContain("- 1 producto con precio bajo a propósito no entra (excepción de margen en su ficha).");
+    amountsComeFromTool(text, result);
+  });
+
   it("sin porcentaje ni mínimo en Configuración, pide el margen", async () => {
     const result = await computeBelowMargin(fakeDb({ ...STORE, storeMinMarginPercent: null }), "store", {});
     expect(composeBelowMarginAnswer(result)).toContain("No tienes un margen mínimo en Configuración. Dime qué margen quieres revisar");

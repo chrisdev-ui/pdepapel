@@ -1,4 +1,4 @@
-import { ProductPresaleStatus } from "@prisma/client";
+import { OrderStatus, PresaleDepositType, PresalePaymentMode, ProductPresaleStatus } from "@prisma/client";
 
 import {
   getHeldUnitsByPresale,
@@ -17,12 +17,20 @@ export interface PresaleRow {
   productName: string;
   productSku: string | null;
   status: ProductPresaleStatus;
-  expectedArrivalAt: Date;
+  /** Null: «por confirmar» (o el texto de `expectedArrivalText`). */
+  expectedArrivalAt: Date | null;
+  expectedArrivalText: string | null;
   /** Sigue activa y la fecha ya pasó. */
   isOverdue: boolean;
-  unitLimit: number;
+  /** Null: sin tope. */
+  unitLimit: number | null;
   committedUnits: number;
-  remainingUnits: number;
+  remainingUnits: number | null;
+  paymentMode: PresalePaymentMode;
+  depositType: PresaleDepositType | null;
+  depositValue: number | null;
+  termsText: string | null;
+  balanceDueDays: number | null;
   /** Unidades vendidas que todavía no se han liberado. */
   pendingUnits: number;
   /**
@@ -41,8 +49,12 @@ export interface PresaleRow {
   overCapUnits: number;
   /** Clientas distintas esperando. */
   customerCount: number;
-  /** Dinero ya cobrado por esas líneas. */
+  /** Dinero ya cobrado por esas líneas: solo pedidos pagados completos. */
   collected: number;
+  /** «Anticipos recibidos»: lo cobrado de pedidos con anticipo y saldo pendiente. Es plata de las clientas, no venta. */
+  depositsReceived: number;
+  /** Pedidos con anticipo recibido y saldo pendiente. */
+  depositOrders: number;
   /** Stock real hoy: dice si ya se puede liberar. */
   productStock: number;
   canRelease: boolean;
@@ -54,6 +66,7 @@ export interface PresalesSummary {
   rows: PresaleRow[];
   activeUnits: number;
   collected: number;
+  depositsReceived: number;
   customerCount: number;
   overdueCount: number;
   /** Próxima fecha prometida que todavía no ha llegado. */
@@ -105,13 +118,14 @@ export async function getPresales(
           quantity: true,
           price: true,
           preorderReleasedAt: true,
+          order: { select: { status: true, depositAmount: true } },
         },
       })
     : [];
 
   const byPresale = new Map<
     string,
-    { pending: number; paid: number; collected: number; orders: Set<string> }
+    { pending: number; paid: number; collected: number; deposits: number; orders: Set<string>; depositOrders: Set<string> }
   >();
   for (const line of lines) {
     if (!line.presaleId) continue;
@@ -119,10 +133,18 @@ export async function getPresales(
       pending: 0,
       paid: 0,
       collected: 0,
+      deposits: 0,
       orders: new Set<string>(),
+      depositOrders: new Set<string>(),
     };
-    // Lo cobrado cuenta todo lo vendido; lo pendiente solo lo que falta salir.
-    bucket.collected += line.price * line.quantity;
+    // Lo cobrado cuenta lo vendido completo; con anticipo solo entró el anticipo,
+    // una vez por pedido (la preventa con anticipo se compra sola).
+    if (line.order?.status === OrderStatus.DEPOSIT_PAID) {
+      if (!bucket.depositOrders.has(line.orderId)) bucket.deposits += Number(line.order.depositAmount ?? 0);
+      bucket.depositOrders.add(line.orderId);
+    } else {
+      bucket.collected += line.price * line.quantity;
+    }
     bucket.paid += line.quantity;
     bucket.orders.add(line.orderId);
     if (line.preorderReleasedAt === null) bucket.pending += line.quantity;
@@ -143,10 +165,16 @@ export async function getPresales(
       productSku: presale.product.sku,
       status: presale.status,
       expectedArrivalAt: presale.expectedArrivalAt,
+      expectedArrivalText: presale.expectedArrivalText,
       isOverdue: isPresaleOverdue(presale, now),
       unitLimit: presale.unitLimit,
       committedUnits: presale.committedUnits,
       remainingUnits: capacity.remaining,
+      paymentMode: presale.paymentMode,
+      depositType: presale.depositType,
+      depositValue: presale.depositValue,
+      termsText: presale.termsText,
+      balanceDueDays: presale.balanceDueDays,
       pendingUnits,
       paidUnits,
       counterDrift: paidUnits - presale.committedUnits,
@@ -154,6 +182,8 @@ export async function getPresales(
       overCapUnits: capacity.overCap,
       customerCount: bucket?.orders.size ?? 0,
       collected: bucket?.collected ?? 0,
+      depositsReceived: bucket?.deposits ?? 0,
+      depositOrders: bucket?.depositOrders.size ?? 0,
       productStock: presale.product.stock,
       canRelease:
         presale.status === ProductPresaleStatus.ACTIVE &&
@@ -168,7 +198,7 @@ export async function getPresales(
     (row) => row.status === ProductPresaleStatus.ACTIVE,
   );
   const upcoming = active
-    .filter((row) => !row.isOverdue)
+    .filter((row): row is PresaleRow & { expectedArrivalAt: Date } => !row.isOverdue && row.expectedArrivalAt !== null)
     .sort(
       (a, b) => a.expectedArrivalAt.getTime() - b.expectedArrivalAt.getTime(),
     );
@@ -177,6 +207,7 @@ export async function getPresales(
     rows: isViewer ? (scrubPresales(rows as any[]) as PresaleRow[]) : rows,
     activeUnits: active.reduce((total, row) => total + row.pendingUnits, 0),
     collected: isViewer ? 0 : active.reduce((total, row) => total + row.collected, 0),
+    depositsReceived: isViewer ? 0 : active.reduce((total, row) => total + row.depositsReceived, 0),
     customerCount: active.reduce((total, row) => total + row.customerCount, 0),
     overdueCount: active.filter((row) => row.isOverdue).length,
     nextArrivalAt: upcoming[0]?.expectedArrivalAt ?? null,

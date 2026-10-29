@@ -221,6 +221,7 @@ export function composeBelowMarginAnswer(result: BelowMarginResult): string {
     datos.minimoConfigurado !== null ? `Tu margen mínimo hoy es ${percent(datos.minimoConfigurado)} (Configuración).` : "No tienes un margen mínimo en Configuración.",
     datos.sinCosto ? `${units(datos.sinCosto, "producto sin costo de compra no se evaluó", "productos sin costo de compra no se evaluaron")}.` : null,
     datos.kits ? `${units(datos.kits, "kit no entra", "kits no entran")}: se evalúan por sus piezas.` : null,
+    datos.conExcepcion ? `${units(datos.conExcepcion, "producto con precio bajo a propósito no entra", "productos con precio bajo a propósito no entran")} (excepción de margen en su ficha).` : null,
     datos.subcategoriaPedidaSinCoincidencia ? "No encontré la subcategoría que nombraste: revisé toda la tienda." : null,
     datos.truncado ? "La tienda tiene más productos de los que reviso de una vez: la lista puede no estar completa." : null,
   ].filter(Boolean) as string[];

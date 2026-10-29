@@ -129,6 +129,7 @@ interface CatalogProduct extends MarkupSampleProduct {
   id: string;
   name: string;
   sku: string | null;
+  marginExceptionReason: string | null;
 }
 
 async function loadCatalog(db: CopilotDb, storeId: string) {
@@ -136,7 +137,7 @@ async function loadCatalog(db: CopilotDb, storeId: string) {
     loadMarkupInputs(db, storeId),
     db.product.findMany({
       where: { storeId, isArchived: false },
-      select: { id: true, name: true, sku: true, categoryId: true, price: true, acqPrice: true, transportationCost: true, isKit: true },
+      select: { id: true, name: true, sku: true, categoryId: true, price: true, acqPrice: true, transportationCost: true, isKit: true, marginExceptionReason: true },
       take: PRODUCT_CAP,
     }),
   ]);
@@ -346,6 +347,7 @@ export async function computeBelowMargin(db: CopilotDb, storeId: string, rawInpu
       evaluados: analysis.evaluados,
       sinCosto: analysis.sinCosto,
       kits: analysis.kits,
+      conExcepcion: analysis.conExcepcion,
       truncado: catalog.truncated,
       porUmbral: analysis.porUmbral.map((threshold) => ({
         ...threshold,

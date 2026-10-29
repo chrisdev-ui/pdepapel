@@ -632,21 +632,38 @@
     <section class="chapter" id="preventas" style="--dot:#A4C3FE">
       <div class="chapter-head"><span class="area">Ventas</span><h2>10. Preventas</h2></div>
       <div class="route">Ruta: <code>/preventas</code> · se abre desde el producto, en la sección «Preventa»</div>
-      <p>Una preventa es <strong>vender hoy algo que todavía no tienes en bodega</strong>. La clienta paga completo, queda apartada su unidad, y el pedido sale el día que llegue la mercancía. Sirve para dos cosas: tener la plata antes de pagarle a tu proveedora, y saber cuántas unidades pedirle sin adivinar.</p>
+      <p>Una preventa es <strong>vender hoy algo que todavía no tienes en bodega</strong>. La clienta paga completo o un anticipo (tú eliges), queda apartada su unidad, y el pedido sale el día que llegue la mercancía. Sirve para dos cosas: tener la plata antes de pagarle a tu proveedora, y saber cuántas unidades pedirle sin adivinar.</p>
       <div class="note care"><strong>Úsala solo con un pedido real en camino</strong><p>La fecha que pongas es una promesa: la clienta ya pagó. Abre una preventa cuando de verdad tengas confirmado el envío de tu proveedora, no «a ver si sale». Si la fecha se cae tienes que avisarle a cada una, y algunas te van a pedir su dinero de vuelta.</p></div>
 
       <h3>Abrir una preventa</h3>
       <p>Se abre desde el producto: entra a <strong>Productos</strong>, ábrelo y baja hasta la sección <strong>Preventa</strong>, justo debajo de Visibilidad.</p>
       <ol class="steps">
-        <li><strong>Cuándo llega</strong>: la fecha en que vas a poder despachar. Es la que ve la clienta y la que usa el panel para saber si la preventa se venció. Tiene que ser futura.</li>
-        <li><strong>Cuántas puedes prometer</strong> (el cupo): el tope de unidades que vas a vender por adelantado, normalmente lo que le pediste a tu proveedora. Cuando se llene, la tienda deja de aceptar reservas sola y el producto vuelve a decir «Llega el…».</li>
+        <li><strong>Cuándo llega</strong>: la fecha en que vas a poder despachar, o un texto («primera semana de diciembre»), o nada. Sin fecha ni texto la tienda dice «Fecha estimada: por confirmar» y la puedes poner después con <strong>Editar preventa</strong>. Si pones fecha, tiene que ser futura y es la que manda para saber si se venció.</li>
+        <li><strong>Cuántas puedes prometer</strong> (el cupo): el tope de unidades que vas a vender por adelantado. Cuando se llene, la tienda deja de aceptar reservas sola. Con <strong>Sin tope</strong> no hay cupo, pero cada pedido lleva máximo 5.</li>
+        <li><strong>Cómo se paga</strong>: completo al reservar (lo de siempre) o <strong>Con anticipo</strong>: un valor fijo por unidad (por ejemplo $30.000) o un porcentaje del precio, y los días para pagar el saldo.</li>
+        <li><strong>Condiciones</strong> (opcional): lo propio de esta campaña. La tienda lo muestra debajo de las reglas fijas de preventa.</li>
         <li>Dale <strong>Abrir preventa</strong>. Desde ese momento el producto se puede reservar en la tienda.</li>
       </ol>
+      <div class="note rule"><strong>Un producto archivado sí se puede dejar listo</strong><p>Puedes abrir y ajustar la preventa con el producto archivado: la tienda no lo muestra mientras siga archivado. El día del lanzamiento lo desarchivas y queda a la venta en preventa. Los feeds de Google, Meta y Pinterest lo incluyen solo cuando la preventa tiene fecha; sin fecha queda fuera. Mercado Libre nunca lo publica mientras esté en preventa.</p></div>
       <div class="note rule"><strong>Un kit no se puede vender en preventa</strong><p>El panel no te deja, y es a propósito: un kit no tiene existencias propias, su stock sale de los productos que lo componen. Al liberar la preventa no habría de dónde descontar. Si quieres vender un kit por adelantado, abre la preventa de cada componente por separado.</p></div>
 
       <h3>Qué ve y qué paga la clienta</h3>
       <p>En la tienda el producto cambia: en vez de «Avísame cuando llegue» aparece el botón <strong>Reservar ahora</strong>, con la fecha de llegada y cuántas reservas quedan. Debajo se le dice, con todas las letras, que paga hoy y que si la fecha cambia puede pedir su dinero de vuelta.</p>
-      <div class="note rule"><strong>Se cobra el total, no un abono</strong><p>La clienta paga el precio completo en el momento de reservar, con los mismos medios de pago de siempre. No hay abonos, cuotas ni pagos parciales, ni ahora ni después. Para ti el pedido entra como cualquier otro pedido pagado.</p></div>
+      <div class="note rule"><strong>Pago completo</strong><p>Si la preventa se paga completa, la clienta paga el precio total al reservar, con los medios de siempre, y para ti el pedido entra como cualquier otro pedido pagado.</p></div>
+
+      <h3>Preventa con anticipo</h3>
+      <p>Con anticipo la ficha muestra el precio completo y debajo «Resérvalo hoy con $30.000 de anticipo · Saldo … + envío cuando llegue», el botón <strong>Reservar con anticipo</strong> y «Cómo funciona la preventa». La preventa con anticipo <strong>se compra sola</strong>: no se mezcla con otros productos, no lleva cupón, tarjeta de regalo ni contra entrega, y al pagar la clienta acepta las condiciones de la preventa. El envío no se cotiza: se cobra con el saldo.</p>
+      <ol class="steps">
+        <li><strong>Paga el anticipo en línea</strong>: el pedido pasa solo a <span class="pill lavender">Anticipo recibido</span> y le llega el correo «Tu preventa quedó apartada». <strong>No es venta</strong>: no tiene fecha de pago, no entra en ventas ni en reportes tributarios, y no descuenta inventario hasta que liberes.</li>
+        <li><strong>Paga el anticipo por transferencia o por WhatsApp</strong>: en el pedido pulsa <strong>Marcar anticipo recibido</strong> (valor, fecha, cómo te pagó, nota). Por defecto <strong>no le avisa</strong> a la clienta; marca «Avisar a la clienta por correo» si quieres que le llegue.</li>
+        <li><strong>Llega la mercancía</strong>: ingrésala y pulsa <strong>Liberar</strong> en Preventas. Los pedidos con anticipo pasan a «Por atender» con el paso <strong>Cobrar saldo</strong>.</li>
+        <li><strong>Cobra el saldo</strong>: cotiza el envío, escríbele a la clienta el saldo más el envío y, cuando te pague, pulsa <strong>Marcar saldo recibido</strong> con el envío que cobraste. El pedido queda <strong>Pagado</strong> (ahí sí es venta) y entra a «Por despachar».</li>
+      </ol>
+      <div class="note care"><strong>El cambio de estado normal no sirve aquí</strong><p>En un pedido con anticipo no aparece «Marcar como pagado»: el anticipo y el saldo se anotan con sus propios botones para que quede registrado cada cobro. «Cancelar preventa» cancela el pedido y devuelve la unidad al cupo; la devolución del dinero (si aplica) la haces tú a mano, como siempre.</p></div>
+
+      <h3>Lista de espera</h3>
+      <p>En la sección Preventa del producto está la <strong>Lista de espera</strong>: quienes te escriben por WhatsApp, Instagram o TikTok, más quienes se anotan en la tienda con «Te avisamos cuando llegue». Agrégalas con nombre, canal y teléfono o @usuario. Desde cada fila puedes abrir el chat de WhatsApp, marcarla contactada o descartarla. <strong>El panel nunca les escribe solo.</strong></p>
+      <p>Si alguien de la lista te paga el anticipo por WhatsApp, pulsa <strong>Marcar anticipo recibido</strong> en su fila: el panel le crea el pedido con anticipo recibido (completa después su correo y dirección) y la fila queda «Con anticipo».</p>
 
       <h3>El pedido espera completo</h3>
       <p>Esto es lo que más preguntan, así que conviene tenerlo claro: <strong>si un pedido trae aunque sea un producto de preventa, no sale nada de ese pedido hasta que liberes</strong>, ni siquiera lo que ya está en tu bodega.</p>
@@ -656,7 +673,7 @@
       <h3>La pantalla de Preventas</h3>
       <p>Está en el menú lateral, en <strong>Ventas → Preventas</strong>. Es la lista de lo que ya cobraste y todavía no has despachado.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/preventas" alt="La pantalla de Preventas sin preventas abiertas: unidades por entregar, dinero ya recibido y próxima entrega prometida." loading="lazy" width="1440" height="900"></div><figcaption>La pantalla de Preventas recién estrenada: los tres totales arriba y, debajo, la lista de campañas.</figcaption></figure>
-      <p>Arriba van tres números: <strong>unidades por entregar</strong>, <strong>dinero ya recibido</strong> (plata que es tuya pero que todavía debes en mercancía) y la <strong>próxima entrega prometida</strong>. Abajo, una tarjeta por preventa con el producto, la fecha, cuántas reservas lleva de su cupo, cuántas clientas esperan y cuánto se recaudó.</p>
+      <p>Arriba van los números: <strong>unidades por entregar</strong>, <strong>dinero ya recibido</strong> (pagado completo, que todavía debes en mercancía), <strong>anticipos recibidos</strong> (plata de las clientas, no venta: falta el saldo) y la <strong>próxima entrega prometida</strong>. Una preventa sin pedidos esperando se puede cerrar con <strong>Cancelar preventa</strong>. Abajo, una tarjeta por preventa con el producto, la fecha, cuántas reservas lleva de su cupo, cuántas clientas esperan y cuánto se recaudó.</p>
       <div class="table-wrap"><table class="states">
         <tr><th>Etiqueta</th><th>Qué significa</th></tr>
         <tr><td><span class="pill sky">En preventa</span></td><td>Se está vendiendo. Es el único estado que aparta unidades.</td></tr>
@@ -896,6 +913,7 @@
       </div>
       <h3>Margen bajo</h3>
       <p>En <strong>Productos › Margen bajo</strong> (solo la dueña) ves qué productos venden hoy bajo el costo o bajo tu margen mínimo de Configuración, con el precio de hoy en la tienda (con ofertas). Primero salen las <strong>ofertas que venden bajo el costo</strong>, después lo que está <strong>bajo el costo</strong>, lo que está <strong>bajo el mínimo antes de Bold</strong> y los <strong>kits</strong>. Cada fila trae el costo, el margen, el margen si pagan con Bold un pedido de solo esa unidad y el precio terminado en 900 que llega al mínimo. Lo que está bajo el mínimo <strong>solo por Bold</strong> va plegado: Bold cobra un fijo de $1.071 por pago, que en un pedido con más productos se reparte y en transferencia o efectivo no se cobra. Es solo una guía: ningún precio se cambia solo; para cambiarlo abre la ficha.</p>
+      <p><strong>Precio bajo a propósito.</strong> Si un precio está bajo tu mínimo a propósito (precio competitivo, volumen), en la ficha marca <strong>Precio bajo a propósito</strong> y escribe el motivo. El aviso de margen cambia por «Margen bajo a propósito: …», nunca bloquea el guardado, y el producto pasa a la sección plegada <strong>Con excepción</strong> de esta vista. Bajo el costo no se exceptúa: para eso está «Vender con pérdida a propósito».</p>
       <h3>La ficha de un producto</h3>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-detalle" alt="La ficha: título con insignias y resumen, «Ver en la tienda», «Archivar» y «Más» arriba; el índice de secciones y «Listo para vender» a la derecha." loading="lazy" width="1440" height="900"></div><figcaption>La ficha: título con insignias y resumen, «Ver en la tienda», «Archivar» y «Más» arriba; el índice de secciones y «Listo para vender» a la derecha.</figcaption></figure>
       <p>Arriba: el nombre, sus insignias (forma, stock) y una línea con SKU, precio, margen, unidades y cuánto falta para vender; los botones <strong>Ver en la tienda</strong>, <strong>Archivar</strong> y <strong>Más</strong> (Duplicar, Convertir en variantes, Eliminar…). A la derecha, el índice para saltar a cada sección y la lista <strong>Listo para vender</strong>. Las secciones:</p>

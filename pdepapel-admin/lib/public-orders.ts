@@ -68,6 +68,8 @@ export const VIEWER_ORDER_DETAIL_SELECT = {
   total: true,
   isGift: true,
   giftCardAmount: true,
+  paymentPlan: true,
+  depositAmount: true,
   orderItems: {
     orderBy: { createdAt: "asc" },
     select: { id: true, productId: true, quantity: true, name: true, sku: true, price: true, imageUrl: true, isCustom: true, brandName: true, isPreorder: true },
@@ -112,6 +114,10 @@ export const CUSTOMER_ORDER_SELECT = {
   // Tarjeta de regalo: cuánto cubrió (pedido que la usó) o qué tarjeta
   // compró este pedido (solo nombre, valor, últimos cuatro y si ya salió).
   giftCardAmount: true,
+  // Preventa con anticipo: cuánto se pagó y cuánto falta (nunca quién lo anotó).
+  paymentPlan: true,
+  depositAmount: true,
+  depositPaidAt: true,
   giftCardPurchase: {
     select: { recipientName: true, initialAmount: true, codeLast4: true, deliveredAt: true },
   },

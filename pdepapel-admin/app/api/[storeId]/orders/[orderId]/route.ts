@@ -292,6 +292,7 @@ export async function PATCH(
         !canTransition(order.status, status, {
           type: transitionType,
           paymentMethod: transitionMethod,
+          paymentPlan: order.paymentPlan,
         })
       ) {
         throw ErrorFactory.InvalidRequest(

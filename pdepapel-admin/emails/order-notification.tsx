@@ -117,6 +117,13 @@ function getLook(status: string, digital = false): Look {
     }
   }
   switch (status) {
+    case "DEPOSIT_PAID":
+      return {
+        tint: "mint",
+        pill: "Anticipo recibido",
+        headline: (n) =>
+          n ? `Listo, ${n}. Tu preventa quedó apartada.` : "Listo. Tu preventa quedó apartada.",
+      };
     case "PENDING":
       return {
         tint: "yellow",

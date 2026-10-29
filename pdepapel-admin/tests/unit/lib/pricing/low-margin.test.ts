@@ -82,4 +82,24 @@ describe("clases de «Margen bajo» (mínimo 40 % antes de Bold)", () => {
     ];
     expect([...rows].sort(compareLowMargin).map((row) => row.id)).toEqual(["c", "a", "b"]);
   });
+
+  it("bajo el mínimo con excepción va a «Con excepción» con su motivo, sea kit o no", () => {
+    const row = classifyLowMargin(product({ price: 9_000, effectivePrice: 9_000, marginExceptionReason: "  Estrategia de volumen " }), 40);
+    expect(row).toMatchObject({ clase: "bajo-minimo", excepcion: "Estrategia de volumen" });
+    expect(sectionOf(row)).toBe("con-excepcion");
+    expect(sectionOf(classifyLowMargin(product({ marginExceptionReason: "Volumen" }), 40))).toBe("con-excepcion");
+    expect(sectionOf(classifyLowMargin(product({ isKit: true, price: 9_000, effectivePrice: 9_000, marginExceptionReason: "Rotar" }), 40))).toBe("con-excepcion");
+  });
+
+  it("la excepción no esconde lo que está bajo el costo ni lo que cumple", () => {
+    expect(sectionOf(classifyLowMargin(product({ price: 5_000, effectivePrice: 5_000, marginExceptionReason: "Volumen" }), 40))).toBe("bajo-costo");
+    expect(sectionOf(classifyLowMargin(product({ price: 20_000, effectivePrice: 20_000, marginExceptionReason: "Volumen" }), 40))).toBeNull();
+    expect(sectionOf(classifyLowMargin(product({ isKit: true, price: 20_000, effectivePrice: 20_000, marginExceptionReason: "Volumen" }), 40))).toBe("kits");
+  });
+
+  it("un motivo vacío no es excepción", () => {
+    const row = classifyLowMargin(product({ price: 9_000, effectivePrice: 9_000, marginExceptionReason: "   " }), 40);
+    expect(row.excepcion).toBeNull();
+    expect(sectionOf(row)).toBe("bajo-minimo");
+  });
 });

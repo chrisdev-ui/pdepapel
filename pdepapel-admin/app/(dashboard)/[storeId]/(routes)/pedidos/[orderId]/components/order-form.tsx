@@ -84,6 +84,8 @@ import {
 } from "./order-form/schema";
 import { SectionCard } from "./order-form/section-card";
 import { OrderStatusBar } from "./order-form/status-bar";
+import { PreorderPaymentActions } from "./order-form/preorder-actions";
+import { isOrderHeldByPresale } from "@/lib/presale-hold";
 import { ShippingSection } from "./order-form/shipping-section";
 import { type TransitionPayload } from "./order-form/status-actions";
 import { SummaryCard } from "./order-form/summary-card";
@@ -880,6 +882,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   steps={timeline}
                   loading={loading}
                   onTransition={onTransition}
+                  paymentPlan={initialData.paymentPlan}
+                  extraActions={
+                    <PreorderPaymentActions
+                      storeId={storeId}
+                      order={{
+                        id: initialData.id,
+                        orderNumber: initialData.orderNumber,
+                        status: initialData.status,
+                        paymentPlan: initialData.paymentPlan,
+                        depositAmount: initialData.depositAmount,
+                        total: initialData.total,
+                        shippingCost: initialData.shipping?.cost ?? 0,
+                        presaleId: initialData.orderItems.find((item) => item.presaleId)?.presaleId ?? null,
+                        heldByPresale: isOrderHeldByPresale(initialData),
+                      }}
+                    />
+                  }
                 />
                 <NotifyCustomerCheckbox
                   className="mt-2 rounded-xl border bg-white px-4 py-2 shadow-sm"

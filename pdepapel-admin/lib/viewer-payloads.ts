@@ -378,6 +378,8 @@ export function scrubShipments<T extends AnyRecord>(shipments: T[]): T[] {
  */
 export const VIEWER_HIDDEN_PRESALE_FIELDS = [
   "amountReceived",
+  "collected",
+  "depositsReceived",
   "depositAmount",
   "depositTotal",
   "totalReceived",
@@ -413,4 +415,29 @@ export function scrubGiftCard<T extends AnyRecord | null | undefined>(card: T): 
 
 export function scrubGiftCards<T extends AnyRecord>(cards: T[]): T[] {
   return cards.map((card) => scrubGiftCard(card));
+}
+
+/**
+ * Lista de espera de una preventa vista por una cuenta de solo lectura:
+ * cuántas hay, por qué canal y en qué estado; nunca a quién contactar ni la
+ * prueba de su consentimiento.
+ */
+export const VIEWER_HIDDEN_WAITLIST_FIELDS = [
+  "name",
+  "phone",
+  "email",
+  "handle",
+  "note",
+  "consentText",
+  "consentVersion",
+  "createdBy",
+] as const;
+
+export function scrubWaitlistEntry<T extends AnyRecord | null | undefined>(entry: T): T {
+  if (!entry) return entry;
+  return omit(entry as AnyRecord, VIEWER_HIDDEN_WAITLIST_FIELDS) as T;
+}
+
+export function scrubWaitlistEntries<T extends AnyRecord>(entries: T[]): T[] {
+  return entries.map((entry) => scrubWaitlistEntry(entry));
 }

@@ -23,6 +23,7 @@ import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { CACHE_HEADERS, currencyFormatter, generateRandomSKU } from "@/lib/utils";
 import { checkIfStoreOwner, verifyStoreOwner } from "@/lib/server/utils";
+import { marginExceptionWrite, parseMarginExceptionReason } from "@/lib/margin-exception";
 import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
@@ -253,7 +254,10 @@ export async function PATCH(
       isKit,
       components,
       catalogAttributes,
+      marginExceptionReason,
     } = body;
+    const marginException = parseMarginExceptionReason(marginExceptionReason);
+    if (!marginException.ok) throw ErrorFactory.InvalidRequest(marginException.message);
     const normalizedSupplierId =
       typeof supplierId === "string" && supplierId !== "none"
         ? supplierId || null
@@ -491,6 +495,7 @@ export async function PATCH(
           supplierId: normalizedSupplierId,
           ...(nextBrandId !== undefined ? { brandId: nextBrandId } : {}),
           ...productIdentifiers,
+          ...marginExceptionWrite(marginException.value, productToUpdate.marginExceptionReason, userId),
           isArchived,
           isFeatured,
           availableAt: parseAvailableAt(availableAt),

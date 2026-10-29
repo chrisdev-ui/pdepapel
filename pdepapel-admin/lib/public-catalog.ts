@@ -110,7 +110,17 @@ export const PUBLIC_PRODUCT_SELECT = {
   // Preventa activa: la tienda la necesita para saber si se puede reservar.
   presales: {
     where: { status: "ACTIVE" as const },
-    select: { id: true, expectedArrivalAt: true, unitLimit: true, committedUnits: true },
+    select: {
+      id: true,
+      expectedArrivalAt: true,
+      expectedArrivalText: true,
+      unitLimit: true,
+      committedUnits: true,
+      paymentMode: true,
+      depositType: true,
+      depositValue: true,
+      termsText: true,
+    },
     take: 1,
   },
   createdAt: true,
@@ -169,6 +179,8 @@ export const INTERNAL_PRODUCT_FIELDS = [
   "shippingProfileId",
   "hasNoProductIdentifier",
   "storeId",
+  // Quién marcó «Precio bajo a propósito»: un id de Clerk. El motivo sí se puede ver.
+  "marginExceptionBy",
 ] as const;
 
 /**

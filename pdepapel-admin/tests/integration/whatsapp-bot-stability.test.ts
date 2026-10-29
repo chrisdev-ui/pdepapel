@@ -123,6 +123,24 @@ describe("stickers, ubicaciones, contactos y tipos que no se leen", () => {
   });
 });
 
+describe("un carrito del catálogo sin nota", () => {
+  it("de entrada: va a Paula sin menú de bienvenida ni acuse", async () => {
+    const chat = await conversation();
+    const result = await run(chat, await inbound(chat.id, null, "order"), { body: "", bodilessType: "order" });
+    expect(result.outcome).toBe("escalated_catalog_cart");
+    expect(sent.messages).toEqual([]);
+    await expect(status(chat.id)).resolves.toMatchObject({ status: "NEEDS_OWNER" });
+  });
+
+  it("a mitad de la conversación: tampoco «Recibí lo que me enviaste»", async () => {
+    const chat = await conversation();
+    await outbound(chat.id, "BOT", ago(HOUR));
+    const result = await run(chat, await inbound(chat.id, null, "order"), { body: "", bodilessType: "order" });
+    expect(result.outcome).toBe("escalated_catalog_cart");
+    expect(sent.messages).toEqual([]);
+  });
+});
+
 describe("una foto con pie no entra a la ráfaga", () => {
   it("con el modo ráfaga encendido, el pie se contesta por el camino de siempre", async () => {
     await settings({ botReadBursts: true });

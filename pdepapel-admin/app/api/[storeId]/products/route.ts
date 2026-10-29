@@ -47,6 +47,7 @@ import {
   parseErrorDetails,
 } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
+import { marginExceptionWrite, parseMarginExceptionReason } from "@/lib/margin-exception";
 import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
@@ -190,7 +191,10 @@ export async function POST(
       components, // [NEW] Array of { componentId, quantity }
       catalogAttributes,
       allowBelowCost = false,
+      marginExceptionReason,
     } = body;
+    const marginException = parseMarginExceptionReason(marginExceptionReason);
+    if (!marginException.ok) throw ErrorFactory.InvalidRequest(marginException.message);
     const normalizedSupplierId =
       typeof supplierId === "string" && supplierId !== "none"
         ? supplierId || null
@@ -341,6 +345,7 @@ export async function POST(
         supplierId: normalizedSupplierId,
         brandId: productBrandId,
         ...productIdentifiers,
+        ...marginExceptionWrite(marginException.value, null, userId),
         productGroupId: normalizedProductGroupId,
         sku,
         images: {

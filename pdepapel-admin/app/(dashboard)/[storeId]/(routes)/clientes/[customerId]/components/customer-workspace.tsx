@@ -48,6 +48,7 @@ const ORDER_STATUS: Partial<
   PAID: { label: "Pagado", tone: "mint" },
   SENT: { label: "Enviado", tone: "sky" },
   PENDING: { label: "Pendiente", tone: "cream" },
+  DEPOSIT_PAID: { label: "Anticipo recibido", tone: "lavender" },
   CREATED: { label: "Creado", tone: "cream" },
   CANCELLED: { label: "Cancelado", tone: "pink" },
   REJECTED: { label: "Rechazado", tone: "pink" },

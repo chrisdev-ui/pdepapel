@@ -33,6 +33,7 @@ vi.mock("@/lib/prismadb", () => ({
     shippingQuote: { findMany: mocks.quoteFindMany },
     order: { findFirst: mocks.orderFindFirst },
     product: { findMany: vi.fn().mockResolvedValue([]) },
+    productPresale: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

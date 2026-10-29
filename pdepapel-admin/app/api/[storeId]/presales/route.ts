@@ -26,12 +26,11 @@ export async function POST(
 
     const product = await prismadb.product.findFirst({
       where: { id: input.productId, storeId: params.storeId },
-      select: { id: true, isKit: true, isArchived: true },
+      select: { id: true, isKit: true },
     });
     if (!product) throw ErrorFactory.NotFound("El producto no existe en esta tienda");
-    if (product.isArchived) {
-      throw ErrorFactory.InvalidRequest("Un producto archivado no se puede poner en preventa");
-    }
+    // Un producto archivado sí se puede dejar listo: la tienda no lo muestra
+    // (redirige) hasta que se desarchiva, y ese es el lanzamiento.
     // Un kit no tiene stock propio: sale de sus componentes, así que liberar
     // una preventa de kit no tendría de dónde descontar.
     if (product.isKit) {
@@ -61,7 +60,13 @@ export async function POST(
         storeId: params.storeId,
         productId: input.productId,
         expectedArrivalAt: input.expectedArrivalAt,
+        expectedArrivalText: input.expectedArrivalText,
         unitLimit: input.unitLimit,
+        paymentMode: input.paymentMode,
+        depositType: input.depositType,
+        depositValue: input.depositValue,
+        termsText: input.termsText,
+        balanceDueDays: input.balanceDueDays,
         createdBy: userId,
       },
     });

@@ -8,6 +8,7 @@ import type {
   ShippingStatus,
 } from "@prisma/client";
 import { Check, Clock } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { TintBadge } from "@/components/ui/tint-badge";
 import type { NextStepCard, TimelineStep } from "@/lib/order-timeline";
@@ -45,6 +46,9 @@ interface OrderStatusBarProps {
   steps?: TimelineStep[];
   loading: boolean;
   onTransition: (payload: TransitionPayload) => Promise<void> | void;
+  /** Preventa con anticipo: «Marcar anticipo/saldo recibido». */
+  paymentPlan?: "FULL" | "DEPOSIT" | null;
+  extraActions?: ReactNode;
 }
 
 /**
@@ -67,6 +71,8 @@ export function OrderStatusBar({
   steps = [],
   loading,
   onTransition,
+  paymentPlan = null,
+  extraActions = null,
 }: OrderStatusBarProps) {
   const tone = nextStep?.tone ?? "slate";
   const shared = {
@@ -80,6 +86,7 @@ export function OrderStatusBar({
     guideRate,
     hasGuide,
     guideOnFile,
+    paymentPlan,
     loading,
     onTransition,
   };
@@ -115,6 +122,7 @@ export function OrderStatusBar({
           )}
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center [&_button]:w-full sm:[&_button]:w-auto">
+          {extraActions}
           <StatusActions {...shared} variant="card" />
           <StatusActions {...shared} variant="care" />
         </div>

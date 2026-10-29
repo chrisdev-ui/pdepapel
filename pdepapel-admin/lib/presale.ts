@@ -1,6 +1,8 @@
 import {
   OrderStatus,
   PaymentMethod,
+  PresaleDepositType,
+  PresalePaymentMode,
   ProductPresaleStatus,
   type Prisma,
 } from "@prisma/client";
@@ -16,11 +18,12 @@ import { parseAvailableAt } from "@/lib/product-availability";
  * Las reglas de negocio que confirmaron Paula y Christian, todas explícitas
  * aquí para que ninguna quede como comportamiento accidental:
  *
- * 1. **Pago completo al reservar.** No hay abonos ni cuotas. El pedido sigue
- *    el flujo de pago de siempre —nace PENDING y lo pasa a PAGADO el webhook
- *    de Bold o Wompi—, y por eso **una línea de preventa solo cuenta cuando el
- *    pedido está PAGADO**: el cupo, el dinero, las clientas y la liberación.
- *    Un carrito abandonado no reserva nada, igual que no descuenta stock.
+ * 1. **Se cuenta cuando entra la plata.** Con `paymentMode = FULL` se paga
+ *    completo al reservar; con `DEPOSIT` se paga un anticipo y el saldo al
+ *    llegar (lib/order-payments.ts). En los dos casos **una línea de preventa
+ *    solo cuenta cuando el pedido está PAGADO o con ANTICIPO RECIBIDO**: el
+ *    cupo, las clientas y la liberación. Un carrito abandonado no reserva
+ *    nada, igual que no descuenta stock.
  * 2. **Retrasos: avisar, y devolver a mano.** El sistema marca la preventa
  *    vencida y manda el aviso dejando registro; las devoluciones se hacen en
  *    Bold o Wompi por fuera, como cualquier otra. Aquí no se cancela ni se
@@ -50,11 +53,13 @@ export {
  * indicador de la pantalla y habilita «Notificar retraso».
  */
 export function isPresaleOverdue(
-  presale: { status: ProductPresaleStatus; expectedArrivalAt: Date },
+  presale: { status: ProductPresaleStatus; expectedArrivalAt: Date | null },
   now: Date = new Date(),
 ): boolean {
+  // Sin fecha («por confirmar») nunca está vencida.
   return (
     presale.status === ProductPresaleStatus.ACTIVE &&
+    presale.expectedArrivalAt !== null &&
     presale.expectedArrivalAt.getTime() < now.getTime()
   );
 }
@@ -117,22 +122,30 @@ export function presaleHoldCutoff(
 }
 
 export interface PresaleCapacity {
-  limit: number;
+  /** Null: sin tope. */
+  limit: number | null;
   /** Unidades pagadas. */
   committed: number;
   /** Unidades de pedidos recientes sin pagar: apartadas, todavía no vendidas. */
   held: number;
-  remaining: number;
+  /** Null: sin tope (la tienda limita cada pedido con `PRESALE_MAX_PER_ORDER`). */
+  remaining: number | null;
   /** Pagadas por encima del tope: nunca se rechaza un pago, así que puede pasar. */
   overCap: number;
 }
 
+/** Unidades por pedido cuando la preventa no tiene tope: un freno de cordura. */
+export const PRESALE_MAX_PER_ORDER = 5;
+
 export function getPresaleCapacity(presale: {
-  unitLimit: number;
+  unitLimit: number | null;
   committedUnits: number;
   heldUnits?: number;
 }): PresaleCapacity {
   const held = Math.max(0, presale.heldUnits ?? 0);
+  if (presale.unitLimit === null) {
+    return { limit: null, committed: presale.committedUnits, held, remaining: null, overCap: 0 };
+  }
   return {
     limit: presale.unitLimit,
     committed: presale.committedUnits,
@@ -140,6 +153,11 @@ export function getPresaleCapacity(presale: {
     remaining: Math.max(0, presale.unitLimit - presale.committedUnits - held),
     overCap: Math.max(0, presale.committedUnits - presale.unitLimit),
   };
+}
+
+/** Cuántas unidades de esta preventa caben en UN pedido. */
+export function presaleUnitsForOrder(capacity: PresaleCapacity): number {
+  return capacity.remaining === null ? PRESALE_MAX_PER_ORDER : capacity.remaining;
 }
 
 /**
@@ -161,7 +179,8 @@ export async function getHeldUnitsByPresale(
 
   const now = options.now ?? new Date();
   const orderWhere: Prisma.OrderWhereInput = {
-    status: { notIn: [OrderStatus.PAID, OrderStatus.CANCELLED] },
+    // Con anticipo recibido ya está en `committedUnits`: contarlo aquí también lo duplicaría.
+    status: { notIn: [OrderStatus.PAID, OrderStatus.DEPOSIT_PAID, OrderStatus.CANCELLED] },
     // La ventana más larga acota la consulta; cada línea se filtra después con
     // la que le toca según su forma de pago.
     createdAt: {
@@ -287,7 +306,8 @@ export async function releasePresaleUnits(
  */
 export const PAID_PRESALE_LINE = {
   isPreorder: true,
-  order: { status: OrderStatus.PAID },
+  // Con anticipo también: liberar le aparta la unidad a quien ya dio el anticipo.
+  order: { status: { in: [OrderStatus.PAID, OrderStatus.DEPOSIT_PAID] } },
 } satisfies Prisma.OrderItemWhereInput;
 
 /**
@@ -582,10 +602,14 @@ export async function getActivePresalesByProduct(
     string,
     {
       id: string;
-      unitLimit: number;
+      unitLimit: number | null;
       committedUnits: number;
       heldUnits: number;
-      expectedArrivalAt: Date;
+      expectedArrivalAt: Date | null;
+      paymentMode: PresalePaymentMode;
+      depositType: PresaleDepositType | null;
+      depositValue: number | null;
+      termsText: string | null;
     }
   >();
   if (productIds.length === 0) return empty;
@@ -602,6 +626,10 @@ export async function getActivePresalesByProduct(
       unitLimit: true,
       committedUnits: true,
       expectedArrivalAt: true,
+      paymentMode: true,
+      depositType: true,
+      depositValue: true,
+      termsText: true,
     },
   });
 
@@ -619,6 +647,10 @@ export async function getActivePresalesByProduct(
       committedUnits: row.committedUnits,
       heldUnits: held.get(row.id) ?? 0,
       expectedArrivalAt: row.expectedArrivalAt,
+      paymentMode: row.paymentMode,
+      depositType: row.depositType,
+      depositValue: row.depositValue,
+      termsText: row.termsText,
     });
   }
   return empty;
@@ -648,57 +680,120 @@ export const PRESALE_MAX_UNIT_LIMIT = 9999;
 
 // `required_error` va en todos: sin él, un campo que no llega produce el
 // "Required" en inglés de zod, y esto es un panel en español.
-export const presaleInputSchema = z.object({
+const presaleFieldsSchema = z.object({
+  /** `yyyy-MM-dd` o ISO, en hora de Bogotá. Vacío: «por confirmar». */
+  expectedArrivalAt: z.string().trim().nullish(),
+  expectedArrivalText: z.string().trim().max(120, "El texto de la fecha es muy largo (máximo 120)").nullish(),
+  /** Null o ausente: sin tope. */
+  unitLimit: z
+    .number({ invalid_type_error: "Las unidades tienen que ser un número" })
+    .int("Tiene que ser un número entero")
+    .min(1, "Promete al menos una unidad")
+    .max(PRESALE_MAX_UNIT_LIMIT, "Son demasiadas unidades")
+    .nullish(),
+  paymentMode: z.nativeEnum(PresalePaymentMode).default(PresalePaymentMode.FULL),
+  depositType: z.nativeEnum(PresaleDepositType).nullish(),
+  depositValue: z.number({ invalid_type_error: "El anticipo tiene que ser un número" }).nullish(),
+  termsText: z.string().trim().max(2000, "Las condiciones son muy largas (máximo 2000)").nullish(),
+  balanceDueDays: z.number().int("Tiene que ser un número entero").min(1, "Al menos un día").max(60, "Máximo 60 días").nullish(),
+});
+
+export const presaleInputSchema = presaleFieldsSchema.extend({
   productId: z
     .string({ required_error: "Elige el producto" })
     .trim()
     .min(1, "Elige el producto"),
-  /** `yyyy-MM-dd` o ISO. Se interpreta en hora de Bogotá. */
-  expectedArrivalAt: z
-    .string({ required_error: "Ponle la fecha en que llega" })
-    .trim()
-    .min(1, "Ponle la fecha en que llega"),
-  unitLimit: z
-    .number({
-      required_error: "Di cuántas unidades puedes prometer",
-      invalid_type_error: "Las unidades tienen que ser un número",
-    })
-    .int("Tiene que ser un número entero")
-    .min(1, "Promete al menos una unidad")
-    .max(PRESALE_MAX_UNIT_LIMIT, "Son demasiadas unidades"),
 });
 
 export type PresaleInput = z.infer<typeof presaleInputSchema>;
 
+export interface ParsedPresaleFields {
+  expectedArrivalAt: Date | null;
+  expectedArrivalText: string | null;
+  unitLimit: number | null;
+  paymentMode: PresalePaymentMode;
+  depositType: PresaleDepositType | null;
+  depositValue: number | null;
+  termsText: string | null;
+  balanceDueDays: number | null;
+}
+
 /**
- * La fecha prometida tiene que estar en el futuro: una preventa que "llega"
- * ayer nace vencida y le promete a la clienta algo ya incumplido.
+ * Reglas de una campaña: la fecha, si la hay, tiene que estar en el futuro
+ * (una preventa que «llega» ayer nace vencida); con anticipo, el anticipo es
+ * un valor fijo por unidad o un porcentaje de 1 a 99.
  */
+function validatePresaleFields(parsed: z.infer<typeof presaleFieldsSchema>, now: Date): ParsedPresaleFields {
+  let expectedArrivalAt: Date | null = null;
+  if (parsed.expectedArrivalAt) {
+    expectedArrivalAt = parseAvailableAt(parsed.expectedArrivalAt);
+    if (!expectedArrivalAt) throw ErrorFactory.InvalidRequest("La fecha de llegada no es válida");
+    if (expectedArrivalAt.getTime() <= now.getTime()) {
+      throw ErrorFactory.InvalidRequest(
+        "La fecha de llegada tiene que ser futura: una preventa no puede prometer algo para ayer.",
+      );
+    }
+  }
+  const deposit = parsed.paymentMode === PresalePaymentMode.DEPOSIT;
+  if (deposit) {
+    if (!parsed.depositType) throw ErrorFactory.InvalidRequest("Elige si el anticipo es un valor fijo o un porcentaje");
+    const value = Number(parsed.depositValue);
+    if (!Number.isFinite(value) || value <= 0) throw ErrorFactory.InvalidRequest("Ponle el valor del anticipo");
+    if (parsed.depositType === PresaleDepositType.PERCENT && (value < 1 || value > 99 || !Number.isInteger(value))) {
+      throw ErrorFactory.InvalidRequest("El porcentaje del anticipo va de 1 a 99");
+    }
+    if (parsed.depositType === PresaleDepositType.FIXED && !Number.isInteger(value)) {
+      throw ErrorFactory.InvalidRequest("El anticipo va en pesos enteros");
+    }
+  }
+  return {
+    expectedArrivalAt,
+    expectedArrivalText: parsed.expectedArrivalText || null,
+    unitLimit: parsed.unitLimit ?? null,
+    paymentMode: parsed.paymentMode,
+    depositType: deposit ? parsed.depositType! : null,
+    depositValue: deposit ? Number(parsed.depositValue) : null,
+    termsText: parsed.termsText || null,
+    balanceDueDays: parsed.balanceDueDays ?? null,
+  };
+}
+
 export function parsePresaleInput(
   body: unknown,
   now: Date = new Date(),
-): {
-  productId: string;
-  expectedArrivalAt: Date;
-  unitLimit: number;
-} {
+): ParsedPresaleFields & { productId: string } {
   // Los fallos del esquema los traduce `handleErrorResponse`, que convierte
   // cualquier ZodError en un 400 con el mensaje del primer campo. Las reglas
-  // de negocio de más abajo sí se lanzan aquí, porque no son de esquema.
+  // de negocio sí se lanzan aquí, porque no son de esquema.
   const parsed = presaleInputSchema.parse(body);
-
-  const expectedArrivalAt = parseAvailableAt(parsed.expectedArrivalAt);
-  if (!expectedArrivalAt) {
-    throw ErrorFactory.InvalidRequest("La fecha de llegada no es válida");
-  }
-  if (expectedArrivalAt.getTime() <= now.getTime()) {
-    throw ErrorFactory.InvalidRequest(
-      "La fecha de llegada tiene que ser futura: una preventa no puede prometer algo para ayer.",
-    );
-  }
-  return {
-    productId: parsed.productId,
-    expectedArrivalAt,
-    unitLimit: parsed.unitLimit,
-  };
+  return { productId: parsed.productId, ...validatePresaleFields(parsed, now) };
 }
+
+/** Editar una campaña activa: los mismos campos, sin cambiar el producto. */
+export function parsePresaleUpdate(body: unknown, now: Date = new Date()): ParsedPresaleFields {
+  return validatePresaleFields(presaleFieldsSchema.parse(body), now);
+}
+
+export { presaleUnitDeposit } from "@/lib/presale-deposit";
+
+// --- Preventa con anticipo en la caja ---------------------------------------
+
+/** Lo que dice la caja cuando una preventa con anticipo viene con otros productos. */
+export const DEPOSIT_PRESALE_ALONE_MESSAGE =
+  "Una preventa con anticipo se compra sola: termina este pedido sin los demás productos o haz la reserva aparte.";
+
+/** El envío de una preventa con anticipo se cotiza y se cobra con el saldo. */
+export const DEPOSIT_PRESALE_SHIPPING_LABEL = "Se cotiza cuando llegue (se paga con el saldo)";
+
+/** Productos del carrito con una preventa ACTIVE que se paga con anticipo. */
+export async function getDepositPresaleProductIds(storeId: string, productIds: string[]): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const rows = await prismadb.productPresale.findMany({
+    where: { storeId, productId: { in: productIds }, status: ProductPresaleStatus.ACTIVE, paymentMode: PresalePaymentMode.DEPOSIT },
+    select: { productId: true },
+  });
+  return new Set(rows.map((row) => row.productId));
+}
+
+/** Medios con los que se paga un anticipo: en línea o transferencia (que Paula confirma a mano). */
+export const DEPOSIT_PAYMENT_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi, PaymentMethod.BankTransfer];

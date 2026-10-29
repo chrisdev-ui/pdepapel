@@ -104,6 +104,8 @@ model Store {
   assistantKnowledgeNotes         AssistantKnowledgeNote[]
   whatsAppBotReplies              WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   productPresales                 ProductPresale[]                @relation("StoreToProductPresale")
+  orderPayments                   OrderPayment[]                  @relation("StoreToOrderPayment")
+  preorderWaitlist                PreorderWaitlistEntry[]         @relation("StoreToPreorderWaitlistEntry")
   stockReservations               StockReservation[]              @relation("StoreToStockReservation")
   newsletterIssues                NewsletterIssue[]               @relation("StoreToNewsletterIssue")
   newsletterCampaignSends         NewsletterCampaignSend[]        @relation("StoreToNewsletterCampaignSend")
@@ -466,6 +468,11 @@ model Product {
   isFeatured                  Boolean                      @default(false)
   isArchived                  Boolean                      @default(false)
   availableAt                 DateTime?
+  /// Margen bajo a propósito (precio competitivo): sale de «Margen bajo» y el
+  /// formulario no lo advierte. Null = sin excepción.
+  marginExceptionReason       String?                      @db.VarChar(255)
+  marginExceptionAt           DateTime?
+  marginExceptionBy           String?                      @db.VarChar(191)
   soldCount                   Int                          @default(0)
   sizeId                      String
   shippingProfileId           String?
@@ -512,6 +519,7 @@ model Product {
   catalogMigrationSuggestions CatalogMigrationSuggestion[]
   homeContents                HomeContentProduct[]
   presales                    ProductPresale[]
+  preorderWaitlist            PreorderWaitlistEntry[]
   stockReservations           StockReservation[]
   stockReservationItems       StockReservationItem[]
 
@@ -1296,6 +1304,21 @@ model Order {
   /// `whatsapp_command` | `conversaciones`.
   draftOrigin          String?              @db.VarChar(24)
 
+  // -- Preventa con anticipo (2026-10-28) --
+  // `total` sigue siendo el valor completo. Lo que se cobra hoy sale de
+  // `getAmountDueNow` (lib/order-payments.ts); los cobros quedan en OrderPayment.
+  paymentPlan               OrderPaymentPlan @default(FULL)
+  /// Anticipo acordado (pesos, ya multiplicado por las unidades). Copia fija: un
+  /// cambio de la preventa no cambia lo que la clienta ya aceptó.
+  depositAmount             Float?
+  depositPaidAt             DateTime?
+  /// «Saldo solicitado» (Lote 2) y su vencimiento.
+  balanceRequestedAt        DateTime?
+  balanceDueAt              DateTime?
+  analyticsDepositTrackedAt DateTime?
+  /// Versión de las condiciones de preventa que aceptó en el checkout.
+  preorderTermsVersion      String?          @db.VarChar(20)
+
   quoteRequests     QuoteRequest[]
   conversations     Conversation[]
   invoices          Invoice[]
@@ -1305,6 +1328,7 @@ model Order {
   capsuleOrder      CapsuleOrder?
   capsuleSlips      CapsuleSlip[]
   notifications     OrderNotification[]
+  payments          OrderPayment[]
 
   @@index([storeId])
   @@index([couponId])
@@ -1327,6 +1351,7 @@ model Order {
   @@index([analyticsPurchaseTrackedAt])
   @@index([giftCardId])
   @@index([storeId, giftCardReview])
+  @@index([storeId, paymentPlan, status])
 }
 
 // ---------------------------------------------------------------------------
@@ -1871,6 +1896,10 @@ enum OrderStatus {
   PAID
   SENT
   CANCELLED
+  /// Preventa con anticipo: se pagó el anticipo y falta el saldo. No es venta
+  /// (no tiene `paidAt`) y ningún barrido automático lo cancela. Va al final
+  /// para que el ALTER del ENUM sea instantáneo en MySQL.
+  DEPOSIT_PAID
 }
 
 enum PaymentMethod {
@@ -3266,32 +3295,153 @@ enum ProductPresaleStatus {
 /// `committedUnits`, que solo se mira en la pantalla de Preventas: Inventario,
 /// «Por reponer» y el kardex siguen leyendo únicamente el stock real.
 model ProductPresale {
-  id                String               @id @default(uuid())
-  storeId           String
-  productId         String
-  status            ProductPresaleStatus @default(ACTIVE)
+  id                  String               @id @default(uuid())
+  storeId             String
+  productId           String
+  status              ProductPresaleStatus @default(ACTIVE)
   /// Fecha que se le promete a la clienta. Pasada esta fecha sin liberar, la
-  /// preventa está vencida.
-  expectedArrivalAt DateTime
-  /// Cuántas unidades se pueden prometer como máximo.
-  unitLimit         Int
+  /// preventa está vencida. Null = «por confirmar» (nunca vencida).
+  expectedArrivalAt   DateTime?
+  /// Texto libre cuando no hay fecha exacta («primera semana de diciembre»).
+  expectedArrivalText String?              @db.VarChar(120)
+  /// Cuántas unidades se pueden prometer como máximo. Null = sin tope.
+  unitLimit           Int?
+  /// FULL: se paga completo al reservar. DEPOSIT: anticipo hoy, saldo al llegar.
+  paymentMode         PresalePaymentMode   @default(FULL)
+  depositType         PresaleDepositType?
+  /// FIXED: pesos por unidad. PERCENT: 1–99 del precio de la unidad.
+  depositValue        Float?
+  /// Condiciones propias de la campaña, texto plano.
+  termsText           String?              @db.Text
+  /// Días para pagar el saldo desde que se avisa que llegó (Lote 2).
+  balanceDueDays      Int?
   /// Unidades ya reservadas. Se sube con el mismo candado atómico que el stock.
-  committedUnits    Int                  @default(0)
-  releasedAt        DateTime?
-  releasedBy        String?
+  committedUnits      Int                  @default(0)
+  releasedAt          DateTime?
+  releasedBy          String?
   /// Aviso de retraso: queda anotado por si una clienta reclama después.
-  delayNotifiedAt   DateTime?
-  delayNotifiedBy   String?
-  createdBy         String?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  delayNotifiedAt     DateTime?
+  delayNotifiedBy     String?
+  createdBy           String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
-  store   Store   @relation("StoreToProductPresale", fields: [storeId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  store           Store                   @relation("StoreToProductPresale", fields: [storeId], references: [id])
+  product         Product                 @relation(fields: [productId], references: [id])
+  waitlistEntries PreorderWaitlistEntry[]
 
   @@index([storeId, status, expectedArrivalAt])
   @@index([productId, status])
   @@index([storeId, productId])
+}
+
+enum PresalePaymentMode {
+  FULL
+  DEPOSIT
+}
+
+enum PresaleDepositType {
+  FIXED
+  PERCENT
+}
+
+enum OrderPaymentPlan {
+  FULL
+  DEPOSIT
+}
+
+enum OrderPaymentKind {
+  DEPOSIT
+  BALANCE
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  APPROVED
+  VOIDED
+  REFUNDED
+}
+
+/// Cada cobro de un pedido con anticipo (anticipo y saldo). `PaymentDetails`
+/// sigue guardando el medio del pedido y la última transacción, como siempre.
+model OrderPayment {
+  id               String             @id @default(uuid())
+  storeId          String
+  orderId          String
+  kind             OrderPaymentKind
+  status           OrderPaymentStatus @default(PENDING)
+  amount           Float
+  method           PaymentMethod
+  /// Referencia propia del cobro en la pasarela: `<orderNumber>-A` / `-S`.
+  gatewayReference String?            @unique @db.VarChar(191)
+  transactionId    String?            @db.VarChar(191)
+  paidAt           DateTime?
+  /// Id de Clerk de quien lo anotó a mano, o "SYSTEM" (webhook).
+  createdBy        String?            @db.VarChar(191)
+  note             String?            @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  store Store @relation("StoreToOrderPayment", fields: [storeId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, kind, status])
+  @@index([storeId, paidAt])
+  @@index([storeId, kind, status])
+}
+
+/// Por dónde llegó alguien a la lista de espera de una preventa. Distinta de
+/// «Esperando a Paula» (lib/whatsapp/waiting-list.ts).
+enum PreorderWaitlistChannel {
+  WHATSAPP
+  INSTAGRAM
+  TIKTOK
+  WEB
+  OTHER
+}
+
+enum PreorderWaitlistStatus {
+  WAITING
+  CONTACTED
+  CONVERTED
+  DISCARDED
+}
+
+/// Lista de espera de una preventa. Nunca dispara mensajes: el contacto es a
+/// mano (wa.me). Teléfono y correo jamás van a logs.
+model PreorderWaitlistEntry {
+  id             String                  @id @default(uuid())
+  storeId        String
+  productId      String
+  presaleId      String?
+  name           String                  @db.VarChar(120)
+  /// Normalizado con lib/phone.ts.
+  phone          String?                 @db.VarChar(32)
+  /// @usuario de Instagram o TikTok.
+  handle         String?                 @db.VarChar(80)
+  email          String?                 @db.VarChar(191)
+  channel        PreorderWaitlistChannel
+  note           String?                 @db.Text
+  status         PreorderWaitlistStatus  @default(WAITING)
+  /// Solo el formulario web: la frase aceptada y la versión de privacidad.
+  consentText    String?                 @db.Text
+  consentVersion String?                 @db.VarChar(32)
+  /// Pedido creado con «Marcar anticipo recibido».
+  orderId        String?
+  contactedAt    DateTime?
+  /// Id de Clerk de quien la anotó, o "WEB".
+  createdBy      String?                 @db.VarChar(191)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  store   Store           @relation("StoreToPreorderWaitlistEntry", fields: [storeId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
+  presale ProductPresale? @relation(fields: [presaleId], references: [id])
+
+  @@index([storeId, productId, status, createdAt])
+  @@index([productId])
+  @@index([presaleId])
+  @@index([orderId])
 }
 
 /// Por dónde nació un pedido. Lo fija el servidor según quién lo crea, nunca

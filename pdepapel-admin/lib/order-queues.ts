@@ -12,7 +12,8 @@ export type OrderQueue =
   | "awaiting-payment" // pago en línea que el cliente aún no completa
   | "dispatch" // pagado (o contra entrega) sin guía
   | "pickup" // pagado, «Recoge en tienda», sin entregar
-  | "presale" // pagado, esperando la mercancía de una preventa: no se despacha nada
+  | "presale" // pagado o con anticipo, esperando la mercancía de una preventa: no se despacha nada
+  | "balance" // anticipo recibido y la mercancía ya llegó: falta cobrar el saldo
   | "in-transit" // con guía, no entregado
   | "issue" // novedad de transportadora
   | "delivered"
@@ -86,6 +87,8 @@ export interface QueueableOrder {
   openInventoryIssues?: number;
   /** Trae una línea de preventa sin liberar: el pedido completo espera (`lib/presale-hold.ts`). */
   heldByPresale?: boolean;
+  /** Preventa con anticipo: el anticipo y el saldo tienen sus propias acciones. */
+  paymentPlan?: "FULL" | "DEPOSIT" | null;
 }
 
 /**
@@ -169,6 +172,9 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
     if (method === PaymentMethod.CASH) return inStore ? "completed" : "verify";
     return "awaiting-payment";
   }
+
+  // Con anticipo: espera la mercancía y, cuando llega (liberada), toca cobrar el saldo.
+  if (status === OrderStatus.DEPOSIT_PAID) return order.heldByPresale ? "presale" : "balance";
 
   if (status === OrderStatus.PAID || status === OrderStatus.SENT) {
     if (inStore || digital) return "completed";
@@ -260,6 +266,8 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
       return { label: "Marcar entregado", primary: true };
     case "presale":
       return { label: "Ver preventa", primary: false };
+    case "balance":
+      return { label: "Cobrar saldo", primary: true };
     case "in-transit":
       return { label: "Ver seguimiento", primary: false };
     case "issue":
@@ -275,7 +283,7 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
 }
 
 /** Colas en las que el pedido todavía no termina: entregado, completado y cerrado no. */
-const ACTIVE_QUEUES: OrderQueue[] = ["verify", "awaiting-payment", "dispatch", "pickup", "presale", "in-transit", "issue", "quote"];
+const ACTIVE_QUEUES: OrderQueue[] = ["verify", "awaiting-payment", "dispatch", "pickup", "presale", "balance", "in-transit", "issue", "quote"];
 
 export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: QueueableOrder, now = new Date()): boolean {
   switch (view) {
@@ -289,6 +297,7 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
         (hasOpenInventoryIssues(order) && ACTIVE_QUEUES.includes(queue)) ||
         (queue === "in-transit" && Boolean(order && isShippingStale(order, now))) ||
         queue === "verify" ||
+        queue === "balance" ||
         queue === "dispatch" ||
         queue === "pickup" ||
         queue === "issue" ||

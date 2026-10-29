@@ -8,6 +8,7 @@ import {
   ShippingProvider,
   ShippingStatus,
   OrderType,
+  OrderPaymentPlan,
 } from "@prisma/client";
 import { GiftCardReview } from "@prisma/client";
 import type { EmailLineItem, EmailSummaryLine } from "@/emails/components";
@@ -38,6 +39,7 @@ import {
   type BankTransferInfo,
 } from "@/lib/bank-transfer-info";
 import { getAmountDue } from "@/lib/gift-card-amounts";
+import { getAmountDueNow } from "@/lib/order-payment-amounts";
 import { getStoreSettings } from "@/lib/store-settings";
 import { env } from "@/lib/env.mjs";
 import {
@@ -377,13 +379,13 @@ const needsTransferInstructions = (order: Pick<EmailOrder, "payment">, status: O
  * de escribir por WhatsApp.
  */
 export function buildBankTransferBlock(
-  order: Pick<EmailOrder, "orderNumber" | "total" | "giftCardAmount">,
+  order: Pick<EmailOrder, "orderNumber" | "total" | "giftCardAmount"> & Partial<Pick<EmailOrder, "status" | "paymentPlan" | "depositAmount">>,
   info: BankTransferInfo,
 ): BankTransferEmailBlock {
   const incomplete = missingBankTransferFields(info).length > 0;
   const message = `Hola, envío el comprobante del pedido #${order.orderNumber}`;
   return {
-    amount: currencyFormatter(getAmountDue(order)),
+    amount: currencyFormatter(getAmountDueNow(order)),
     reference: order.orderNumber,
     account: info.account,
     breBKey: info.breBKey,
@@ -404,6 +406,25 @@ function bankTransferText(block: BankTransferEmailBlock): string {
     block.note,
     ...(block.whatsappUrl ? [`WhatsApp: ${block.whatsappUrl}`] : []),
   ].join("\n");
+}
+
+/**
+ * Preventa con anticipo: qué se pagó y qué falta. El saldo es el total del
+ * pedido menos el anticipo; el envío se cotiza cuando llega y se suma al saldo.
+ */
+export function depositThanksParagraph(
+  order: Pick<EmailOrder, "total" | "depositAmount">,
+  status: OrderStatus,
+): string {
+  const deposit = Math.round(Number(order.depositAmount ?? 0));
+  const balance = Math.max(0, Math.round(Number(order.total)) - deposit);
+  if (status === OrderStatus.DEPOSIT_PAID) {
+    return `Recibimos tu anticipo de ${currencyFormatter(deposit)}: tu preventa quedó apartada. Cuando llegue el producto te escribimos para coordinar el pago del saldo de ${currencyFormatter(balance)} más el envío, y ahí lo despachamos.`;
+  }
+  if (status === OrderStatus.PAID) {
+    return "¡Gracias! Recibimos el saldo de tu preventa. Estamos alistando tu pedido y te avisamos cuando salga.";
+  }
+  return `Tu preventa queda apartada cuando pagues el anticipo de ${currencyFormatter(deposit)}. El saldo de ${currencyFormatter(balance)} más el envío lo pagas cuando llegue el producto.`;
 }
 
 const HANDED_OVER_THANKS = "¡Esperamos que disfrutes tu compra! Si tienes algún problema con tu pedido, por favor contáctanos.";
@@ -455,6 +476,8 @@ export function buildOrderEmails(
       : status === OrderStatus.PAID
       ? `¡Gracias! El código de la tarjeta de regalo ya salió ${giftCardTarget}, en un correo aparte.`
       : "Recibimos tu compra de la tarjeta de regalo. En cuanto el pago se confirme, el código sale por correo."
+    : order.paymentPlan === OrderPaymentPlan.DEPOSIT && status !== OrderStatus.CANCELLED && status !== OrderStatus.SENT
+      ? depositThanksParagraph(order, status)
     : status === OrderStatus.PAID
       ? "¡Gracias por tu compra! Estamos procesando tu pedido y te notificaremos cuando sea enviado."
       : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";

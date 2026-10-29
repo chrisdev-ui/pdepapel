@@ -10,13 +10,17 @@ import { classifyLowMargin } from "@/lib/pricing/low-margin";
 afterEach(cleanup);
 
 const offerRow = classifyLowMargin({ id: "p1", name: "Cartuchera", categoryName: "Cartucheras", price: 8_000, effectivePrice: 5_000, offerLabel: "Feria", cost: 6_000, isKit: false }, 40);
+const exceptionRow = classifyLowMargin(
+  { id: "p3", name: "Calendario de adviento", categoryName: "Calendarios", price: 160_000, effectivePrice: 160_000, offerLabel: null, cost: 123_778, isKit: false, marginExceptionReason: "Precio competitivo, estrategia de volumen" },
+  40,
+);
 const boldRow = classifyLowMargin({ id: "p2", name: "Sticker", categoryName: null, price: 10_000, effectivePrice: 10_000, offerLabel: null, cost: 6_000, isKit: false }, 40);
 
 const page = (overrides: Partial<LowMarginPage>): LowMarginPage => ({
   minimoPct: 40,
   evaluados: 10,
   sinCosto: 2,
-  counts: { "oferta-bajo-costo": 1, "bajo-costo": 0, "bajo-minimo": 3, "solo-bold": 7, kits: 1 },
+  counts: { "oferta-bajo-costo": 1, "bajo-costo": 0, "bajo-minimo": 3, "solo-bold": 7, kits: 1, "con-excepcion": 0 },
   section: "oferta-bajo-costo",
   total: 1,
   page: 1,
@@ -76,5 +80,31 @@ describe("«Margen bajo»", () => {
     expect(within(pages).getByRole("link", { name: "Anterior" }).getAttribute("href")).toBe("/s/productos/margen-bajo?seccion=bajo-minimo");
     expect(within(pages).getByRole("link", { name: "Siguiente" }).getAttribute("href")).toBe("/s/productos/margen-bajo?seccion=bajo-minimo&pagina=3");
     expect(pages.textContent).toContain("Página 2 de 3");
+  });
+
+  it("«Con excepción» va plegada con su conteo y no aparece en la barra", () => {
+    render(<LowMarginView storeId="s" data={page({ counts: { "oferta-bajo-costo": 1, "bajo-costo": 0, "bajo-minimo": 3, "solo-bold": 7, kits: 1, "con-excepcion": 2 } })} />);
+    const nav = screen.getByRole("navigation", { name: "Secciones de margen bajo" });
+    expect(within(nav).queryByRole("link", { name: /Con excepción/ })).toBeNull();
+    const folded = screen.getByText("Con excepción (2)").closest("details")!;
+    expect(folded.open).toBe(false);
+    expect(folded.textContent).toContain("Precio bajo a propósito");
+    expect(within(folded).getByRole("link", { name: "Ver la lista (2)" }).getAttribute("href")).toBe("/s/productos/margen-bajo?seccion=con-excepcion");
+  });
+
+  it("sin excepciones no pinta la sección plegada", () => {
+    render(<LowMarginView storeId="s" data={page({})} />);
+    expect(screen.queryByText(/Con excepción/)).toBeNull();
+  });
+
+  it("la lista «Con excepción» muestra nombre, margen y motivo", () => {
+    render(<LowMarginView storeId="s" data={page({ section: "con-excepcion", total: 1, rows: [exceptionRow], counts: { "oferta-bajo-costo": 1, "bajo-costo": 0, "bajo-minimo": 3, "solo-bold": 7, kits: 1, "con-excepcion": 1 } })} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Con excepción (1)" })).toBeTruthy();
+    const nav = screen.getByRole("navigation", { name: "Secciones de margen bajo" });
+    expect(within(nav).getByRole("link", { name: "Con excepción (1)" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Producto", "Precio", "Costo", "Margen", "Con Bold (1 unidad)", "Para 40 %", "Motivo"]);
+    const row = screen.getAllByRole("row").find((element) => element.textContent?.includes("Calendario de adviento"))!;
+    expect(row.textContent).toContain("22,6 %");
+    expect(row.textContent).toContain("Precio competitivo, estrategia de volumen");
   });
 });

@@ -306,7 +306,7 @@ describe("POST /api/[storeId]/checkout", () => {
         }),
       }),
     );
-    expect(mocks.generateBoldCheckoutData).toHaveBeenCalledWith(order);
+    expect(mocks.generateBoldCheckoutData).toHaveBeenCalledWith(order, null);
   });
 
   /**

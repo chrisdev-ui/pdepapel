@@ -33,6 +33,7 @@ const VIEWER_KEYS = [
   "soldCount",
   "abcClassification",
   "shippingProfileId",
+  "marginExceptionBy",
   // Márgenes y pisos de precio.
   "minimumMarginAmount",
   "minimumMarginPct",

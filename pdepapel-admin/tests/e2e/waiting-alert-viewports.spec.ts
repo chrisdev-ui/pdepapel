@@ -91,7 +91,12 @@ test.describe("«Clientas esperando» en distintos tamaños", () => {
       await expect(card).toBeVisible({ timeout: 90_000 });
       await settled(card);
       const row = page.getByRole("link", { name: /Conversación · hace (4[5-9]|5\d) min/ }).filter({ visible: true }).first();
-      await expect(row).toBeVisible();
+      // El resumen de esperas se comparte 5 s por proceso (lib/whatsapp/waiting-alert.ts): si la prueba
+      // anterior pintó el menú justo antes de sembrar, la primera carga puede traer la lectura previa.
+      await expect(async () => {
+        if (!(await row.isVisible())) await page.reload({ waitUntil: "domcontentloaded" });
+        await expect(row).toBeVisible({ timeout: 3000 });
+      }).toPass({ timeout: 30_000 });
       await expect(page.getByText("Clienta Que No Debe Verse")).toHaveCount(0);
       await expect(page.getByText("texto que no debe verse en Inicio")).toHaveCount(0);
       const box = await row.boundingBox();

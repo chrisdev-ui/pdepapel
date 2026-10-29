@@ -57,6 +57,7 @@ export const statusOptions = {
   [OrderStatus.PAID]: "Pagada",
   [OrderStatus.SENT]: "Enviada",
   [OrderStatus.CANCELLED]: "Cancelada",
+  [OrderStatus.DEPOSIT_PAID]: "Anticipo recibido",
 };
 
 export const paymentOptions: Record<PaymentMethod, string> = {
