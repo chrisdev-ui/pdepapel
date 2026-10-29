@@ -342,5 +342,14 @@ describe("la barra de búsqueda marca la preventa", () => {
     const rows = (await response.json()) as { name: string; stock: number; isPreorder: boolean }[];
     expect(rows.find((row) => row.name === "Calendario de adviento Prueba")).toMatchObject({ stock: 0, isPreorder: true });
     expect(rows.find((row) => row.name === "Calendario de escritorio Prueba")).toMatchObject({ stock: 0, isPreorder: false });
+
+    // El listado agrupado (/tienda, /categoria) también la trae: sin ella la tarjeta dice «Agotado».
+    const listing = await productsGET(
+      request(`http://admin.test/api/x/products?fromShop=true&search=${encodeURIComponent("calendario")}&page=1&itemsPerPage=24&groupBy=parents`),
+      { params: { storeId } },
+    );
+    const { products } = (await listing.json()) as { products: { name: string; stock: number; presales?: { id: string }[] }[] };
+    expect(products.find((row) => row.name === "Calendario de adviento Prueba")).toMatchObject({ stock: 0, presales: [expect.objectContaining({ id: expect.any(String) })] });
+    expect(products.find((row) => row.name === "Calendario de escritorio Prueba")?.presales ?? []).toEqual([]);
   });
 });

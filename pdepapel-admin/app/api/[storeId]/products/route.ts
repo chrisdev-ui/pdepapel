@@ -120,6 +120,8 @@ interface UnifiedProduct {
   stock: number;
   isFeatured?: boolean;
   availableAt?: Date | null;
+  /** La preventa abierta: con stock 0 la tarjeta dice «Preventa», no «Agotado». */
+  presales?: PublicProductRecord["presales"];
 }
 
 interface GroupVariantProduct {
@@ -1010,6 +1012,7 @@ export async function GET(
           isFeatured: p.isFeatured,
           soldCount: p.soldCount ?? 0,
           availableAt: p.availableAt ?? null,
+          presales: p.presales ?? [],
         }),
       );
 
