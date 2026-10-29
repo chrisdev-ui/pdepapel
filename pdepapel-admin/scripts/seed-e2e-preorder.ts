@@ -7,6 +7,11 @@ import { blockOutboundNetwork, NOT_STUBBED, TEST_ENV_STUBS } from "./lib/test-is
  * $30.000 por unidad, sin tope ni fecha. Solo contra `pdepapel_test`.
  *
  *   node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx tsx scripts/seed-e2e-preorder.ts seed|clean
+ *
+ * También, para que la e2e compruebe lo que la tienda dejó en la base:
+ * `inspect` (lista de espera y pedidos del producto, sin datos de contacto),
+ * `deposit <orderId>` (el anticipo anotado con el mismo `settleDepositPayment`
+ * que usa «Marcar anticipo recibido» en el panel) y `archive` / `unarchive`.
  */
 for (const [name, value] of Object.entries(TEST_ENV_STUBS)) {
   if (!NOT_STUBBED.has(name)) process.env[name] = value;
@@ -76,8 +81,47 @@ async function main() {
       },
     });
     console.log(JSON.stringify({ productId: product.id, slug: product.slug }));
+  } else if (mode === "inspect") {
+    const product = await db.product.findUnique({ where: { id: PRODUCT_ID }, select: { isArchived: true } });
+    const waitlist = await db.preorderWaitlistEntry.findMany({
+      where: { productId: PRODUCT_ID },
+      select: { name: true, status: true, channel: true, phone: true, email: true, consentVersion: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const orders = await db.order.findMany({
+      where: { orderItems: { some: { productId: PRODUCT_ID } } },
+      select: { id: true, status: true, paymentPlan: true, depositAmount: true, total: true, paidAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+    console.log(
+      JSON.stringify({
+        isArchived: product?.isArchived ?? null,
+        waitlist: waitlist.map(({ phone, email, ...entry }) => ({ ...entry, hasPhone: Boolean(phone), hasEmail: Boolean(email) })),
+        orders: orders.map(({ paidAt, ...order }) => ({ ...order, paid: paidAt !== null })),
+      }),
+    );
+  } else if (mode === "deposit") {
+    const orderId = process.argv[3];
+    if (!orderId) throw new Error("Falta el id del pedido");
+    await import("./lib/allow-server-only.cjs");
+    const { settleDepositPayment } = await import("../lib/order-payments");
+    const result = await settleDepositPayment({
+      orderId,
+      storeId,
+      amount: 30000,
+      method: "BankTransfer",
+      paidAt: new Date(),
+      source: "manual",
+      createdBy: "e2e",
+      note: null,
+      notifyCustomer: false,
+    });
+    console.log(JSON.stringify({ outcome: result.outcome }));
+  } else if (mode === "archive" || mode === "unarchive") {
+    await db.product.update({ where: { id: PRODUCT_ID }, data: { isArchived: mode === "archive" } });
+    console.log(JSON.stringify({ isArchived: mode === "archive" }));
   } else {
-    throw new Error("Modo desconocido: seed | clean");
+    throw new Error("Modo desconocido: seed | clean | inspect | deposit <orderId> | archive | unarchive");
   }
   await db.$disconnect();
 }

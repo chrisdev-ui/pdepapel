@@ -12,20 +12,32 @@ import { skipPrivacyBanner } from "../helpers/public-page";
  * ficha muestra el precio completo, el anticipo, «por confirmar», «Cómo
  * funciona la preventa» y la lista de espera; la caja pide aceptar las
  * condiciones, no cotiza envío y cobra solo el anticipo. A 390 se crea el
- * pedido por transferencia y queda con anticipo de $30.000 sobre $160.000.
+ * pedido por transferencia y queda con anticipo de $30.000 sobre $160.000;
+ * anotado el anticipo (el mismo `settleDepositPayment` de «Marcar anticipo
+ * recibido»), la página del pedido dice «Anticipo recibido». Además: el
+ * formulario «Avísame» guarda la fila en la lista de espera, y el carrito
+ * mixto pregunta antes de vaciar.
  */
 
 const ADMIN_DIR = path.resolve(process.cwd(), "../pdepapel-admin");
 const SCREENSHOTS = path.join(ADMIN_DIR, "tmp/preventa-anticipo-shots");
 
-function seed(mode: "seed" | "clean") {
-  const output = execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "scripts/seed-e2e-preorder.ts", mode], {
+function seed(mode: "seed" | "clean" | "inspect" | "deposit", ...args: string[]) {
+  const output = execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "scripts/seed-e2e-preorder.ts", mode, ...args], {
     cwd: ADMIN_DIR,
     encoding: "utf8",
     env: { ...process.env, PRISMA_LOG: "" },
   });
   return output.trim().split("\n").reverse().find((line) => line.startsWith("{")) ?? "{}";
 }
+
+type Inspection = {
+  waitlist: { name: string; status: string; channel: string; hasPhone: boolean; hasEmail: boolean; consentVersion: string | null }[];
+  orders: { id: string; status: string; paymentPlan: string; depositAmount: number; total: number; paid: boolean }[];
+};
+const inspect = (): Inspection => JSON.parse(seed("inspect"));
+const cartItemIds = (page: Page) =>
+  page.evaluate(() => (JSON.parse(window.localStorage.getItem("cart-storage") ?? "{}")?.state?.items ?? []).map((item: { id: string }) => item.id));
 
 const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 const shot = async (page: Page, name: string) => {
@@ -123,6 +135,79 @@ test.describe("preventa con anticipo en la tienda", () => {
     await expect(page.getByText(/Paga el anticipo de \$\s?30\.000/).first()).toBeVisible({ timeout: 30_000 });
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     await shot(page, "tienda-pedido-390");
+
+    // Paula anota el anticipo: la clienta ve «Anticipo recibido», no «pagado».
+    expect(JSON.parse(seed("deposit", orderId))).toEqual({ outcome: "applied" });
+    await page.reload();
+    await expect(page.getByText("Anticipo recibido").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/Paga el anticipo de/)).toHaveCount(0);
+    expect(inspect().orders.find((row) => row.id === orderId)).toMatchObject({ status: "DEPOSIT_PAID", paid: false });
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "tienda-pedido-anticipo-recibido-390");
+  });
+
+  test("«Avísame» de la ficha guarda la fila en la lista de espera, a 390", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openProduct(page);
+    const form = page.getByRole("form", { name: "Avísame de la preventa de Calendario de adviento E2E" });
+    await form.scrollIntoViewIfNeeded();
+    const send = form.getByRole("button", { name: "Avísame" });
+    await send.click();
+    await expect(form.getByRole("alert")).toHaveText("Escribe tu nombre.");
+    await form.getByRole("textbox", { name: "Nombre" }).fill("Clienta Tienda E2E");
+    await form.getByRole("textbox", { name: "WhatsApp" }).fill("3001112233");
+    await send.click();
+    await expect(form.getByRole("alert")).toHaveText("Marca la casilla para que podamos contactarte.");
+    await form.getByRole("checkbox").check();
+    // El panel descarta en silencio un alta enviada en menos de 3 s (trampa de bots).
+    await page.waitForTimeout(3_500);
+    await send.click();
+    await expect(page.getByRole("status").filter({ hasText: "Listo, te avisamos cuando abra la preventa o llegue." })).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => inspect().waitlist.length, { timeout: 30_000 }).toBe(1);
+    expect(inspect().waitlist[0]).toMatchObject({ name: "Clienta Tienda E2E", status: "WAITING", hasPhone: true, hasEmail: false });
+    expect(inspect().waitlist[0].consentVersion).toBeTruthy();
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "tienda-avisame-390");
+  });
+
+  test("carrito mixto: pregunta antes de vaciar, en los dos sentidos, a 1280", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openProduct(page);
+    const reserve = page.getByRole("button", { name: /Reservar con anticipo/ }).filter({ visible: true }).first();
+
+    // Un producto normal primero.
+    expect((await page.goto("/producto/producto-feria-e2e"))?.status()).toBe(200);
+    await page.getByRole("button", { name: /Agregar al carrito/ }).filter({ visible: true }).first().click();
+    await expect.poll(() => cartItemIds(page), { timeout: 30_000 }).toEqual(["e2e-fair-product"]);
+
+    // La preventa: «Mantener mi carrito» no toca nada; «Vaciar y reservar» deja solo la preventa.
+    await page.goto(`/producto/${slug}`);
+    await expect(reserve).toBeVisible({ timeout: 60_000 });
+    await reserve.click();
+    const ask = page.getByRole("alertdialog").or(page.getByRole("dialog")).filter({ hasText: "La preventa se paga aparte" }).first();
+    await expect(ask).toBeVisible({ timeout: 30_000 });
+    await shot(page, "tienda-carrito-mixto-pregunta-1280");
+    await ask.getByRole("button", { name: "Mantener mi carrito" }).click();
+    await expect(ask).toBeHidden();
+    expect(await cartItemIds(page)).toEqual(["e2e-fair-product"]);
+    await reserve.click();
+    await expect(ask).toBeVisible({ timeout: 30_000 });
+    await ask.getByRole("button", { name: "Vaciar y reservar" }).click();
+    await expect.poll(() => cartItemIds(page), { timeout: 30_000 }).toEqual(["e2e-preorder-calendar"]);
+
+    // Al revés: con la preventa en el carrito, un producto normal también pregunta.
+    await page.goto("/producto/producto-feria-e2e");
+    await page.getByRole("button", { name: /Agregar al carrito/ }).filter({ visible: true }).first().click();
+    const back = page.getByRole("alertdialog").or(page.getByRole("dialog")).filter({ hasText: "Tu carrito tiene una preventa" }).first();
+    await expect(back).toBeVisible({ timeout: 30_000 });
+    await back.getByRole("button", { name: "Mantener mi carrito" }).click();
+    expect(await cartItemIds(page)).toEqual(["e2e-preorder-calendar"]);
+
+    // El carrito explica que sale cuando llegue.
+    await page.goto("/carrito");
+    await expect(page.getByText(/Tienes un producto de preventa/).first()).toBeVisible({ timeout: 60_000 });
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "tienda-carrito-preventa-1280");
   });
 
   for (const viewport of [
