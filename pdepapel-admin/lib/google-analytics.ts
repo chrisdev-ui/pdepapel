@@ -1,4 +1,4 @@
-import { OrderStatus } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentStatus, OrderStatus } from "@prisma/client";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
@@ -217,6 +217,13 @@ export async function recordDepositInGoogleAnalytics(orderId: string): Promise<"
       analyticsClientId: true,
       analyticsSessionId: true,
       analyticsDepositTrackedAt: true,
+      // El primer cobro aprobado: lo que de verdad entró (puede ser más que el anticipo).
+      payments: {
+        where: { kind: OrderPaymentKind.DEPOSIT, status: OrderPaymentStatus.APPROVED },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { amount: true },
+      },
       orderItems: {
         select: {
           name: true,
@@ -241,7 +248,7 @@ export async function recordDepositInGoogleAnalytics(orderId: string): Promise<"
     sessionId: normalizeGoogleAnalyticsSessionId(order.analyticsSessionId),
     items: order.orderItems,
     orderNumber: `${order.orderNumber}-A`,
-    total: Number(order.depositAmount ?? 0),
+    total: Number(order.payments[0]?.amount ?? order.depositAmount ?? 0),
   });
   const { coupon: _coupon, shipping: _shipping, payment_type: _paymentType, ...params } = base.events[0].params as Record<string, unknown>;
   const payload = { ...base, events: [{ name: "preorder_deposit_paid", params }] };

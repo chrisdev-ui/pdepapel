@@ -352,9 +352,11 @@ export interface Order {
   giftCardAmount?: number;
   /** Preventa con anticipo: «DEPOSIT»; el resto de pedidos, «FULL» o sin el campo. */
   paymentPlan?: "FULL" | "DEPOSIT" | null;
-  /** Anticipo acordado al reservar (pesos); el saldo es `total − depositAmount`. */
+  /** Anticipo mínimo acordado al reservar (pesos). */
   depositAmount?: number | null;
   depositPaidAt?: string | null;
+  /** Lo que ya pagó (anticipo + abonos); el saldo es `total − paidSoFar`. */
+  paidSoFar?: number | null;
   /** La tarjeta que este pedido compró (solo pedidos de tipo GIFT_CARD). */
   giftCardPurchase?: {
     recipientName: string | null;

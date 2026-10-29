@@ -1,6 +1,7 @@
-import { OrderStatus, Prisma } from "@prisma/client";
+import { OrderPaymentPlan, OrderPaymentStatus, OrderStatus, Prisma } from "@prisma/client";
 
 import type { CapsuleReceipt } from "@/lib/capsule-receipt";
+import { PREPAYMENT_KINDS, sumPrepaid } from "@/lib/order-payment-amounts";
 import { isPaidLike } from "@/lib/order-transitions";
 
 import {
@@ -118,6 +119,11 @@ export const CUSTOMER_ORDER_SELECT = {
   paymentPlan: true,
   depositAmount: true,
   depositPaidAt: true,
+  // Solo para sumar `paidSoFar`; las filas nunca salen (ni medio ni notas).
+  payments: {
+    where: { status: OrderPaymentStatus.APPROVED, kind: { in: PREPAYMENT_KINDS } },
+    select: { kind: true, status: true, amount: true },
+  },
   giftCardPurchase: {
     select: { recipientName: true, initialAmount: true, codeLast4: true, deliveredAt: true },
   },
@@ -169,8 +175,15 @@ export type CustomerOrderRecord = Prisma.OrderGetPayload<{
  * booleana (la tienda solo necesita saber si lo creó el panel).
  */
 export function toCustomerOrderResponse(order: CustomerOrderRecord, capsule: CapsuleReceipt | null = null, declinedAttempt = false) {
-  const { createdBy, ...customerOrder } = order;
-  return { ...customerOrder, createdByAdmin: Boolean(createdBy), capsule, ...receiptMeta(order.status, declinedAttempt) };
+  const { createdBy, payments, ...customerOrder } = order;
+  return {
+    ...customerOrder,
+    // Preventa con anticipo: lo que ya pagó (anticipo + abonos), para «Llevas $X pagado».
+    paidSoFar: order.paymentPlan === OrderPaymentPlan.DEPOSIT ? sumPrepaid(payments) : null,
+    createdByAdmin: Boolean(createdBy),
+    capsule,
+    ...receiptMeta(order.status, declinedAttempt),
+  };
 }
 
 export type PaymentResult = "approved" | "declined" | "pending";

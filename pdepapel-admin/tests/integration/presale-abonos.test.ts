@@ -20,6 +20,7 @@ import {
   ShippingStatus,
 } from "@prisma/client";
 
+import { assertNoForbiddenKeys } from "../helpers/forbidden-keys";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
 /**
@@ -349,5 +350,24 @@ describe("abonos libres", () => {
     expect((await manualDeposit(order.id, UNIT_DEPOSIT * 2)).status).toBe(200);
     expect((await installment(order.id, 1500)).status).toBe(200);
     expect((await received()) - before).toBe(UNIT_DEPOSIT * 2 + 1500);
+  });
+  it("el recibo público trae «paidSoFar» (anticipo + abonos) y nunca las filas de cobro", async () => {
+    const order = await depositOrder(1, PaymentMethod.BankTransfer);
+    expect((await manualDeposit(order.id, UNIT_DEPOSIT * 2)).status).toBe(200);
+    expect((await installment(order.id, 2500)).status).toBe(200);
+    const { GET } = await import("@/app/api/[storeId]/orders/[orderId]/route");
+    const owner = session.userId;
+    session.userId = null;
+    try {
+      const response = await GET(new Request("http://admin.test/api/x", { headers: { Origin: "https://papeleriapdepapel.com" } }), { params: { storeId: f.store.id, orderId: order.id } });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.masked).toBe(true);
+      expect(body.paidSoFar).toBe(UNIT_DEPOSIT * 2 + 2500);
+      expect(body).not.toHaveProperty("payments");
+      assertNoForbiddenKeys(body, "linkHolder");
+    } finally {
+      session.userId = owner;
+    }
   });
 });

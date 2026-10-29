@@ -11,7 +11,9 @@ import { blockOutboundNetwork, NOT_STUBBED, TEST_ENV_STUBS } from "./lib/test-is
  * También, para que la e2e compruebe lo que la tienda dejó en la base:
  * `inspect` (lista de espera y pedidos del producto, sin datos de contacto),
  * `deposit <orderId>` (el anticipo anotado con el mismo `settleDepositPayment`
- * que usa «Marcar anticipo recibido» en el panel) y `archive` / `unarchive`.
+ * que usa «Marcar anticipo recibido» en el panel), `installment <orderId>
+ * <valor>` (el abono con el mismo `recordInstallment` de «Registrar abono») y
+ * `archive` / `unarchive`.
  */
 for (const [name, value] of Object.entries(TEST_ENV_STUBS)) {
   if (!NOT_STUBBED.has(name)) process.env[name] = value;
@@ -117,11 +119,27 @@ async function main() {
       notifyCustomer: false,
     });
     console.log(JSON.stringify({ outcome: result.outcome }));
+  } else if (mode === "installment") {
+    const [orderId, amount] = process.argv.slice(3);
+    if (!orderId || !amount) throw new Error("Faltan el id del pedido y el valor del abono");
+    await import("./lib/allow-server-only.cjs");
+    const { recordInstallment } = await import("../lib/order-payments");
+    const result = await recordInstallment({
+      orderId,
+      storeId,
+      amount: Number(amount),
+      method: "CASH",
+      paidAt: new Date(),
+      createdBy: "e2e",
+      note: null,
+      notifyCustomer: false,
+    });
+    console.log(JSON.stringify({ paid: result.paid, remaining: result.remaining }));
   } else if (mode === "archive" || mode === "unarchive") {
     await db.product.update({ where: { id: PRODUCT_ID }, data: { isArchived: mode === "archive" } });
     console.log(JSON.stringify({ isArchived: mode === "archive" }));
   } else {
-    throw new Error("Modo desconocido: seed | clean | inspect | deposit <orderId> | archive | unarchive");
+    throw new Error("Modo desconocido: seed | clean | inspect | deposit <orderId> | installment <orderId> <valor> | archive | unarchive");
   }
   await db.$disconnect();
 }

@@ -64,13 +64,25 @@ describe("pedido de una preventa con anticipo", () => {
     renderSummary(order());
     const card = screen.getByTestId("deposit-paid-card");
     expect(card).toHaveTextContent("Preventa apartada");
-    expect(card.textContent!.replace(/\s+/g, " ")).toContain(
-      "Recibimos tu anticipo de $ 30.000. Saldo pendiente: $ 130.000 + envío, que pagas cuando llegue el producto. Te escribimos cuando llegue para coordinar el pago.",
-    );
+    expect(card.textContent!.replace(/\s+/g, " ")).toContain("Llevas $ 30.000 pagado · faltan $ 130.000 + envío");
+    expect(card).toHaveTextContent("Te escribimos cuando llegue el producto para coordinar el pago y el envío.");
+    expect(screen.getByText("Pagado hasta ahora").closest("div")).toHaveTextContent("30.000");
     expect(screen.getByText("Saldo al llegar").closest("div")).toHaveTextContent(/130\.000 \+ envío/);
     expect(screen.getByText("Se cotiza cuando llegue")).toBeInTheDocument();
     expect(screen.queryByText("Gratis")).toBeNull();
     expect(screen.queryByRole("button", { name: "Pagar ahora" })).toBeNull();
+  });
+
+  it("con abonos (…393 + $20.000): lleva lo pagado de verdad y el saldo baja", () => {
+    renderSummary(order({ paidSoFar: 80000 }));
+    expect(screen.getByTestId("deposit-progress").textContent!.replace(/\s+/g, " ")).toBe("Llevas $ 80.000 pagado · faltan $ 80.000 + envío");
+    expect(screen.getByText("Pagado hasta ahora").closest("div")).toHaveTextContent("80.000");
+    expect(screen.getByText("Saldo al llegar").closest("div")).toHaveTextContent(/80\.000 \+ envío/);
+  });
+
+  it("pagado todo antes de que llegue: solo falta el envío", () => {
+    renderSummary(order({ paidSoFar: 160000 }));
+    expect(screen.getByTestId("deposit-progress").textContent!.replace(/\s+/g, " ")).toBe("Llevas $ 160.000 pagado · solo falta el envío");
   });
 
   it("pendiente: pide el anticipo, no el total", () => {

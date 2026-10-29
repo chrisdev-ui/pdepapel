@@ -19,20 +19,28 @@ export function depositTeaser(depositNow: number, balance: number): string {
   return `Resérvalo hoy con ${money(depositNow)} de anticipo · Saldo de ${money(balance)} + envío cuando llegue`;
 }
 
+/**
+ * Qué no se devuelve si la clienta desiste. Un solo lugar (ficha, caja y
+ * términos): Paula está decidiendo si es solo el primer anticipo o también
+ * los abonos. Cambiar la frase es un cambio de términos: sube la versión en
+ * lib/legal-versions.ts de las dos apps.
+ */
+export const PRESALE_NON_REFUNDABLE = "El anticipo no es reembolsable";
+
 /** Los cinco puntos fijos de «Cómo funciona la preventa»; el anticipo es por unidad. */
 export function presaleHowItWorks(unitDeposit: number): string[] {
   return [
     `Hoy pagas un anticipo de ${money(unitDeposit)} por unidad y tu producto queda apartado.`,
     "Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.",
     "El precio queda fijo desde que reservas.",
-    "El anticipo no es reembolsable, salvo el derecho de retracto de ley o si el producto no llega (en ese caso te devolvemos todo).",
+    `${PRESALE_NON_REFUNDABLE}, salvo el derecho de retracto de ley o si el producto no llega (en ese caso te devolvemos todo).`,
     "La preventa se compra sola: no se mezcla con otros productos en el mismo pedido.",
   ];
 }
 
 /** La casilla obligatoria del checkout, con el anticipo de este pedido. */
 export function depositTermsCheckboxText(depositNow: number): string {
-  return `Acepto las condiciones de la preventa: hoy pago un anticipo de ${money(depositNow)}; el saldo y el envío los pago cuando llegue el producto. El anticipo no es reembolsable, salvo el derecho de retracto de ley o si el producto no llega.`;
+  return `Acepto las condiciones de la preventa: hoy pago un anticipo de ${money(depositNow)}; el saldo y el envío los pago cuando llegue el producto. ${PRESALE_NON_REFUNDABLE}, salvo el derecho de retracto de ley o si el producto no llega.`;
 }
 
 export function depositSubmitLabel(depositNow: number): string {
@@ -45,6 +53,11 @@ export function depositPendingText(depositAmount: number): string {
 }
 
 /** Pedido con el anticipo recibido. */
+/** La línea de avance de una preventa con abonos en /pedido. */
+export function depositProgressText(paid: number, balance: number): string {
+  return balance > 0 ? `Llevas ${money(paid)} pagado · faltan ${money(balance)} + envío` : `Llevas ${money(paid)} pagado · solo falta el envío`;
+}
+
 export function depositPaidText(depositAmount: number, balance: number): string {
   return `Recibimos tu anticipo de ${money(depositAmount)}. Saldo pendiente: ${money(balance)} + envío, que pagas cuando llegue el producto. Te escribimos cuando llegue para coordinar el pago.`;
 }

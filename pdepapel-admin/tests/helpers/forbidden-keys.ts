@@ -110,6 +110,8 @@ const VIEWER_KEYS = [
  * correo llegan recortados (se comprueban por valor) y la guía sí llega.
  */
 const LINK_HOLDER_KEYS = [
+  // Los cobros de una preventa (medio, notas): el recibo solo trae `paidSoFar`.
+  "payments",
   "address",
   "address2",
   "addressReference",

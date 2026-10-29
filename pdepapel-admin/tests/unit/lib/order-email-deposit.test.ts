@@ -72,4 +72,31 @@ describe("correos de una preventa con anticipo", () => {
     const body = await html(customer!);
     expect(body).toContain("Recibimos el saldo de tu preventa");
   });
+
+  // Abonos libres: lo pagado es la suma de los cobros aprobados, no el anticipo esperado.
+  const withPayments = (status: OrderStatus, amounts: number[]) =>
+    ({
+      ...(order(PaymentMethod.BankTransfer, status) as object),
+      payments: amounts.map((amount, index) => ({ kind: index === 0 ? "DEPOSIT" : "INSTALLMENT", status: "APPROVED", amount })),
+    }) as never;
+
+  it("…393: anticipo de $60.000 sobre $30.000 esperados → «Recibimos tu anticipo de $60.000», saldo $100.000", async () => {
+    const { customer } = buildOrderEmails(withPayments(OrderStatus.DEPOSIT_PAID, [60000]), OrderStatus.DEPOSIT_PAID);
+    const body = await html(customer!);
+    expect(body).toMatch(/Recibimos tu anticipo de \$\s?60\.000/);
+    expect(body).toMatch(/saldo de \$\s?100\.000 más el envío/);
+  });
+
+  it("«Abono recibido»: asunto propio, el abono, lo que lleva y lo que falta", async () => {
+    const { customer, admin } = buildOrderEmails(withPayments(OrderStatus.DEPOSIT_PAID, [30000, 20000]), OrderStatus.DEPOSIT_PAID, { installmentAmount: 20000 });
+    expect(customer!.subject).toBe("Tu pedido #ORD-1 - Abono recibido");
+    expect(admin.subject).toBe("[Admin] Pedido #ORD-1 - Abono recibido");
+    const body = await html(customer!);
+    expect(body).toMatch(/Recibimos tu abono de \$\s?20\.000\. Llevas \$\s?50\.000 pagado de \$\s?160\.000; faltan \$\s?110\.000 más el envío/);
+  });
+
+  it("pagado todo con abonos: «Ya pagaste todo», solo falta el envío", async () => {
+    const { customer } = buildOrderEmails(withPayments(OrderStatus.DEPOSIT_PAID, [30000, 130000]), OrderStatus.DEPOSIT_PAID, { installmentAmount: 130000 });
+    expect(await html(customer!)).toMatch(/Ya pagaste todo \(\$\s?160\.000\): cuando llegue el producto solo falta el envío/);
+  });
 });

@@ -91,5 +91,8 @@ describe("lo que se paga ahora (transferencia)", () => {
 
   it("el saldo es el total menos el anticipo", () => {
     expect(depositBalance({ total: 160000, depositAmount: 30000 })).toBe(130000);
+    // Abonos libres: el saldo sale de lo pagado (anticipo + abonos), no del anticipo esperado.
+    expect(depositBalance({ total: 160000, depositAmount: 30000, paidSoFar: 60000 })).toBe(100000);
+    expect(depositBalance({ total: 160000, depositAmount: 30000, paidSoFar: 160000 })).toBe(0);
   });
 });

@@ -7,8 +7,8 @@ import { BoldCheckoutButton } from "@/components/bold-checkout-button";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { OrderStatus, PaymentMethod } from "@/constants";
-import { amountDueNow, depositBalance, isDepositOrder } from "@/lib/presale-checkout";
-import { depositPaidText, depositPendingText } from "@/lib/presale-copy";
+import { amountDueNow, depositBalance, depositPaidSoFar, isDepositOrder } from "@/lib/presale-checkout";
+import { depositPendingText, depositProgressText } from "@/lib/presale-copy";
 import { currencyFormatter } from "@/lib/utils";
 import { getPaymentMethodLabel, type OrderStageInfo } from "@/lib/order-status";
 import type { Order } from "@/types";
@@ -63,6 +63,7 @@ export function OrderSummaryCard({
   // Preventa con anticipo: el total es el del producto; hoy se cobra el anticipo.
   const deposit = isDepositOrder(order) ? Number(order.depositAmount ?? 0) : 0;
   const depositReceived = deposit > 0 && order.status === OrderStatus.DEPOSIT_PAID;
+  const paidSoFar = depositPaidSoFar(order);
   const totalLabel =
     stage.stage === "paid" ||
     stage.stage === "shipped" ||
@@ -104,7 +105,10 @@ export function OrderSummaryCard({
             <CalendarCheck aria-hidden="true" className="h-4 w-4 shrink-0" />
             Preventa apartada
           </p>
-          <p>{depositPaidText(deposit, depositBalance(order))}</p>
+          <p className="font-semibold" data-testid="deposit-progress">
+            {depositProgressText(paidSoFar, depositBalance(order))}
+          </p>
+          <p>Te escribimos cuando llegue el producto para coordinar el pago y el envío.</p>
         </div>
       )}
 
@@ -155,13 +159,15 @@ export function OrderSummaryCard({
               label={
                 stage.stage === "cancelled"
                   ? "Anticipo"
-                  : depositReceived || stage.stage === "paid" || stage.stage === "shipped" || stage.stage === "delivered"
-                    ? "Anticipo pagado"
-                    : "Anticipo a pagar hoy"
+                  : depositReceived
+                    ? "Pagado hasta ahora"
+                    : stage.stage === "paid" || stage.stage === "shipped" || stage.stage === "delivered"
+                      ? "Anticipo pagado"
+                      : "Anticipo a pagar hoy"
               }
               strong
             >
-              <Currency value={deposit} className="text-2xl font-bold text-pink-froly" />
+              <Currency value={depositReceived ? paidSoFar : deposit} className="text-2xl font-bold text-pink-froly" />
             </Row>
             {order.status !== OrderStatus.PAID && stage.stage !== "cancelled" && (
               <Row label="Saldo al llegar">

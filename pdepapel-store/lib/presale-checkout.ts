@@ -74,6 +74,11 @@ export function amountDueNow(
 }
 
 /** El saldo de una preventa con anticipo (sin el envío, que se cotiza al llegar). */
-export function depositBalance(order: Pick<Order, "total" | "depositAmount">): number {
-  return Math.max(0, Number(order.total) - Number(order.depositAmount ?? 0));
+/** Lo que ya pagó: anticipo + abonos (`paidSoFar`), o el anticipo si el panel no lo manda. */
+export function depositPaidSoFar(order: Pick<Order, "depositAmount" | "paidSoFar">): number {
+  return Number(order.paidSoFar ?? order.depositAmount ?? 0);
+}
+
+export function depositBalance(order: Pick<Order, "total" | "depositAmount" | "paidSoFar">): number {
+  return Math.max(0, Number(order.total) - depositPaidSoFar(order));
 }

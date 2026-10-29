@@ -9,6 +9,7 @@ import {
   ShippingStatus,
   OrderType,
   OrderPaymentPlan,
+  OrderPaymentStatus,
 } from "@prisma/client";
 import { GiftCardReview } from "@prisma/client";
 import type { EmailLineItem, EmailSummaryLine } from "@/emails/components";
@@ -39,7 +40,7 @@ import {
   type BankTransferInfo,
 } from "@/lib/bank-transfer-info";
 import { getAmountDue } from "@/lib/gift-card-amounts";
-import { getAmountDueNow } from "@/lib/order-payment-amounts";
+import { getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
 import { getStoreSettings } from "@/lib/store-settings";
 import { env } from "@/lib/env.mjs";
 import {
@@ -71,6 +72,8 @@ export const ORDER_EMAIL_INCLUDE = {
     include: { product: { select: { name: true } } },
     orderBy: { createdAt: "asc" },
   },
+  // Preventa con anticipo: lo que ya pagó (anticipo + abonos) para el saldo del correo.
+  payments: { where: { status: OrderPaymentStatus.APPROVED }, select: { kind: true, status: true, amount: true } },
   // Un pack de cápsulas cambia el agradecimiento (lib/capsule-receipt.ts).
   capsuleOrder: { select: { packSize: true, edition: { select: { packOptions: { select: { packSize: true, giftLabel: true } } } } } },
 } satisfies Prisma.OrderInclude;
@@ -409,17 +412,29 @@ function bankTransferText(block: BankTransferEmailBlock): string {
 }
 
 /**
- * Preventa con anticipo: qué se pagó y qué falta. El saldo es el total del
- * pedido menos el anticipo; el envío se cotiza cuando llega y se suma al saldo.
+ * Preventa con anticipo: qué se pagó y qué falta. Lo pagado es la suma de los
+ * cobros aprobados (anticipo + abonos); el saldo es el total menos eso, y el
+ * envío se cotiza cuando llega y se suma al saldo. Con `installmentAmount`
+ * es el correo de «Abono recibido».
  */
 export function depositThanksParagraph(
-  order: Pick<EmailOrder, "total" | "depositAmount">,
+  order: Pick<EmailOrder, "total" | "depositAmount"> & { payments?: EmailOrder["payments"] },
   status: OrderStatus,
+  installmentAmount?: number,
 ): string {
   const deposit = Math.round(Number(order.depositAmount ?? 0));
-  const balance = Math.max(0, Math.round(Number(order.total)) - deposit);
+  const total = Math.round(Number(order.total));
+  const paid = order.payments?.length ? sumPrepaid(order.payments) : deposit;
+  const balance = Math.max(0, total - paid);
+  if (status === OrderStatus.DEPOSIT_PAID && installmentAmount) {
+    return balance > 0
+      ? `Recibimos tu abono de ${currencyFormatter(installmentAmount)}. Llevas ${currencyFormatter(paid)} pagado de ${currencyFormatter(total)}; faltan ${currencyFormatter(balance)} más el envío, que pagas cuando llegue el producto.`
+      : `Recibimos tu abono de ${currencyFormatter(installmentAmount)}. Ya pagaste todo (${currencyFormatter(total)}): cuando llegue el producto solo falta el envío.`;
+  }
   if (status === OrderStatus.DEPOSIT_PAID) {
-    return `Recibimos tu anticipo de ${currencyFormatter(deposit)}: tu preventa quedó apartada. Cuando llegue el producto te escribimos para coordinar el pago del saldo de ${currencyFormatter(balance)} más el envío, y ahí lo despachamos.`;
+    return balance > 0
+      ? `Recibimos tu anticipo de ${currencyFormatter(paid)}: tu preventa quedó apartada. Cuando llegue el producto te escribimos para coordinar el pago del saldo de ${currencyFormatter(balance)} más el envío, y ahí lo despachamos.`
+      : `Recibimos tu pago de ${currencyFormatter(paid)}: tu preventa quedó apartada y paga. Cuando llegue el producto te escribimos para coordinar el envío.`;
   }
   if (status === OrderStatus.PAID) {
     return "¡Gracias! Recibimos el saldo de tu preventa. Estamos alistando tu pedido y te avisamos cuando salga.";
@@ -432,7 +447,7 @@ const HANDED_OVER_THANKS = "¡Esperamos que disfrutes tu compra! Si tienes algú
 export function buildOrderEmails(
   order: EmailOrder,
   status: OrderStatus,
-  options: { accountClaimLink?: string | null; bankTransfer?: BankTransferInfo | null } = {},
+  options: { accountClaimLink?: string | null; bankTransfer?: BankTransferInfo | null; installmentAmount?: number } = {},
 ): { admin: BuiltEmail; customer: BuiltEmail | null } {
   const readableStatus = getReadableStatus(status);
   const readablePayment = getReadablePaymentMethod(order.payment);
@@ -477,7 +492,7 @@ export function buildOrderEmails(
       ? `¡Gracias! El código de la tarjeta de regalo ya salió ${giftCardTarget}, en un correo aparte.`
       : "Recibimos tu compra de la tarjeta de regalo. En cuanto el pago se confirme, el código sale por correo."
     : order.paymentPlan === OrderPaymentPlan.DEPOSIT && status !== OrderStatus.CANCELLED && status !== OrderStatus.SENT
-      ? depositThanksParagraph(order, status)
+      ? depositThanksParagraph(order, status, options.installmentAmount)
     : status === OrderStatus.PAID
       ? "¡Gracias por tu compra! Estamos procesando tu pedido y te notificaremos cuando sea enviado."
       : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
@@ -485,7 +500,9 @@ export function buildOrderEmails(
   const admin: BuiltEmail = {
     subject: awaitingApproval
       ? `${flagged ? "⚠️ Posible bot · " : ""}🎁 Tarjeta de regalo esperando aprobación — #${order.orderNumber}`
-      : `${flagged ? "⚠️ Posible bot · " : ""}[Admin] Pedido #${order.orderNumber} - ${readableStatus}${giftCardHeld ? " · Tarjeta en revisión" : ""}`,
+      : options.installmentAmount
+        ? `[Admin] Pedido #${order.orderNumber} - Abono recibido`
+        : `${flagged ? "⚠️ Posible bot · " : ""}[Admin] Pedido #${order.orderNumber} - ${readableStatus}${giftCardHeld ? " · Tarjeta en revisión" : ""}`,
     react: OrderNotification({
       name: order.fullName,
       orderNumber: order.orderNumber,
@@ -514,7 +531,11 @@ export function buildOrderEmails(
 
   const customer: BuiltEmail | null = order.email
     ? {
-        subject: handedOver ? `¡Tu pedido #${order.orderNumber} ha sido entregado!` : `Tu pedido #${order.orderNumber} - ${readableStatus}`,
+        subject: handedOver
+          ? `¡Tu pedido #${order.orderNumber} ha sido entregado!`
+          : options.installmentAmount
+            ? `Tu pedido #${order.orderNumber} - Abono recibido`
+            : `Tu pedido #${order.orderNumber} - ${readableStatus}`,
         react: OrderNotification({
           name: order.fullName,
           orderNumber: order.orderNumber,
@@ -636,7 +657,7 @@ export const sendOrderEmail = async (
       bankTransfer = bankTransferInfoFrom(settings);
       logIncompleteBankTransfer(`correo de pedido #${order.orderNumber}`, missingBankTransferFields(bankTransfer));
     }
-    const built = buildOrderEmails(order, status as OrderStatus, { accountClaimLink, bankTransfer });
+    const built = buildOrderEmails(order, status as OrderStatus, { accountClaimLink, bankTransfer, installmentAmount: options?.installmentAmount });
 
     // Cada destinatario por su lado (lib/email-delivery.ts): si falla el del
     // admin, el de la clienta sale igual, y cada fallo queda registrado.

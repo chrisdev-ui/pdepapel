@@ -22,7 +22,7 @@ import { skipPrivacyBanner } from "../helpers/public-page";
 const ADMIN_DIR = path.resolve(process.cwd(), "../pdepapel-admin");
 const SCREENSHOTS = path.join(ADMIN_DIR, "tmp/preventa-anticipo-shots");
 
-function seed(mode: "seed" | "clean" | "inspect" | "deposit", ...args: string[]) {
+function seed(mode: "seed" | "clean" | "inspect" | "deposit" | "installment", ...args: string[]) {
   const output = execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "scripts/seed-e2e-preorder.ts", mode, ...args], {
     cwd: ADMIN_DIR,
     encoding: "utf8",
@@ -142,8 +142,18 @@ test.describe("preventa con anticipo en la tienda", () => {
     await expect(page.getByText("Anticipo recibido").first()).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText(/Paga el anticipo de/)).toHaveCount(0);
     expect(inspect().orders.find((row) => row.id === orderId)).toMatchObject({ status: "DEPOSIT_PAID", paid: false });
+    await expect(page.getByTestId("deposit-progress")).toHaveText(/Llevas \$\s?30\.000 pagado · faltan \$\s?130\.000 \+ envío/);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     await shot(page, "tienda-pedido-anticipo-recibido-390");
+
+    // Abonos libres: Paula anota un abono de $20.000 y la clienta ve lo que lleva y lo que falta.
+    expect(JSON.parse(seed("installment", orderId, "20000"))).toEqual({ paid: 50000, remaining: 110000 });
+    await page.reload();
+    await expect(page.getByTestId("deposit-progress")).toHaveText(/Llevas \$\s?50\.000 pagado · faltan \$\s?110\.000 \+ envío/, { timeout: 60_000 });
+    await expect(page.getByText("Pagado hasta ahora").first()).toBeVisible();
+    await expect(page.getByText(/Saldo al llegar/).first()).toBeVisible();
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "tienda-pedido-abono-390");
   });
 
   test("«Avísame» de la ficha guarda la fila en la lista de espera, a 390", async ({ page }) => {

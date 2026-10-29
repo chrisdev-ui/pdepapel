@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PolicyPage, POLICY_CONTACT, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { LEGAL_VERSIONS } from "@/lib/legal-versions";
+import { PRESALE_NON_REFUNDABLE } from "@/lib/presale-copy";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -116,8 +117,8 @@ const sections: PolicySection[] = [
           anticipo.
         </p>
         <p>
-          <strong>Si desistes o no pagas el saldo.</strong> El anticipo{" "}
-          <strong>no es reembolsable</strong> si decides no continuar con la
+          <strong>Si desistes o no pagas el saldo.</strong>{" "}
+          <strong>{PRESALE_NON_REFUNDABLE}</strong> si decides no continuar con la
           compra o si no pagas el saldo en el plazo indicado,{" "}
           <strong>salvo el derecho de retracto de ley o si el producto no llega</strong>.
         </p>
