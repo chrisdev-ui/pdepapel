@@ -37,6 +37,16 @@ export function mentionsPresaleProduct(message: string, productName: string): bo
   return wanted.length === 1 ? hits === 1 : hits >= 2;
 }
 
+/** El bot no anota en la lista de espera: quien lo pide pasa a Paula (`wantsPreorderWaitlist`). */
+export const PRESALE_WAITLIST_OFFER = "Si prefieres esperar, dime y te anoto en la lista de espera.";
+
+const WAITLIST_REQUEST = /\blista de espera\b|\b(anotame|anoteme|anotarme|apuntame|apunteme|apuntarme)\b|\bme (anota|anotas|anotan|apunta|apuntas)\b|\b(prefiero|quiero) esperar/;
+
+/** «Anótame», «lista de espera», «prefiero esperar»: la clienta pide que la anoten. */
+export function wantsPreorderWaitlist(message: string): boolean {
+  return WAITLIST_REQUEST.test(normalizeBotText(message));
+}
+
 export interface PresaleAnswerInput {
   name: string;
   slug: string;
@@ -59,7 +69,7 @@ export function buildPresaleAnswer(product: PresaleAnswerInput): string {
     return [
       `¡Sí! ${product.name} está en preventa: cuesta ${currencyFormatter(price)} y lo apartas hoy con ${currencyFormatter(deposit)} de anticipo. El saldo (${currencyFormatter(price - deposit)}) y el envío los pagas cuando llegue. ${arrival}.`,
       `Resérvalo aquí: ${link}`,
-      "¿Prefieres esperar? Escribe «lista de espera» y te avisamos cuando llegue.",
+      PRESALE_WAITLIST_OFFER,
     ].join("\n");
   }
   return [
@@ -68,11 +78,17 @@ export function buildPresaleAnswer(product: PresaleAnswerInput): string {
   ].join("\n");
 }
 
-/** La preventa activa (de un producto visible en la tienda) que la pregunta nombra, si hay una. */
+/**
+ * La preventa abierta que la pregunta nombra, si hay una: activa, de un
+ * producto visible en la tienda y con cupo. Archivado o sin cupo, el bot
+ * contesta como por cualquier producto que no está.
+ */
 export async function findPresaleAnswer(storeId: string, message: string): Promise<string | null> {
   const presales = await prismadb.productPresale.findMany({
     where: { storeId, status: ProductPresaleStatus.ACTIVE, product: { isArchived: false } },
     select: {
+      unitLimit: true,
+      committedUnits: true,
       paymentMode: true,
       depositType: true,
       depositValue: true,
@@ -82,7 +98,12 @@ export async function findPresaleAnswer(storeId: string, message: string): Promi
     },
     take: 20,
   });
-  const match = presales.find((presale) => presale.product.slug && mentionsPresaleProduct(message, presale.product.name));
+  const match = presales.find(
+    (presale) =>
+      presale.product.slug &&
+      (presale.unitLimit === null || presale.committedUnits < presale.unitLimit) &&
+      mentionsPresaleProduct(message, presale.product.name),
+  );
   if (!match) return null;
   return buildPresaleAnswer({ ...match.product, presale: match });
 }

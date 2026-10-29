@@ -74,7 +74,7 @@ import {
   resolveProductSearch,
   type ProductDecision,
 } from "@/lib/whatsapp/bot-products";
-import { findPresaleAnswer } from "@/lib/whatsapp/presale-answer";
+import { findPresaleAnswer, wantsPreorderWaitlist } from "@/lib/whatsapp/presale-answer";
 import {
   detectProductReference,
   parseShownProducts,
@@ -239,6 +239,23 @@ export async function lastBotSearchMissed(conversationId: string, now = new Date
  * Por qué no salió un envío, con su motivo real. Antes todo era
  * `skipped_owner_active` y eso escondía los topes y los turnos perdidos.
  */
+/** Pidió a Paula escribiendo (no con el botón): se le confirma y el bot se calla. */
+async function handOffAsked(conversationId: string, recipient: Parameters<typeof deliver>[1], pace: Parameters<typeof deliver>[4]): Promise<WhatsAppBotResult> {
+  const sent = await deliver(
+    conversationId,
+    recipient,
+    TALK_TO_OWNER_ACKNOWLEDGEMENT,
+    [],
+    pace,
+    // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
+    // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
+    { omitOwnerButton: true, handoff: "owner_requested" },
+  );
+  if (sent.aborted) return abortedOutcome(sent);
+  await escalate(conversationId);
+  return sent.ok ? { outcome: "escalated_owner_requested" } : { outcome: "escalated_owner_requested", error: sent.error };
+}
+
 function abortedOutcome(sent: { reason?: QuietReason }): WhatsAppBotResult {
   switch (sent.reason) {
     case "per_inbound":
@@ -1189,7 +1206,13 @@ async function decideAndAnswer(input: {
   const productBody = greetedProductQuestion ? greetedProductQuestion.rest : input.body;
   const withGreeting = (text: string) => (greetedProductQuestion ? `${GREETING_REPLY_PREFIX} ${text}` : text);
 
-  // 5 bis. Un producto en preventa: la búsqueda solo ve lo que hay en bodega
+  // 5 bis. «Anótame en la lista de espera»: el bot no anota, la lista la lleva
+  //    Paula. Antes de la respuesta de preventa, que nombraría el producto otra vez.
+  if (wantsPreorderWaitlist(productBody)) {
+    return handOffAsked(conversation.id, input.recipient, immediatePacing(input));
+  }
+
+  // 5 ter. Un producto en preventa: la búsqueda solo ve lo que hay en bodega
   //    y lo daría por agotado. Texto plano (lib/whatsapp/presale-answer.ts).
   const presaleAnswer = await findPresaleAnswer(conversation.storeId, productBody).catch((error: unknown) => {
     console.error("[WHATSAPP_BOT] No se pudo revisar las preventas:", error);
@@ -1290,21 +1313,7 @@ async function decideAndAnswer(input: {
   //    una persona, que es lo contrario de lo que necesita oír. Va después de
   //    las palabras clave para que una respuesta de Paula siga mandando.
   if (normalizeBotText(input.body) === normalizeBotText(TALK_TO_OWNER_BUTTON_TITLE)) {
-    const sent = await deliver(
-      conversation.id,
-      input.recipient,
-      TALK_TO_OWNER_ACKNOWLEDGEMENT,
-      [],
-      immediatePacing(input),
-      // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
-      // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true, handoff: "owner_requested" },
-    );
-    if (sent.aborted) return abortedOutcome(sent);
-    await escalate(conversation.id);
-    return sent.ok
-      ? { outcome: "escalated_owner_requested" }
-      : { outcome: "escalated_owner_requested", error: sent.error };
+    return handOffAsked(conversation.id, input.recipient, immediatePacing(input));
   }
 
   // 6 ter. Solo «ok», «gracias», «listo»: no pide nada. Ni «Esa no me la sé» ni
