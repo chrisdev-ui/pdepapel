@@ -20,6 +20,8 @@ export enum OrderStatus {
   CREATED = "CREATED",
   PENDING = "PENDING",
   PAID = "PAID",
+  /** Preventa con anticipo: el anticipo entró; el saldo y el envío se pagan cuando llegue. */
+  DEPOSIT_PAID = "DEPOSIT_PAID",
   CANCELLED = "CANCELLED",
 }
 

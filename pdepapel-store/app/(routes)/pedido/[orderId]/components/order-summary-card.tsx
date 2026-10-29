@@ -1,12 +1,15 @@
 "use client";
 
-import { Lock, Printer, Receipt } from "lucide-react";
+import { CalendarCheck, Lock, Printer, Receipt } from "lucide-react";
 
 import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
 import { BoldCheckoutButton } from "@/components/bold-checkout-button";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
-import { PaymentMethod } from "@/constants";
+import { OrderStatus, PaymentMethod } from "@/constants";
+import { amountDueNow, depositBalance, isDepositOrder } from "@/lib/presale-checkout";
+import { depositPaidText, depositPendingText } from "@/lib/presale-copy";
+import { currencyFormatter } from "@/lib/utils";
 import { getPaymentMethodLabel, type OrderStageInfo } from "@/lib/order-status";
 import type { Order } from "@/types";
 import { OrderSection } from "./order-section";
@@ -57,6 +60,9 @@ export function OrderSummaryCard({
   // Lo que se pagó por fuera de la tarjeta; el total del pedido no cambia.
   const amountDue = Math.max(0, order.total - giftCardAmount);
   const canCollectPayment = awaitingPayment && stage.stage !== "cancelled";
+  // Preventa con anticipo: el total es el del producto; hoy se cobra el anticipo.
+  const deposit = isDepositOrder(order) ? Number(order.depositAmount ?? 0) : 0;
+  const depositReceived = deposit > 0 && order.status === OrderStatus.DEPOSIT_PAID;
   const totalLabel =
     stage.stage === "paid" ||
     stage.stage === "shipped" ||
@@ -79,7 +85,26 @@ export function OrderSummaryCard({
           role="status"
           className="rounded-xl border border-kawaii-yellow bg-kawaii-yellow-light/60 p-3 text-sm text-yellow-950"
         >
-          {stage.description}
+          {deposit > 0
+            ? // Un intento rechazado conserva su explicación («No se hizo ningún cargo…»).
+              order.paymentResult === "declined"
+              ? `${stage.description} ${depositPendingText(deposit)}.`
+              : `${depositPendingText(deposit)}.`
+            : stage.description}
+        </div>
+      )}
+
+      {depositReceived && (
+        <div
+          role="status"
+          data-testid="deposit-paid-card"
+          className="flex flex-col gap-1.5 rounded-xl border border-kawaii-mint bg-kawaii-mint-light/60 p-3 text-sm text-emerald-950"
+        >
+          <p className="flex items-center gap-2 font-sans text-base font-bold">
+            <CalendarCheck aria-hidden="true" className="h-4 w-4 shrink-0" />
+            Preventa apartada
+          </p>
+          <p>{depositPaidText(deposit, depositBalance(order))}</p>
         </div>
       )}
 
@@ -99,7 +124,9 @@ export function OrderSummaryCard({
         )}
         {!digital && (
           <Row label={order.shipping?.provider === "NONE" ? "Retiro en tienda" : "Envío"}>
-            {shippingCost > 0 ? (
+            {deposit > 0 && shippingCost === 0 ? (
+              <span className="text-sm font-semibold text-muted-foreground">Se cotiza cuando llegue</span>
+            ) : shippingCost > 0 ? (
               <Currency value={shippingCost} className="text-sm font-semibold" />
             ) : (
               <span className="text-sm font-semibold text-success">Gratis</span>
@@ -112,10 +139,37 @@ export function OrderSummaryCard({
           </Row>
         )}
         <div className="border-t border-dashed border-border pt-2">
-          <Row label={giftCardAmount > 0 ? "Total del pedido" : totalLabel} strong={giftCardAmount === 0}>
-            <Currency value={order.total} className={giftCardAmount > 0 ? "text-sm font-semibold" : "text-2xl font-bold text-pink-froly"} />
-          </Row>
+          {deposit > 0 ? (
+            <Row label="Total del producto">
+              <Currency value={order.total} className="text-sm font-semibold" />
+            </Row>
+          ) : (
+            <Row label={giftCardAmount > 0 ? "Total del pedido" : totalLabel} strong={giftCardAmount === 0}>
+              <Currency value={order.total} className={giftCardAmount > 0 ? "text-sm font-semibold" : "text-2xl font-bold text-pink-froly"} />
+            </Row>
+          )}
         </div>
+        {deposit > 0 && (
+          <>
+            <Row
+              label={
+                stage.stage === "cancelled"
+                  ? "Anticipo"
+                  : depositReceived || stage.stage === "paid" || stage.stage === "shipped" || stage.stage === "delivered"
+                    ? "Anticipo pagado"
+                    : "Anticipo a pagar hoy"
+              }
+              strong
+            >
+              <Currency value={deposit} className="text-2xl font-bold text-pink-froly" />
+            </Row>
+            {order.status !== OrderStatus.PAID && stage.stage !== "cancelled" && (
+              <Row label="Saldo al llegar">
+                <span className="text-sm font-semibold">{currencyFormatter.format(depositBalance(order))} + envío</span>
+              </Row>
+            )}
+          </>
+        )}
         {giftCardAmount > 0 && (
           <>
             <Row label="Tarjeta de regalo">
@@ -150,7 +204,7 @@ export function OrderSummaryCard({
 
       {canCollectPayment && (method === PaymentMethod.Bold || (method as string) === "Bold") && (
         <BoldCheckoutButton
-          order={{ id: order.id, orderNumber: order.orderNumber, total: order.total }}
+          order={{ id: order.id, orderNumber: order.orderNumber, total: amountDueNow(order) }}
           autoOpen={autoOpenPayment}
         />
       )}
@@ -174,6 +228,10 @@ export function OrderSummaryCard({
             orderNumber: order.orderNumber,
             total: order.total,
             fullName: order.fullName,
+            status: order.status,
+            paymentPlan: order.paymentPlan,
+            depositAmount: order.depositAmount,
+            giftCardAmount: order.giftCardAmount,
           }}
         />
       )}

@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Ban,
+  CalendarCheck,
   CheckCircle2,
   Clock,
   HandCoins,
@@ -25,6 +26,7 @@ const STAGE_ICONS: Record<OrderStageInfo["stage"], LucideIcon> = {
   verifying: Clock,
   cod: HandCoins,
   paid: CheckCircle2,
+  deposit_paid: CalendarCheck,
   shipped: Truck,
   delivered: PackageCheck,
   issue: AlertTriangle,

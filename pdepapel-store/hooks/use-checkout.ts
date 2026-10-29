@@ -1,6 +1,7 @@
 import { checkoutOrder } from "@/actions/checkout-order";
 import { createNewOrder } from "@/actions/create-new-order";
 import { PaymentMethod } from "@/constants";
+import { resolveCheckoutEndpoint } from "@/lib/presale-checkout";
 import { CheckoutOrder, CheckoutResponse, Order } from "@/types";
 import { useMutation } from "@tanstack/react-query";
 
@@ -43,10 +44,12 @@ export default function useCheckout({
     switch (data.payment.method) {
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
-        return await createNewOrder(data, sessionToken, idempotencyKey);
       case PaymentMethod.Bold:
       case PaymentMethod.Wompi:
-        return await checkoutOrder(data, sessionToken, idempotencyKey);
+        // La transferencia de una preventa con anticipo también va a /checkout.
+        return resolveCheckoutEndpoint(data) === "checkout"
+          ? await checkoutOrder(data, sessionToken, idempotencyKey)
+          : await createNewOrder(data, sessionToken, idempotencyKey);
       default:
         throw new Error("Método de pago no disponible");
     }

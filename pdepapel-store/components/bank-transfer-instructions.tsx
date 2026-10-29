@@ -34,6 +34,7 @@ import {
   missingBankTransferFields,
   reportIncompleteBankTransfer,
 } from "@/lib/bank-transfer";
+import { amountDueNow } from "@/lib/presale-checkout";
 import { SUPPORT_WHATSAPP_NUMBER } from "@/lib/support";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 
@@ -43,6 +44,11 @@ interface BankTransferInstructionsProps {
     orderNumber: string;
     total: number;
     fullName?: string;
+    /** Para transferir lo que falta hoy: el anticipo de una reserva, o el total menos la tarjeta de regalo. */
+    status?: string;
+    paymentPlan?: "FULL" | "DEPOSIT" | null;
+    depositAmount?: number | null;
+    giftCardAmount?: number;
   };
   compact?: boolean;
 }
@@ -67,7 +73,14 @@ export const BankTransferInstructions: React.FC<
     bancolombiaAccount.match(/\d[\d\s.-]{5,}\d/)?.[0].replace(/\s/g, "") ??
     bancolombiaAccount;
   const whatsappNumber = bankTransfer.whatsappNumber ?? SUPPORT_WHATSAPP_NUMBER;
-  const formattedTotal = currencyFormatter.format(order.total);
+  const amountToTransfer = amountDueNow({
+    status: order.status ?? "PENDING",
+    total: order.total,
+    paymentPlan: order.paymentPlan,
+    depositAmount: order.depositAmount,
+    giftCardAmount: order.giftCardAmount,
+  });
+  const formattedTotal = currencyFormatter.format(amountToTransfer);
 
   const copyToClipboard = async (text: string, label: string) => {
     const copied = await onCopy(text, {
@@ -183,7 +196,7 @@ export const BankTransferInstructions: React.FC<
               size="sm"
               className="h-8 w-full border-purple-200 bg-purple-50/60 px-2 text-xs font-semibold text-purple-950 hover:bg-purple-100 hover:text-purple-950 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
               onClick={() =>
-                copyToClipboard(order.total.toString(), "Valor de la orden")
+                copyToClipboard(amountToTransfer.toString(), "Valor de la orden")
               }
             >
               {copiedField === "Valor de la orden" ? (

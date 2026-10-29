@@ -14,6 +14,7 @@ import { PresaleCartNotice } from "@/components/presale-cart-notice";
 import { WelcomeBenefitCard } from "@/components/welcome-benefit-card";
 import { PaymentMethod } from "@/constants";
 import { currencyFormatter } from "@/lib/utils";
+import { DEPOSIT_NO_COUPON_NOTE, depositTermsCheckboxText, PRESALE_TERMS_HREF } from "@/lib/presale-copy";
 import { useCart } from "@/hooks/use-cart";
 import { isPresaleItem } from "@/lib/purchasable-units";
 import { AlertTriangle, MapPin, UserRound } from "lucide-react";
@@ -36,9 +37,18 @@ import {
   type ShippingRecovery,
 } from "./shipping-rate-recovery";
 
+export interface DepositCheckoutTerms {
+  /** Anticipo que se cobra hoy (todas las unidades). */
+  dueNow: number;
+  accepted: boolean;
+  onAcceptedChange: (accepted: boolean) => void;
+}
+
 interface PaymentInfoStepProps {
   /** Pack de cápsulas: en línea o por transferencia, sin contra entrega ni cupones (el servidor los rechaza). */
   capsuleMode?: boolean;
+  /** Preventa con anticipo: en línea o transferencia, sin cupón ni tarjeta, con la casilla de condiciones. */
+  depositTerms?: DepositCheckoutTerms | null;
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
   couponState: CouponState;
@@ -73,6 +83,7 @@ const formatDeliveryDays = (days?: number) => {
 
 export const PaymentInfoStep = ({
   capsuleMode = false,
+  depositTerms = null,
   form,
   isLoading,
   couponState,
@@ -103,6 +114,7 @@ export const PaymentInfoStep = ({
   const shippingOptionType = form.watch("shippingOptionType");
   const values = form.getValues();
   const paymentLabelId = useId();
+  const termsId = useId();
   // Regla 1 de la preventa: se paga al reservar. Contra entrega no cobraría
   // hasta que el paquete llegue —semanas después—, así que el pedido quedaría
   // sin pagar y sin cupo. La API lo rechaza también; aquí se evita que la
@@ -246,7 +258,7 @@ export const PaymentInfoStep = ({
                 disabled={isLoading || giftCardCoversAll}
                 ariaLabelledBy={paymentLabelId}
                 omit={!codAvailable ? [PaymentMethod.COD] : []}
-                hide={capsuleMode ? [PaymentMethod.COD] : []}
+                hide={capsuleMode || depositTerms ? [PaymentMethod.COD] : []}
                 disabledMessages={
                   !codAvailable
                     ? {
@@ -347,6 +359,39 @@ export const PaymentInfoStep = ({
         </div>
       </div>
 
+      {depositTerms ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground" data-testid="deposit-no-coupon-note">{DEPOSIT_NO_COUPON_NOTE}.</p>
+          <label
+            htmlFor={termsId}
+            className="flex min-h-[2.75rem] cursor-pointer items-start gap-3 rounded-xl border-2 border-blue-baby bg-blue-purple/10 p-3.5 text-sm leading-relaxed text-blue-yankees"
+          >
+            <input
+              id={termsId}
+              type="checkbox"
+              required
+              checked={depositTerms.accepted}
+              onChange={(event) => depositTerms.onAcceptedChange(event.target.checked)}
+              disabled={isLoading}
+              aria-describedby={`${termsId}-link`}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-blue-yankees"
+              data-testid="deposit-terms-checkbox"
+            />
+            <span>
+              {depositTermsCheckboxText(depositTerms.dueNow)}{" "}
+              <a
+                id={`${termsId}-link`}
+                href={PRESALE_TERMS_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline underline-offset-4"
+              >
+                Ver condiciones de la preventa
+              </a>
+            </span>
+          </label>
+        </div>
+      ) : (
       <div className="space-y-4">
         {capsuleMode ? (
           <p className="text-sm text-muted-foreground">Los cupones no aplican a los packs de cápsulas.</p>
@@ -385,6 +430,7 @@ export const PaymentInfoStep = ({
           </p>
         ) : null}
       </div>
+      )}
 
       <FormField
         control={form.control}

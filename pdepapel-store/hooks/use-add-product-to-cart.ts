@@ -2,6 +2,7 @@ import { useCallback } from "react";
 
 import { useCart } from "@/hooks/use-cart";
 import { useCartSheet } from "@/hooks/use-cart-sheet";
+import { usePresaleCartConflict } from "@/hooks/use-presale-cart-conflict";
 import { toast } from "@/hooks/use-toast";
 import { getAnalyticsValue, toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
@@ -22,6 +23,10 @@ export function useAddProductToCart(source: string) {
       const requested = Math.max(1, quantity);
       const result = inCart ? updateQuantity(product.id, requested) : addItem(product, requested);
 
+      if (!result.ok && result.status === "presale_alone") {
+        usePresaleCartConflict.getState().ask({ product, quantity: requested, uiSource: source });
+        return false;
+      }
       if (!result.ok) {
         toast({
           description:

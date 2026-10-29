@@ -16,14 +16,15 @@ describe("Términos y condiciones", () => {
   it("tiene sus secciones en orden, la fecha y ningún marcador sin llenar", () => {
     const { container } = render(<TermsPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Términos y condiciones de P de Papel" })).toBeInTheDocument();
-    expect(screen.getByText("21 de octubre de 2026")).toBeInTheDocument();
+    expect(screen.getByText("28 de octubre de 2026")).toBeInTheDocument();
     const article = container.querySelector("article") ?? container;
     const titles = within(article as HTMLElement).getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
-    expect(titles.slice(0, 13)).toEqual([
+    expect(titles.slice(0, 14)).toEqual([
       "Quiénes somos",
       "Uso del sitio",
       "Productos, precios y disponibilidad",
       "Pedidos y pagos",
+      "Preventas y anticipos",
       "Envíos",
       "Cambios, devoluciones y derecho de retracto",
       "Garantía legal",
@@ -45,6 +46,20 @@ describe("Términos y condiciones", () => {
       expect(hrefs).toContain(route);
     }
     expect(container.querySelector("#peticiones-quejas-reclamos")).not.toBeNull();
+  });
+
+  it("tiene la sección de preventas con anticipo que enlaza el checkout (#preventas)", () => {
+    const { container } = render(<TermsPage />);
+    const section = container.querySelector("#preventas");
+    expect(section).not.toBeNull();
+    const text = section!.textContent!.replace(/\s+/g, " ");
+    expect(text).toContain("Preventas y anticipos");
+    expect(text).toContain("no es reembolsable");
+    expect(text).toContain("salvo el derecho de retracto de ley o si el producto no llega");
+    expect(text).toContain("te devolvemos el 100 % de lo que pagaste, incluido el anticipo");
+    expect(text).toContain("dentro del plazo que te indiquemos al avisarte");
+    expect(text).toContain("El envío se cotiza y se paga con el saldo.");
+    expect(text).not.toMatch(/\[N\]/);
   });
 
   it("nombra al mismo responsable que la política de datos", () => {

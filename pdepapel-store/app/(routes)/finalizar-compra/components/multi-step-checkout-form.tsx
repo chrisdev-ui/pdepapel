@@ -59,6 +59,9 @@ import {
 } from "@/lib/customer-analytics";
 import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { readEarlyAccessCookie } from "@/lib/early-access";
+import { applyDepositCheckout, DEPOSIT_SHIPPING } from "@/lib/presale-checkout";
+import { DEPOSIT_SHIPPING_NOTE, depositSubmitLabel } from "@/lib/presale-copy";
+import { isDepositPresaleItem } from "@/lib/presale-deposit";
 import { normalizePhoneForInput } from "@/lib/phone";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -235,7 +238,8 @@ const formSchema = z
     paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.Bold),
     shippingProvider: z.string().default("ENVIOCLICK"),
     shippingOptionType: z
-      .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP"])
+      // PRESALE_DEPOSIT: preventa con anticipo, el envío se cotiza al llegar.
+      .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP", "PRESALE_DEPOSIT"])
       .default("ENVIOCLICK"),
     envioClickIdRate: z.number().optional(),
     shipping: shippingSchema,
@@ -489,6 +493,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [form]);
 
   const activeItems = cart.items;
+  // Preventa con anticipo: se compra sola, sin cupón, tarjeta ni contra
+  // entrega, y el envío se cobra con el saldo (el panel lo exige igual).
+  const depositMode = !capsuleMode && activeItems.some((item) => isDepositPresaleItem(item));
+  // Consentimiento: empieza sin marcar y nunca se guarda en el navegador.
+  const [preorderTermsAccepted, setPreorderTermsAccepted] = useState(false);
 
   useEffect(() => {
     if (completedOrderPath) return;
@@ -512,6 +521,34 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const paymentMethod = form.watch("paymentMethod");
   const shippingOptionType = form.watch("shippingOptionType");
 
+  // Lo guardado de otra visita no vale aquí: la reserva no cotiza envío ni
+  // lleva cupón; y un carrito normal no hereda el envío de una reserva.
+  useEffect(() => {
+    if (!shippingOptionType) return;
+    if (depositMode) {
+      if (shippingOptionType !== "PRESALE_DEPOSIT") {
+        form.setValue("shippingOptionType", "PRESALE_DEPOSIT");
+        form.setValue("shippingProvider", "MANUAL");
+        form.setValue("envioClickIdRate", 0);
+        form.setValue("shipping", { ...DEPOSIT_SHIPPING, codFee: null });
+      }
+      if (form.getValues("couponCode")) form.setValue("couponCode", "");
+      if (form.getValues("giftCardCode")) form.setValue("giftCardCode", "");
+      if (paymentMethod === PaymentMethod.COD) form.setValue("paymentMethod", PaymentMethod.Bold);
+    } else if (shippingOptionType === "PRESALE_DEPOSIT") {
+      form.setValue("shippingOptionType", "ENVIOCLICK");
+      form.setValue("shippingProvider", "ENVIOCLICK");
+      form.setValue("envioClickIdRate", 0);
+      form.setValue("shipping", {});
+    }
+  }, [depositMode, form, paymentMethod, shippingOptionType]);
+
+  useEffect(() => {
+    if (!depositMode) return;
+    setCouponState((previous) => (previous.coupon || previous.isValid !== null ? { coupon: null, isValid: null } : previous));
+    setGiftCardState((previous) => (previous.card || previous.isValid !== null ? { card: null, isValid: null } : previous));
+  }, [depositMode]);
+
   useEffect(() => {
     if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
       form.setValue("paymentMethod", PaymentMethod.Bold, {
@@ -532,7 +569,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       ? Math.max(0, quotedCodFee)
       : 0;
 
-  const { total, subtotal, couponDiscount, productSavings, freeShipping } =
+  const { total, subtotal, couponDiscount, productSavings, freeShipping, dueNow, balanceDue } =
     useMemo(
       () =>
         calculateTotals(
@@ -545,10 +582,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       [activeItems, couponState.coupon, shippingCost, freeShippingThreshold, codFee],
     );
   // Cupón primero (ya está en `total`); la tarjeta cubre lo que queda.
-  const giftCardApplied = giftCardState.card
+  const giftCardApplied = giftCardState.card && !depositMode
     ? Math.max(0, Math.min(giftCardState.card.balance, total))
     : 0;
-  const amountDue = Math.max(0, total - giftCardApplied);
+  // Con anticipo se cobra hoy solo el anticipo; `total` sigue siendo el valor del producto.
+  const amountDue = depositMode ? dueNow : Math.max(0, total - giftCardApplied);
   const giftCardCoversAll = giftCardApplied > 0 && amountDue === 0;
 
   // Reenviar SOLO cuando `shipping.cost` ya es el nuevo: en ese render `total`
@@ -586,14 +624,23 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     if (checkoutStartedRef.current || analyticsItems.length === 0) return;
 
     checkoutStartedRef.current = true;
+    // Una reserva con anticipo vale hoy el anticipo, no el producto completo.
+    const startValue = depositMode ? dueNow : getAnalyticsValue(analyticsItems);
     trackCustomerEvent("begin_checkout", {
       browser_context: getBrowserContext(navigator.userAgent),
       currency: "COP",
       items: analyticsItems,
-      value: getAnalyticsValue(analyticsItems),
+      value: startValue,
     });
+    if (depositMode) {
+      trackCustomerEvent("preorder_deposit_start", {
+        currency: "COP",
+        items: analyticsItems,
+        value: dueNow,
+      });
+    }
     trackTikTokEvent("InitiateCheckout", tiktokProductParameters(analyticsItems));
-  }, [analyticsItems]);
+  }, [analyticsItems, depositMode, dueNow]);
 
   useEffect(() => {
     const checkoutStepName = getCheckoutStepName(currentStep);
@@ -823,15 +870,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   };
 
   const rememberPendingOrder = useCallback(
-    (order: { id: string; orderNumber?: string; total?: number }) => {
+    (order: { id: string; orderNumber?: string; total?: number; depositAmount?: number | null }) => {
       setPendingOrder({
         id: order.id,
         orderNumber: order.orderNumber || order.id,
-        total: Number(order.total ?? total),
+        // Lo que falta pagar: en una reserva, el anticipo.
+        total: Number(order.depositAmount || order.total || amountDue),
         createdAt: Date.now(),
       });
     },
-    [setPendingOrder, total],
+    [amountDue, setPendingOrder],
   );
 
   const { mutateAsync, status } = useCheckout({
@@ -969,17 +1017,22 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         const isBankTransfer =
           !paidWithGiftCard &&
           form.getValues("paymentMethod") === PaymentMethod.BankTransfer;
+        const isDepositReservation = order.paymentPlan === "DEPOSIT";
         if (!isBankTransfer) fireConfetti();
         toast({
           title: paidWithGiftCard
             ? "¡Pedido pagado con tu tarjeta de regalo!"
             : isBankTransfer
-              ? "Pedido reservado, falta la transferencia"
+              ? isDepositReservation
+                ? "Reserva creada, falta el anticipo"
+                : "Pedido reservado, falta la transferencia"
               : "¡Pedido creado!",
           description: paidWithGiftCard
             ? `Tu pedido #${order.orderNumber || order.id} ya está pagado. Empezamos a prepararlo.`
             : isBankTransfer
-              ? "Te mostramos los datos para transferir. Lo verificamos manualmente y te confirmamos."
+              ? isDepositReservation
+                ? "Te mostramos los datos para transferir el anticipo. Lo verificamos manualmente y te confirmamos."
+                : "Te mostramos los datos para transferir. Lo verificamos manualmente y te confirmamos."
               : `Tu pedido #${order.orderNumber || order.id} quedó registrado.`,
           variant: "success",
         });
@@ -1096,6 +1149,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   const onSubmit = async (data: CheckoutFormValue): Promise<void> => {
     if (isSubmittingRef.current || status === "pending") return;
+    if (depositMode && !preorderTermsAccepted) {
+      toast({
+        title: "Falta aceptar las condiciones",
+        description: "Marca la casilla de las condiciones de la preventa para continuar.",
+        variant: "warning",
+      });
+      return;
+    }
     isSubmittingRef.current = true;
     setIsPreparingSubmit(true);
 
@@ -1200,7 +1261,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         typeof quotedFee === "number"
           ? Math.max(0, quotedFee)
           : null;
-      const formattedData = {
+      const baseData = {
         ...(capsuleMode ? { capsuleVideoConsent: capsulePack.videoConsent } : {}),
         fullName: fullName.trim(),
         phone: telephone,
@@ -1255,6 +1316,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         giftRecipientPhone: isGift ? giftRecipientPhone || null : null,
         giftMessage: isGift ? giftMessage?.trim() || null : null,
       };
+      const formattedData = depositMode ? applyDepositCheckout(baseData) : baseData;
 
       trackCustomerEvent("add_payment_info", {
         currency: "COP",
@@ -1295,14 +1357,18 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     }
   };
 
-  const submitLabel = giftCardCoversAll
+  const submitLabel = depositMode
+    ? depositSubmitLabel(amountDue)
+    : giftCardCoversAll
     ? "Confirmar pedido"
     : paymentMethod === PaymentMethod.Bold ||
         paymentMethod === PaymentMethod.Wompi
       ? `Pagar ${currencyFormatter.format(amountDue)}`
       : "Confirmar pedido";
 
-  const submitFootnote =
+  const submitFootnote = depositMode && paymentMethod === PaymentMethod.BankTransfer ? (
+      <>Te mostraremos la cuenta y el valor del anticipo en la siguiente pantalla.</>
+    ) :
     paymentMethod === PaymentMethod.Bold ||
     paymentMethod === PaymentMethod.Wompi ? (
       <>
@@ -1316,6 +1382,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     );
 
   const shippingSummary = (() => {
+    if (depositMode) {
+      return (
+        <span className="text-sm text-muted-foreground">Con el saldo</span>
+      );
+    }
     if (shippingOptionType === "MEDELLIN_LOCAL") {
       return (
         <span className="text-sm text-muted-foreground">
@@ -1451,11 +1522,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           );
         })}
       </ul>
-      <FreeShippingProgress
-        subtotal={subtotal}
-        threshold={freeShippingThreshold}
-        className="border-y py-3"
-      />
+      {!depositMode && (
+        <FreeShippingProgress
+          subtotal={subtotal}
+          threshold={freeShippingThreshold}
+          className="border-y py-3"
+        />
+      )}
       <dl className="flex w-full flex-col gap-2.5 text-sm">
         <div className="flex items-center justify-between">
           <dt>Subtotal</dt>
@@ -1526,9 +1599,25 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             </div>
           </>
         ) : null}
+        {depositMode ? (
+          <>
+            <div className="flex items-center justify-between">
+              <dt>Total del producto</dt>
+              <dd>
+                <Currency className="text-base font-semibold" value={total} />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Saldo al llegar</dt>
+              <dd className="font-quicksand text-base font-semibold" data-testid="checkout-deposit-balance">
+                {currencyFormatter.format(balanceDue)} + envío
+              </dd>
+            </div>
+          </>
+        ) : null}
         <div className="flex items-center justify-between border-t border-dashed pt-3">
           <dt className="text-base font-bold">
-            {giftCardCoversAll ? "Te queda por pagar" : "Total a pagar"}
+            {depositMode ? "Pagas hoy (anticipo)" : giftCardCoversAll ? "Te queda por pagar" : "Total a pagar"}
           </dt>
           <dd className="flex flex-col items-end">
             <Currency
@@ -1542,7 +1631,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         </div>
       </dl>
       <p className="text-xs text-muted-foreground">
-        Sin cargos ocultos: el envío que ves es el que pagas.
+        {depositMode
+          ? `${DEPOSIT_SHIPPING_NOTE}.`
+          : "Sin cargos ocultos: el envío que ves es el que pagas."}
       </p>
       <ul className="flex flex-col gap-2 border-t pt-3 text-xs text-foreground/80">
         <li className="flex items-center gap-2">
@@ -1670,6 +1761,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           isGuest={isGuest}
                           freeShippingThreshold={freeShippingThreshold}
                           freeShipping={freeShipping}
+                          shippingNote={depositMode ? `${DEPOSIT_SHIPPING_NOTE}.` : null}
                         />
                       )}
                       {currentStep === 2 && (
@@ -1685,11 +1777,21 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           orderTotal={subtotal}
                           amountBeforeShipping={Math.max(0, subtotal - couponDiscount)}
                           freeShipping={freeShipping}
+                          depositPresale={depositMode}
                         />
                       )}
                       {currentStep === 3 && (
                         <PaymentInfoStep
                           capsuleMode={capsuleMode}
+                          depositTerms={
+                            depositMode
+                              ? {
+                                  dueNow: amountDue,
+                                  accepted: preorderTermsAccepted,
+                                  onAcceptedChange: setPreorderTermsAccepted,
+                                }
+                              : null
+                          }
                           form={form}
                           isLoading={isPendingSubmit}
                           couponState={couponState}
@@ -1729,7 +1831,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       onBack={handleBack}
                       isNextDisabled={
                         currentStep === FORM_STEPS.length &&
-                        stockConflicts.length > 0
+                        (stockConflicts.length > 0 || (depositMode && !preorderTermsAccepted))
                       }
                       isLoading={isPendingSubmit || isNavigating}
                       submitLabel={submitLabel}
@@ -1760,10 +1862,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           {currentStep === FORM_STEPS.length ? (
             <LegalConsent action="checkout" className="mx-auto mb-2 max-w-lg text-[11px]" />
           ) : null}
+          {currentStep === FORM_STEPS.length && depositMode && !preorderTermsAccepted ? (
+            <p className="mx-auto mb-2 max-w-lg text-[11px] font-semibold text-amber-800" data-testid="deposit-terms-sticky-hint">
+              Marca la casilla de las condiciones de la preventa para pagar.
+            </p>
+          ) : null}
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <div className="flex min-w-0 flex-col">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Total a pagar
+                {depositMode ? "Pagas hoy" : "Total a pagar"}
               </span>
               <Currency
                 className="text-lg font-black text-pink-froly"
@@ -1775,7 +1882,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               disabled={
                 isPendingSubmit ||
                 isNavigating ||
-                (currentStep === FORM_STEPS.length && stockConflicts.length > 0)
+                (currentStep === FORM_STEPS.length &&
+                  (stockConflicts.length > 0 || (depositMode && !preorderTermsAccepted)))
               }
               aria-busy={isPendingSubmit || undefined}
               className="ml-auto h-12 shrink-0 rounded-full px-6 text-base font-semibold"

@@ -92,6 +92,19 @@ describe("vaciar el carrito en la página del pedido", () => {
     expect(useCheckoutStore.getState().pendingOrder).toBeNull();
   });
 
+  it("el anticipo recibido de una preventa también cierra la reserva del carrito", async () => {
+    useCart.setState({ items: [cartItem("cal", 1)] });
+    useCheckoutStore.setState({
+      pendingOrder: { id: "order-1", orderNumber: "ORD-1", createdAt: Date.now() } as never,
+    });
+    const depositPaid = { ...paidOrder([["cal", 1]]), status: OrderStatus.DEPOSIT_PAID, paymentPlan: "DEPOSIT", depositAmount: 3000 } as Order;
+
+    render(<SingleOrderPage order={depositPaid} />);
+
+    await waitFor(() => expect(useCart.getState().items).toHaveLength(0));
+    expect(useCheckoutStore.getState().pendingOrder).toBeNull();
+  });
+
   it("no vacía nada mientras el pedido no esté pagado", async () => {
     useCart.setState({ items: [cartItem("p1", 2)] });
     const pending = { ...paidOrder([["p1", 2]]), status: OrderStatus.PENDING } as Order;

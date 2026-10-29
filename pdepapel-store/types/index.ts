@@ -116,11 +116,19 @@ export interface Product {
   /** Preventa activa: se puede reservar hoy y llega en la fecha prometida. */
   presales?: {
     id: string;
-    expectedArrivalAt: string;
-    unitLimit: number;
+    /** Fecha estimada; null cuando solo hay texto («primera semana de diciembre») o nada. */
+    expectedArrivalAt: string | null;
+    expectedArrivalText?: string | null;
+    /** null: sin tope de campaña (cada pedido lleva hasta `PRESALE_MAX_PER_ORDER`). */
+    unitLimit: number | null;
     committedUnits: number;
     /** Apartadas por pedidos recientes sin pagar; solo viene en consultas sin caché. */
     heldUnits?: number;
+    /** FULL: se paga completo al reservar. DEPOSIT: anticipo hoy, saldo y envío al llegar. */
+    paymentMode?: "FULL" | "DEPOSIT";
+    depositType?: "FIXED" | "PERCENT" | null;
+    depositValue?: number | null;
+    termsText?: string | null;
   }[];
   /** Escalera de precio por cantidad; vacía o ausente = precio plano. */
   priceTiers?: { minQuantity: number; unitPrice: number }[];
@@ -342,6 +350,11 @@ export interface Order {
   giftMessage?: string | null;
   /** Lo que una tarjeta de regalo cubrió de este pedido (0 si ninguna). */
   giftCardAmount?: number;
+  /** Preventa con anticipo: «DEPOSIT»; el resto de pedidos, «FULL» o sin el campo. */
+  paymentPlan?: "FULL" | "DEPOSIT" | null;
+  /** Anticipo acordado al reservar (pesos); el saldo es `total − depositAmount`. */
+  depositAmount?: number | null;
+  depositPaidAt?: string | null;
   /** La tarjeta que este pedido compró (solo pedidos de tipo GIFT_CARD). */
   giftCardPurchase?: {
     recipientName: string | null;
@@ -565,6 +578,8 @@ export interface CheckoutOrder {
     method: PaymentMethod;
   };
   shipping?: {
+    /** «CUSTOM»: envío sin cotizar (preventa con anticipo: se cobra con el saldo). */
+    provider?: string;
     carrierName?: string;
     courier?: string;
     productName?: string;
@@ -589,6 +604,9 @@ export interface CheckoutOrder {
   giftRecipientEmail?: string | null;
   giftRecipientPhone?: string | null;
   giftMessage?: string | null;
+  /** Preventa con anticipo: la casilla de condiciones marcada y su versión. */
+  preorderTermsAccepted?: boolean;
+  preorderTermsVersion?: string;
 }
 
 export interface DaneLocation {

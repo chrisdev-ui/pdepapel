@@ -68,4 +68,20 @@ describe("aviso de preventa en el carrito", () => {
     expect(container.textContent).toContain("3 de nov");
     expect(container.textContent).not.toContain("15 de oct");
   });
+
+  it("una preventa sin fecha no inventa una: dice «Fecha estimada: …» y, con anticipo, cuándo se paga el resto", () => {
+    const { container } = render(
+      <PresaleCartNotice
+        items={[
+          item("cal", "Calendario", [
+            { id: "ps", expectedArrivalAt: null, expectedArrivalText: "primera semana de diciembre", unitLimit: null, committedUnits: 0, paymentMode: "DEPOSIT", depositType: "FIXED", depositValue: 30000 },
+          ]),
+        ]}
+      />,
+    );
+    expect(container.textContent).toContain("Todo tu pedido sale cuando llegue la preventa");
+    expect(container.textContent).toContain("Fecha estimada: primera semana de diciembre");
+    expect(container.textContent).toContain("Hoy pagas el anticipo. Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.");
+    expect(container.textContent).not.toContain("Invalid");
+  });
 });

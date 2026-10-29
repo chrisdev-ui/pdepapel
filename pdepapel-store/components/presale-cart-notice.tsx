@@ -2,6 +2,7 @@
 
 import { Truck } from "lucide-react";
 
+import { describePresaleArrival, isDepositPresaleItem } from "@/lib/presale-deposit";
 import { formatArrivalDate } from "@/lib/product-card";
 import { cn } from "@/lib/utils";
 import { Product } from "@/types";
@@ -25,12 +26,16 @@ export function PresaleCartNotice({
   if (presaleItems.length === 0) return null;
 
   // La fecha que manda es la más lejana: el pedido sale cuando llegue todo.
+  // Una preventa sin fecha (solo texto, o por confirmar) manda sobre cualquier fecha.
+  const undated = presaleItems.find((item) => !item.presales![0].expectedArrivalAt);
   const arrival = presaleItems
     .map((item) => item.presales![0].expectedArrivalAt)
+    .filter((value): value is string => Boolean(value))
     .sort()
-    .at(-1)!;
-  const arrivalLabel = formatArrivalDate(arrival);
+    .at(-1);
+  const arrivalLabel = !undated && arrival ? formatArrivalDate(arrival) : null;
   const othersWaiting = items.length - presaleItems.length;
+  const deposit = presaleItems.every((item) => isDepositPresaleItem(item));
 
   return (
     <div
@@ -41,8 +46,16 @@ export function PresaleCartNotice({
     >
       <p className="flex items-center gap-2 text-[15px] font-semibold text-blue-800">
         <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
-        Todo tu pedido sale el {arrivalLabel}
+        {arrivalLabel ? `Todo tu pedido sale el ${arrivalLabel}` : "Todo tu pedido sale cuando llegue la preventa"}
       </p>
+      {undated ? (
+        <p className="text-sm font-semibold">{describePresaleArrival(undated.presales![0])}</p>
+      ) : null}
+      {deposit ? (
+        <p className="text-sm leading-relaxed">
+          Hoy pagas el anticipo. Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.
+        </p>
+      ) : null}
       <p className="text-sm leading-relaxed">
         {presaleItems.length === 1
           ? `Tienes un producto de preventa (${presaleItems[0].name}).`

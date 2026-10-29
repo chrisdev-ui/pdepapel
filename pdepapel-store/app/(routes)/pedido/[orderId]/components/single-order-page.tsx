@@ -47,6 +47,7 @@ import {
   isAwaitingPayment,
   isGiftCardPurchase,
 } from "@/lib/order-status";
+import { isDepositOrder } from "@/lib/presale-checkout";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order, ShippingTrackingEvent } from "@/types";
 import { OrderHelpCard } from "./order-help-card";
@@ -88,6 +89,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const confirmingReturn = paymentReturn && paymentResult === "pending";
   const [returnWindowOver, setReturnWindowOver] = useState(false);
   const fastPolling = confirmingReturn && !returnWindowOver;
+  // Volver de la pasarela con el anticipo de una preventa: otro aviso, no «gracias por tu compra».
+  const depositReturn = isDepositOrder(activeOrder) && activeOrder.status === OrderStatus.DEPOSIT_PAID;
 
   useEffect(() => {
     if (!confirmingReturn) return;
@@ -104,10 +107,12 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
 
     if (paymentResult === "approved") {
       toast({
-        title: "¡Gracias por tu compra!",
+        title: depositReturn ? "¡Listo! Recibimos tu anticipo" : "¡Gracias por tu compra!",
         variant: "success",
         icon: <ShieldCheck className="h-8 w-8" />,
-        description: "Recibimos tu pago.",
+        description: depositReturn
+          ? "Tu preventa quedó apartada. Te escribimos cuando llegue para coordinar el pago del saldo."
+          : "Recibimos tu pago.",
         duration: 10000,
       });
       fireConfetti();
@@ -121,7 +126,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         "No se realizó ningún cargo a tu cuenta. Tu carrito sigue intacto: intenta el pago de nuevo o usa otro método.",
       duration: 10000,
     });
-  }, [paymentReturn, paymentResult, order.id, toast, fireConfetti]);
+  }, [paymentReturn, paymentResult, order.id, toast, fireConfetti, depositReturn]);
 
   // TikTok «CompletePayment»: pagado por pasarela o cubierto entero por una
   // tarjeta de regalo; nunca transferencia ni contra entrega. Una vez por
@@ -149,7 +154,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   // whether the confirmation arrives by polling, by redirect or on a later
   // visit. The purchase itself is reported by the admin once payment is verified.
   useEffect(() => {
-    if (activeOrder.status !== OrderStatus.PAID) return;
+    // El anticipo de una preventa también cierra el carrito: la reserva ya está hecha.
+    if (activeOrder.status !== OrderStatus.PAID && activeOrder.status !== OrderStatus.DEPOSIT_PAID) return;
 
     // El camino normal: este navegador arrancó el pedido y lo recuerda.
     // El segundo: se pagó en otro navegador —pasa al abrir el enlace desde
@@ -308,7 +314,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
 
   const heading =
     paymentReturn && paymentResult === "approved"
-      ? "¡Gracias por tu compra!"
+      ? depositReturn
+        ? "¡Listo! Recibimos tu anticipo"
+        : "¡Gracias por tu compra!"
       : `Pedido #${orderNumber}`;
 
   return (

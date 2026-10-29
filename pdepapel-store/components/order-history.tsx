@@ -41,7 +41,7 @@ type HistoryFilter = "all" | "unpaid" | "active" | "delivered" | "closed";
 const FILTERS: { id: HistoryFilter; label: string; stages: OrderStage[] }[] = [
   { id: "all", label: "Todos", stages: [] },
   { id: "unpaid", label: "Por pagar", stages: ["unpaid", "verifying"] },
-  { id: "active", label: "En proceso", stages: ["cod", "paid", "shipped", "issue"] },
+  { id: "active", label: "En proceso", stages: ["cod", "paid", "deposit_paid", "shipped", "issue"] },
   { id: "delivered", label: "Entregados", stages: ["delivered"] },
   { id: "closed", label: "Cancelados", stages: ["cancelled"] },
 ];

@@ -2,12 +2,15 @@
 
 import {
   Award,
+  CalendarClock,
+  ChevronDown,
   Heart,
   ShieldCheck,
   ShoppingCart,
   Star,
   Truck,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MouseEvent, ReactNode, RefObject, useEffect, useMemo, useState } from "react";
@@ -32,7 +35,15 @@ import {
 } from "@/lib/customer-analytics";
 import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { getProductAvailability } from "@/lib/product-availability";
-import { getPurchasableUnits } from "@/lib/purchasable-units";
+import {
+  depositTeaser,
+  PRESALE_HOW_IT_WORKS_TITLE,
+  PRESALE_TERMS_HREF,
+  PRESALE_WAITLIST_HEADING,
+  presaleHowItWorks,
+} from "@/lib/presale-copy";
+import { presaleUnitDeposit } from "@/lib/presale-deposit";
+import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
 import { isModifiedClick } from "@/lib/link-click";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
@@ -64,6 +75,11 @@ interface ProductInfoProps {
   /** «Original <Marca> ›», pintado en el servidor. */
   brandSlot?: ReactNode;
 }
+
+// Solo las fichas con preventa bajan este formulario (y su antibots).
+const PreorderWaitlistForm = dynamic(() =>
+  import("@/components/preorder-waitlist-form").then((module) => module.PreorderWaitlistForm),
+);
 
 const CTA_CLASS =
   "order-last flex min-h-[52px] basis-full items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 font-sans text-base font-semibold sm:order-none sm:basis-auto sm:flex-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
@@ -127,6 +143,16 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       value: getAnalyticsValue([item]),
     });
     trackTikTokEvent("ViewContent", tiktokProductParameters([item]));
+    // Sin datos personales: el producto, el anticipo de una unidad y si hay fecha.
+    const activePresale = getActivePresale(data);
+    if (activePresale?.paymentMode === "DEPOSIT" && getPurchasableUnits(data) > 0) {
+      trackCustomerEvent("preorder_view", {
+        currency: "COP",
+        items: [item],
+        deposit_value: presaleUnitDeposit(activePresale, effectiveUnitPrice({ ...data, quantity: 1 })),
+        has_eta: Boolean(activePresale.expectedArrivalAt),
+      });
+    }
   }, [data]);
 
   const uniqueDesigns = useMemo(() => {
@@ -247,6 +273,13 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   };
 
   const availability = getProductAvailability(data, { earlyAccess });
+  const presale = getActivePresale(data);
+  // Solo mientras se puede reservar: con el cupo lleno no se ofrece el anticipo.
+  const depositPresale =
+    availability.status === "presale" && availability.presale?.deposit && presale ? presale : null;
+  const lineUnitPrice = effectiveUnitPrice({ ...data, quantity });
+  const unitDeposit = depositPresale ? presaleUnitDeposit(depositPresale, lineUnitPrice) : 0;
+  const ctaAmount = depositPresale ? unitDeposit * quantity : lineUnitPrice * quantity;
   const needsOption = Boolean(
     data.isGroup && hasVariants && !data.design && !data.color && !data.size,
   );
@@ -380,6 +413,16 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </span>
         )}
       </div>
+
+      {depositPresale && (
+        <div className="-mt-2 flex flex-col gap-1 font-sans text-sm text-blue-yankees" data-testid="presale-deposit-teaser">
+          <p className="font-semibold">{depositTeaser(unitDeposit, Math.max(0, lineUnitPrice - unitDeposit))}</p>
+          <p className="flex items-center gap-1.5 text-gray-600">
+            <CalendarClock aria-hidden="true" className="h-4 w-4 shrink-0" />
+            {availability.presale?.arrivalLine}
+          </p>
+        </div>
+      )}
 
       {data.priceTiers && data.priceTiers.length > 0 && (
         <PriceTierLadder
@@ -595,9 +638,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 <span className="sm:hidden xl:inline">
                   {" "}
                   ·{" "}
-                  {currencyFormatter.format(
-                    effectiveUnitPrice({ ...data, quantity }) * quantity,
-                  )}
+                  {currencyFormatter.format(ctaAmount)}
                 </span>
               </span>
             )}
@@ -647,12 +688,41 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         </Button>
       </div>
 
-      <div id="avisame" data-product-signals={data.id} className="scroll-mt-40">
+      <div id="avisame" data-product-signals={data.id} className="flex scroll-mt-40 flex-col gap-4">
         <ProductSignals
           product={data}
           availability={availability}
           quantity={quantity}
         />
+        {depositPresale && (
+          <details className="group rounded-xl border border-blue-baby bg-white font-sans text-sm text-blue-yankees" data-testid="presale-how-it-works">
+            <summary className="flex min-h-[2.75rem] cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees [&::-webkit-details-marker]:hidden">
+              {PRESALE_HOW_IT_WORKS_TITLE}
+              <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+            </summary>
+            <div className="flex flex-col gap-3 border-t border-blue-baby px-4 py-3">
+              <ol className="flex list-decimal flex-col gap-1.5 pl-5 leading-relaxed">
+                {presaleHowItWorks(unitDeposit).map((rule) => (
+                  <li key={rule}>{rule}</li>
+                ))}
+              </ol>
+              {depositPresale.termsText?.trim() ? (
+                <p className="whitespace-pre-line leading-relaxed text-gray-700">{depositPresale.termsText.trim()}</p>
+              ) : null}
+              <Link href={PRESALE_TERMS_HREF} className="inline-flex min-h-[2.75rem] w-fit items-center font-semibold underline underline-offset-4">
+                Ver condiciones completas
+              </Link>
+            </div>
+          </details>
+        )}
+        {availability.presale && (
+          <section aria-labelledby={`lista-espera-${data.id}`} className="flex flex-col gap-3 rounded-xl border border-blue-baby/60 bg-blue-baby/10 p-4">
+            <h2 id={`lista-espera-${data.id}`} className="font-serif text-base font-bold text-blue-yankees">
+              {PRESALE_WAITLIST_HEADING}
+            </h2>
+            <PreorderWaitlistForm productId={data.id} productName={data.name} />
+          </section>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-2 rounded-2xl border border-purple-100 bg-purple-50/50 p-3 text-center font-sans text-xs font-semibold text-purple-950">

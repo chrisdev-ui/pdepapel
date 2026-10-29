@@ -54,6 +54,7 @@ export function ReorderButton({
     setIsAdding(true);
     let added = 0;
     let limited = 0;
+    let blockedByPresale = false;
     let lastAdded: Product | null = null;
 
     for (const { product, quantity } of reorderable) {
@@ -64,6 +65,7 @@ export function ReorderButton({
             Math.min(product.stock, (inCart.quantity ?? 1) + quantity),
           )
         : addItem(product, Math.min(product.stock, quantity));
+      if (!result.ok && result.status === "presale_alone") blockedByPresale = true;
       if (result.ok) {
         added += 1;
         lastAdded = result.item;
@@ -75,7 +77,9 @@ export function ReorderButton({
 
     if (added === 0) {
       toast({
-        description: "Estos productos ya no están disponibles.",
+        description: blockedByPresale
+          ? "Tu carrito tiene una preventa, que se paga aparte. Termina esa reserva o vacía el carrito para volver a pedir."
+          : "Estos productos ya no están disponibles.",
         variant: "warning",
       });
       return;

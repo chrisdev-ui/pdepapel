@@ -3,6 +3,11 @@ import type { Order } from "@/types";
 
 export const ORDER_STATUS_POLL_INTERVAL_MS = 10_000;
 
+/**
+ * Solo se sondea mientras el pago está por confirmarse. Con el anticipo
+ * recibido (DEPOSIT_PAID) no hay nada más que esperar en esta visita: el
+ * saldo se cobra a mano cuando llega el producto.
+ */
 export function shouldPollOrderStatus(status: string, isVisible: boolean) {
   return (
     isVisible &&
@@ -23,6 +28,7 @@ export function mergePolledOrder(current: Order, fetched: Order): Order {
     status: fetched.status,
     paymentResult: fetched.paymentResult,
     paidAt: fetched.paidAt,
+    depositPaidAt: fetched.depositPaidAt ?? current.depositPaidAt,
     shipping:
       current.shipping && fetched.shipping
         ? {

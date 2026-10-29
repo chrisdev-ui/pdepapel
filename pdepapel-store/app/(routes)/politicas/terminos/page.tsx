@@ -86,6 +86,53 @@ const sections: PolicySection[] = [
       </p>
     ),
   },
+  // Sección en revisión legal (preventa con anticipo, 2026-10-28): redacción
+  // provisional de output/audits/preventa-fase0-2026-10-28.md §8.2, pendiente
+  // de Paula (plazo del saldo, canal y tiempo del reembolso) y del abogado
+  // (retracto frente al anticipo, arras, plazo de entrega).
+  {
+    id: "preventas",
+    title: "Preventas y anticipos",
+    content: (
+      <>
+        <p>
+          <strong>Preventas con anticipo.</strong> Algunos productos se venden
+          antes de que lleguen a nuestra bodega. Al reservar pagas un anticipo
+          (por ejemplo, $30.000 por unidad) y el saldo del precio más el envío
+          cuando el producto llegue; te avisamos para que lo pagues dentro del
+          plazo que te indiquemos al avisarte.
+        </p>
+        <p>
+          <strong>Precio.</strong> El precio del producto queda fijo desde que
+          reservas.
+        </p>
+        <p>
+          <strong>Fecha estimada.</strong> La fecha que mostramos es una
+          estimación del proveedor. Si cambia, te avisamos.
+        </p>
+        <p>
+          <strong>Si el producto no llega.</strong> Si no podemos entregarte el
+          producto, te devolvemos el 100 % de lo que pagaste, incluido el
+          anticipo.
+        </p>
+        <p>
+          <strong>Si desistes o no pagas el saldo.</strong> El anticipo{" "}
+          <strong>no es reembolsable</strong> si decides no continuar con la
+          compra o si no pagas el saldo en el plazo indicado,{" "}
+          <strong>salvo el derecho de retracto de ley o si el producto no llega</strong>.
+        </p>
+        <p>
+          <strong>Derecho de retracto.</strong> Como en toda compra por
+          internet, puedes retractarte dentro de los cinco (5) días hábiles
+          siguientes a la entrega, en los términos del artículo 47 de la Ley 1480
+          de 2011; en ese caso te devolvemos el total pagado.
+        </p>
+        <p>
+          <strong>Envío.</strong> El envío se cotiza y se paga con el saldo.
+        </p>
+      </>
+    ),
+  },
   {
     id: "envios",
     title: "Envíos",

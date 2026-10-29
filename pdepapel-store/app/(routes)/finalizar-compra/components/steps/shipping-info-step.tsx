@@ -61,6 +61,7 @@ import {
 } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
+import { DEPOSIT_SHIPPING_NOTE } from "@/lib/presale-copy";
 import type { LocationOption } from "@/types";
 
 const EMPTY_LOCATIONS: LocationOption[] = [];
@@ -77,6 +78,8 @@ interface ShippingInfoStepProps {
   amountBeforeShipping?: number;
   /** The order already qualifies for free shipping: rates show «Gratis». */
   freeShipping?: boolean;
+  /** Preventa con anticipo: solo la dirección; el envío se cotiza y se cobra con el saldo. */
+  depositPresale?: boolean;
 }
 
 const MEDELLIN_AREA_CITIES = [
@@ -124,6 +127,7 @@ export const ShippingInfoStep = ({
   orderTotal,
   amountBeforeShipping,
   freeShipping = false,
+  depositPresale = false,
 }: ShippingInfoStepProps) => {
   const { getToken, isLoaded: isAuthLoaded, userId } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,7 +168,10 @@ export const ShippingInfoStep = ({
   const selectedCity = form.watch("city") || "";
   const selectedDept = form.watch("department") || "";
   const wantsToSaveAddress = form.watch("saveAddress");
-  const shippingOptionType = form.watch("shippingOptionType") || "ENVIOCLICK";
+  const watchedOptionType = form.watch("shippingOptionType") || "ENVIOCLICK";
+  // Una reserva nunca cotiza, ni en el render que llega antes de que el
+  // formulario cambie el tipo de envío guardado de otra visita.
+  const shippingOptionType = depositPresale ? "PRESALE_DEPOSIT" : watchedOptionType;
   const selectedRateId = form.watch("envioClickIdRate");
   // La búsqueda de ciudades no bloquea la dirección: antes cada pulsación
   // dejaba estos campos deshabilitados un instante y el toque se perdía.
@@ -951,6 +958,12 @@ export const ShippingInfoStep = ({
           )}
         </div>
 
+        {depositPresale ? (
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-blue-900" data-testid="deposit-shipping-note">
+            <Truck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden="true" />
+            <p className="text-sm font-semibold">{DEPOSIT_SHIPPING_NOTE}.</p>
+          </div>
+        ) : (
         <FormField
           control={form.control}
           name="shippingOptionType"
@@ -1040,6 +1053,7 @@ export const ShippingInfoStep = ({
             </FormItem>
           )}
         />
+        )}
 
         {shippingOptionType === "MEDELLIN_LOCAL" && (
           <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-emerald-900">

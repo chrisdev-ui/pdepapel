@@ -4,7 +4,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { ToastIcon } from "@/components/ui/toast-icon";
 import { toast } from "@/hooks/use-toast";
 import { isComingSoon } from "@/lib/product-card";
-import { getPurchasableUnits } from "@/lib/purchasable-units";
+import { isDepositPresaleItem } from "@/lib/presale-deposit";
+import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
 import { slimStoredProduct } from "@/lib/stored-product";
 import { Product } from "@/types";
 
@@ -12,9 +13,21 @@ export type CartMutationResult =
   | { ok: true; status: "added" | "updated"; item: Product }
   | {
       ok: false;
-      status: "stock_limit" | "unavailable";
+      /** `presale_alone`: una preventa con anticipo se compra sola (se pregunta antes de vaciar). */
+      status: "stock_limit" | "unavailable" | "presale_alone";
       item: Product | null;
     };
+
+/**
+ * Una preventa con anticipo no se mezcla con nada (ni con otra preventa): el
+ * cobro de hoy es solo el anticipo y el resto espera a que llegue. El panel
+ * rechaza el pedido mezclado; aquí se pregunta antes de llegar a pagar.
+ */
+export function conflictsWithDepositPresale(items: Product[], incoming: Product): boolean {
+  const others = items.filter((item) => item.id !== incoming.id);
+  if (others.length === 0) return false;
+  return isDepositPresaleItem(incoming) || others.some((item) => isDepositPresaleItem(item));
+}
 
 interface CartStore {
   items: Product[];
@@ -41,8 +54,13 @@ export const useCart = create(
         // botón «Reservar ahora» sin efecto.
         const units = getPurchasableUnits(item);
 
-        if (item.isArchived || units <= 0 || isComingSoon(item)) {
+        // Una preventa se vende antes de que llegue: «llega pronto» no la frena.
+        if (item.isArchived || units <= 0 || (isComingSoon(item) && !getActivePresale(item))) {
           return { ok: false, status: "unavailable", item };
+        }
+
+        if (conflictsWithDepositPresale(currentItems, item)) {
+          return { ok: false, status: "presale_alone", item };
         }
 
         if (existingItem) {

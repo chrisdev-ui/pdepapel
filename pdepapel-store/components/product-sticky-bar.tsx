@@ -7,6 +7,8 @@ import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { ProductAvailability } from "@/lib/product-availability";
+import { presaleUnitDeposit } from "@/lib/presale-deposit";
+import { getActivePresale } from "@/lib/purchasable-units";
 import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Product } from "@/types";
 
@@ -54,8 +56,12 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
   const image = product.images?.find((item) => item.isMain) ?? product.images?.[0];
   const options = [product.design?.name, product.color?.name].filter(Boolean).join(" · ");
   const canBuy = availability.canBuy;
+  // Preventa con anticipo: lo que se cobra hoy es el anticipo.
+  const presale = getActivePresale(product);
+  const deposit = availability.status === "presale" && Boolean(availability.presale?.deposit && presale);
+  const lineUnitPrice = effectiveUnitPrice({ ...product, quantity });
   const total = currencyFormatter.format(
-    effectiveUnitPrice({ ...product, quantity }) * quantity,
+    (deposit && presale ? presaleUnitDeposit(presale, lineUnitPrice) : lineUnitPrice) * quantity,
   );
   const action = canBuy ? (
     <button
@@ -64,8 +70,8 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
       className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-blue-yankees px-5 font-sans text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
     >
       <ShoppingCart aria-hidden="true" className="h-4 w-4" />
-      <span className="lg:hidden">Agregar</span>
-      <span className="hidden lg:inline">Agregar al carrito</span>
+      <span className="lg:hidden">{deposit ? "Reservar" : "Agregar"}</span>
+      <span className="hidden lg:inline">{deposit ? "Reservar con anticipo" : "Agregar al carrito"}</span>
     </button>
   ) : availability.status === "archived" ? null : (
     <button

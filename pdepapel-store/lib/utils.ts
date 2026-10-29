@@ -4,6 +4,7 @@ import {
   INTERRAPIDISIMO_KEYSIZE,
   INTERRAPIDISIMO_SALTSIZE,
 } from "@/constants";
+import { isDepositPresaleItem, presaleUnitDeposit } from "@/lib/presale-deposit";
 import { resolveUnitPrice } from "@/lib/price-tiers";
 import { Coupon, Product, Review } from "@/types";
 import { clsx, type ClassValue } from "clsx";
@@ -161,6 +162,41 @@ export const calculateTotals = (
     return total + effectiveUnitPrice(item) * Number(item.quantity ?? 1);
   }, 0);
 
+  // Preventa con anticipo: se compra sola, sin cupón ni envío (el envío se
+  // cobra con el saldo). Hoy se paga el anticipo; `total` sigue siendo el
+  // valor completo del producto, igual que en el pedido del panel.
+  const isDepositCart = orderItems.length > 0 && orderItems.some((item) => isDepositPresaleItem(item));
+  if (isDepositCart) {
+    const dueNow = orderItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity ?? 1);
+      const unitPrice = effectiveUnitPrice(item);
+      const presale = item.presales?.[0];
+      const unitDue = presale && isDepositPresaleItem(item) ? presaleUnitDeposit(presale, unitPrice) : unitPrice;
+      return sum + unitDue * quantity;
+    }, 0);
+    const productSavingsDeposit = orderItems.reduce((total, item) => {
+      const quantity = Number(item.quantity ?? 1);
+      const unitPrice = effectiveUnitPrice(item);
+      const listPrice = Number(item.originalPrice) || Number(item.price) || 0;
+      return listPrice > unitPrice ? total + (listPrice - unitPrice) * quantity : total;
+    }, 0);
+    return {
+      subtotal,
+      total: subtotal,
+      couponDiscount: 0,
+      productSavings: productSavingsDeposit,
+      codFee: 0,
+      shippingCost: 0,
+      freeShipping: false,
+      freeShippingRemaining: 0,
+      isDepositCart: true,
+      /** Lo que se cobra hoy: el anticipo. */
+      dueNow,
+      /** Lo que queda para cuando llegue, sin el envío (se cotiza entonces). */
+      balanceDue: Math.max(0, subtotal - dueNow),
+    };
+  }
+
   // Calculate total product-level savings (from offers)
   const productSavings = orderItems.reduce((total, item) => {
     const quantity = Number(item.quantity ?? 1);
@@ -206,5 +242,8 @@ export const calculateTotals = (
       typeof freeShippingThreshold === "number" && freeShippingThreshold > 0
         ? Math.max(freeShippingThreshold - subtotal, 0)
         : 0,
+    isDepositCart: false,
+    dueNow: total,
+    balanceDue: 0,
   };
 };

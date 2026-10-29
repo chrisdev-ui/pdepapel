@@ -26,7 +26,7 @@ import {
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
-import { calculateTotals } from "@/lib/utils";
+import { calculateTotals, currencyFormatter } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { useRouter } from "next/navigation";
 
@@ -42,7 +42,7 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   const hasTrackedCartViewRef = useRef(false);
   const highlightId = useCartSheet((state) => state.highlightId);
   const { freeShippingThreshold } = useStorefrontSettings();
-  const { total, subtotal } = useMemo(
+  const { total, subtotal, isDepositCart, dueNow, balanceDue } = useMemo(
     () => calculateTotals(cart.items, null, 0, freeShippingThreshold),
     [cart.items, freeShippingThreshold],
   );
@@ -199,13 +199,30 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
         )}
       </div>
       <footer className="flex max-h-[60dvh] w-full shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-t border-blue-purple/40 bg-background px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:px-6">
-        {cart.items.length > 0 && (
+        {cart.items.length > 0 && !isDepositCart && (
           <FreeShippingProgress subtotal={subtotal} threshold={freeShippingThreshold} />
         )}
-        <div className="flex w-full items-center justify-between font-quicksand text-lg font-semibold">
-          <span>Subtotal</span>
-          <Currency value={total} />
-        </div>
+        {isDepositCart ? (
+          <dl className="flex w-full flex-col gap-1 font-quicksand" data-testid="drawer-deposit-summary">
+            <div className="flex items-center justify-between text-sm">
+              <dt>Total del producto</dt>
+              <dd className="font-semibold">{currencyFormatter.format(total)}</dd>
+            </div>
+            <div className="flex items-center justify-between text-lg font-bold">
+              <dt>Pagas hoy (anticipo)</dt>
+              <dd>{currencyFormatter.format(dueNow)}</dd>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <dt>Saldo al llegar</dt>
+              <dd className="font-semibold">{currencyFormatter.format(balanceDue)} + envío</dd>
+            </div>
+          </dl>
+        ) : (
+          <div className="flex w-full items-center justify-between font-quicksand text-lg font-semibold">
+            <span>Subtotal</span>
+            <Currency value={total} />
+          </div>
+        )}
         {cart.items.length > 0 && (
           <AccountPrompt
             variant="compact"

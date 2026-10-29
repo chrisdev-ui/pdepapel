@@ -30,6 +30,8 @@ interface BasicInfoStepProps {
   freeShippingThreshold?: number | null;
   /** El pedido ya alcanza el envío gratis. */
   freeShipping?: boolean;
+  /** Reemplaza el aviso del envío (preventa con anticipo: se cobra con el saldo). */
+  shippingNote?: string | null;
 }
 
 /** Lo primero que se pregunta quien entra al checkout: cuánto cuesta el envío. */
@@ -47,6 +49,7 @@ export const BasicInfoStep = ({
   isGuest = true,
   freeShippingThreshold = null,
   freeShipping = false,
+  shippingNote = null,
 }: BasicInfoStepProps) => {
   const { isLoaded, userId } = useAuth();
   const showSignInHint = isLoaded ? !userId : isGuest;
@@ -62,7 +65,7 @@ export const BasicInfoStep = ({
         {/* Alto fijo (dos líneas en el teléfono): el texto depende del umbral y el esqueleto no lo conoce. */}
         <p className="flex min-h-10 items-center gap-2 text-sm text-muted-foreground sm:min-h-5" data-testid="checkout-shipping-teaser">
           <Truck className="h-4 w-4 shrink-0 text-blue-yankees" aria-hidden="true" />
-          {shippingTeaser(freeShippingThreshold, freeShipping)}
+          {shippingNote ?? shippingTeaser(freeShippingThreshold, freeShipping)}
         </p>
       </div>
 

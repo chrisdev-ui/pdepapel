@@ -6,9 +6,15 @@
  * contra ella lo que llega del checkout y del registro.
  */
 export const LEGAL_VERSIONS = {
-  terms: "2026-10-21",
+  terms: "2026-10-28",
   privacy: "2026-10-26",
 } as const;
+
+/**
+ * Versión de las condiciones de la preventa con anticipo (sección
+ * «Preventas y anticipos» de los términos) que acepta la casilla del checkout.
+ */
+export const PREORDER_TERMS_VERSION = "2026-10-28";
 
 export type LegalConsentVersions = { terms: string; privacy: string };
 

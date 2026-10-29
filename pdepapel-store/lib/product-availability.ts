@@ -1,6 +1,7 @@
 import { getLowStockLabel, isLowStock } from "@/components/ui/low-stock-notice";
 import { formatArrivalDate, isComingSoon } from "@/lib/product-card";
-import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
+import { describePresaleArrival, isDepositPresale } from "@/lib/presale-deposit";
+import { getActivePresale, getPurchasableUnits, isUncappedPresale } from "@/lib/purchasable-units";
 import { Product } from "@/types";
 
 export type ProductAvailabilityStatus =
@@ -21,7 +22,17 @@ export interface ProductAvailability {
   stockLabel: string;
   tone: "green" | "amber" | "gray" | "purple" | "blue";
   /** Preventa: cuántas reservas quedan y cuándo llega. */
-  presale?: { remaining: number; arrivalLabel: string } | null;
+  presale?: {
+    remaining: number;
+    /** «1 dic»; null si la campaña no tiene fecha (solo texto o nada). */
+    arrivalLabel: string | null;
+    /** «Fecha estimada: 5 de diciembre» / «… <texto>» / «… por confirmar». */
+    arrivalLine: string;
+    /** Sin tope de campaña: no se dice «quedan N reservas». */
+    uncapped: boolean;
+    /** Hoy se paga solo el anticipo; el saldo y el envío cuando llegue. */
+    deposit: boolean;
+  } | null;
 }
 
 const STOCK_COUNT_LIMIT = 30;
@@ -55,15 +66,18 @@ export function getProductAvailability(
   const presale = getActivePresale(product);
   if (presale) {
     const remaining = getPurchasableUnits(product);
-    const arrivalLabel = formatArrivalDate(presale.expectedArrivalAt);
+    const arrivalLabel = presale.expectedArrivalAt ? formatArrivalDate(presale.expectedArrivalAt) : null;
+    const arrivalLine = describePresaleArrival(presale);
+    const deposit = isDepositPresale(presale);
+    const uncapped = isUncappedPresale(presale);
     if (remaining > 0) {
       return {
         status: "presale",
         canBuy: true,
-        ctaLabel: "Reservar ahora",
-        stockLabel: `Preventa · llega el ${arrivalLabel}`,
+        ctaLabel: deposit ? "Reservar con anticipo" : "Reservar ahora",
+        stockLabel: `Preventa · ${arrivalLine}`,
         tone: "blue",
-        presale: { remaining, arrivalLabel },
+        presale: { remaining, arrivalLabel, arrivalLine, uncapped, deposit },
       };
     }
     // Se llenó el cupo: deja de venderse y vuelve a ser un «llega pronto».
@@ -71,9 +85,9 @@ export function getProductAvailability(
       status: "coming-soon",
       canBuy: false,
       ctaLabel: "Avísame cuando llegue",
-      stockLabel: `Reservas agotadas · llega el ${arrivalLabel}`,
+      stockLabel: `Reservas agotadas · ${arrivalLine}`,
       tone: "purple",
-      presale: { remaining: 0, arrivalLabel },
+      presale: { remaining: 0, arrivalLabel, arrivalLine, uncapped, deposit },
     };
   }
 

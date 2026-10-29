@@ -19,7 +19,8 @@ import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { formatArrivalDate } from "@/lib/product-card";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
-import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
+import { describePresaleArrival, PRESALE_MAX_PER_ORDER } from "@/lib/presale-deposit";
+import { getActivePresale, getPurchasableUnits, isUncappedPresale } from "@/lib/purchasable-units";
 import { productPath } from "@/lib/routes";
 import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Product } from "@/types";
@@ -74,7 +75,9 @@ export const CartItem: React.FC<CartItemProps> = ({
   const units = getPurchasableUnits(item);
   const soldOut = units === 0;
   const overStock = !soldOut && quantity > units;
-  const lowStock = !soldOut && !overStock && units <= 3;
+  // Sin tope de campaña el límite es por pedido: no hay «quedan N» que contar.
+  const uncapped = isUncappedPresale(presale);
+  const lowStock = !soldOut && !overStock && !uncapped && units <= 3;
 
   const onQuantity = (value: number) => {
     const result = updateQuantity(item.id, value);
@@ -82,7 +85,9 @@ export const CartItem: React.FC<CartItemProps> = ({
       toast({
         description:
           result.status === "stock_limit"
-            ? presale
+            ? uncapped
+              ? `Puedes reservar hasta ${PRESALE_MAX_PER_ORDER} por pedido.`
+              : presale
               ? `Solo quedan ${units} reservas de este producto.`
               : `Solo quedan ${units} unidades de este producto.`
             : "Este producto ya no está disponible.",
@@ -147,8 +152,10 @@ export const CartItem: React.FC<CartItemProps> = ({
 
         {presale && !soldOut && (
           <p className="inline-flex w-fit items-center gap-1.5 rounded-full bg-blue-baby/40 px-2 py-0.5 font-sans text-xs font-bold text-blue-800">
-            <Truck aria-hidden="true" className="h-3 w-3" /> Preventa · llega el{" "}
-            {formatArrivalDate(presale.expectedArrivalAt)}
+            <Truck aria-hidden="true" className="h-3 w-3" />{" "}
+            {presale.expectedArrivalAt
+              ? `Preventa · llega el ${formatArrivalDate(presale.expectedArrivalAt)}`
+              : `Preventa · ${describePresaleArrival(presale)}`}
           </p>
         )}
 
@@ -164,9 +171,10 @@ export const CartItem: React.FC<CartItemProps> = ({
             )}
             {overStock && (
               <p className="inline-flex items-center gap-1.5 font-sans text-xs font-bold text-amber-800">
-                <Flame aria-hidden="true" className="h-3.5 w-3.5" /> Solo quedan{" "}
-                {units}
-                {presale ? " reservas" : ""}: baja la cantidad para continuar
+                <Flame aria-hidden="true" className="h-3.5 w-3.5" />{" "}
+                {uncapped
+                  ? `Máximo ${PRESALE_MAX_PER_ORDER} por pedido: baja la cantidad para continuar`
+                  : `Solo quedan ${units}${presale ? " reservas" : ""}: baja la cantidad para continuar`}
               </p>
             )}
             {lowStock && (

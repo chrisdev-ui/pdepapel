@@ -93,11 +93,18 @@ export function getProductCardBadges(
   // La preventa manda sobre «Llega pronto» y sobre «Agotado»: es justamente
   // el producto sin bodega que SÍ se puede comprar hoy.
   const presale = product.presales?.[0];
+  // Sin tope (`unitLimit` null) la campaña nunca se agota por cupo.
+  const presaleOpen =
+    presale && (presale.unitLimit === null || presale.unitLimit === undefined || presale.unitLimit - presale.committedUnits > 0);
 
   let commercial: CardBadge | null = null;
-  if (presale && presale.unitLimit - presale.committedUnits > 0) {
+  if (presale && presaleOpen) {
     commercial = {
-      text: `Preventa · llega el ${formatArrivalDate(presale.expectedArrivalAt)}`,
+      // Con anticipo, el precio de la tarjeta no es lo que se paga hoy: basta «Preventa».
+      text:
+        presale.paymentMode !== "DEPOSIT" && presale.expectedArrivalAt
+          ? `Preventa · llega el ${formatArrivalDate(presale.expectedArrivalAt)}`
+          : "Preventa",
       tone: "comingSoon",
     };
   } else if (presale) {

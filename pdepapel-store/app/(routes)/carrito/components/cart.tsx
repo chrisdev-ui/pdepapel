@@ -22,7 +22,8 @@ import { useStorefrontSettings } from "@/providers/storefront-settings-provider"
 import { Category, Product } from "@/types";
 
 import { PresaleCartNotice } from "@/components/presale-cart-notice";
-import { getPurchasableUnits, isPresaleItem } from "@/lib/purchasable-units";
+import { isDepositPresaleItem } from "@/lib/presale-deposit";
+import { getActivePresale, getPurchasableUnits, isPresaleItem, isUncappedPresale } from "@/lib/purchasable-units";
 import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 import { CartItem, PriceChange } from "./cart-item";
@@ -127,9 +128,10 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
     [cart.items, freeShippingThreshold],
   );
   const cartIds = new Set(cart.items.map((item) => item.id));
-  const visibleSuggestions = suggestions
-    .filter((product) => !cartIds.has(product.id))
-    .slice(0, MAX_SUGGESTIONS);
+  // Una preventa con anticipo se compra sola: sugerir más productos solo abriría «¿Vaciar el carrito?».
+  const visibleSuggestions = cart.items.some((item) => isDepositPresaleItem(item))
+    ? []
+    : suggestions.filter((product) => !cartIds.has(product.id)).slice(0, MAX_SUGGESTIONS);
 
   const onRemove = (id: string) => {
     cart.removeItem(id);
@@ -219,7 +221,9 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
                       ? isPresaleItem(checkoutBlocker)
                         ? "se acabaron las reservas"
                         : "está agotado"
-                      : isPresaleItem(checkoutBlocker)
+                      : isUncappedPresale(getActivePresale(checkoutBlocker))
+                        ? `máximo ${blockerUnits} por pedido`
+                        : isPresaleItem(checkoutBlocker)
                         ? `solo quedan ${blockerUnits} reservas`
                         : `solo quedan ${blockerUnits}`
                   }.`

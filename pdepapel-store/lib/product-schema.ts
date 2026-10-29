@@ -99,8 +99,11 @@ export function buildProductSchema(
           : product.stock > 0
             ? "https://schema.org/InStock"
             : "https://schema.org/OutOfStock",
+      // Solo con una fecha real: un texto («primera semana de diciembre») no es una fecha.
       ...(product.presales?.[0]
-        ? { availabilityStarts: product.presales[0].expectedArrivalAt }
+        ? product.presales[0].expectedArrivalAt
+          ? { availabilityStarts: product.presales[0].expectedArrivalAt }
+          : {}
         : isComingSoon(product) && product.availableAt
           ? { availabilityStarts: product.availableAt }
           : {}),

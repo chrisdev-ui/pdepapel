@@ -14,6 +14,8 @@ export type OrderStage =
   | "verifying"
   | "cod"
   | "paid"
+  /** Preventa con anticipo: el anticipo entró; falta el saldo y el envío cuando llegue. */
+  | "deposit_paid"
   | "shipped"
   | "delivered"
   | "issue"
@@ -77,6 +79,17 @@ export function getOrderStage(order: StageSource): OrderStageInfo {
       description:
         "Este pedido se canceló. Si ya habías pagado, escríbenos y te ayudamos con el reembolso.",
       tone: "neutral",
+    };
+  }
+
+  // El saldo se cobra a mano cuando llega (Lote 2): aquí no hay nada que pagar en línea.
+  if (order.status === OrderStatus.DEPOSIT_PAID) {
+    return {
+      stage: "deposit_paid",
+      label: "Anticipo recibido",
+      description:
+        "Tu preventa quedó apartada. Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.",
+      tone: "success",
     };
   }
 
@@ -220,6 +233,7 @@ export interface TimelineStep {
 type TimelineSource = StageSource & {
   createdAt: string;
   paidAt?: string | null;
+  depositPaidAt?: string | null;
   shipping?:
     | (Pick<Shipping, "status" | "provider"> &
         Partial<
@@ -263,6 +277,7 @@ export function getOrderTimeline(order: TimelineSource): TimelineStep[] {
     ];
   }
 
+  const depositPaid = stage === "deposit_paid";
   const paidDone =
     stage === "paid" ||
     stage === "shipped" ||
@@ -285,17 +300,18 @@ export function getOrderTimeline(order: TimelineSource): TimelineStep[] {
     },
     {
       id: "paid",
-      label: stage === "cod" ? "Pago al recibir" : "Pago confirmado",
-      state: paidDone
+      label: depositPaid ? "Anticipo recibido" : stage === "cod" ? "Pago al recibir" : "Pago confirmado",
+      state: paidDone || depositPaid
         ? "done"
         : stage === "cancelled"
           ? "pending"
           : stage === "cod"
             ? "pending"
             : "current",
-      date: paidDone ? (order.paidAt ?? null) : null,
-      detail:
-        stage === "verifying"
+      date: depositPaid ? (order.depositPaidAt ?? null) : paidDone ? (order.paidAt ?? null) : null,
+      detail: depositPaid
+        ? "Saldo y envío cuando llegue"
+        : stage === "verifying"
           ? "Esperando la verificación del pago"
           : stage === "unpaid"
             ? "Pendiente de pago"
@@ -319,7 +335,9 @@ export function getOrderTimeline(order: TimelineSource): TimelineStep[] {
             ? getShippingStatusLabel(shippingStatus)
             : stage === "paid" && !pickup
               ? "Sale en 1 día hábil"
-              : undefined,
+              : stage === "deposit_paid"
+                ? "Sale cuando llegue la preventa"
+                : undefined,
     },
     {
       id: "delivered",

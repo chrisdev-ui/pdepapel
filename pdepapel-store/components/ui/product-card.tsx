@@ -15,6 +15,7 @@ import { MouseEventHandler, memo, useCallback, useEffect, useState } from "react
 
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { useCart } from "@/hooks/use-cart";
+import { usePresaleCartConflict } from "@/hooks/use-presale-cart-conflict";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
@@ -207,6 +208,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
         return;
       }
       const result = addToCart(product);
+      if (!result.ok && result.status === "presale_alone") {
+        usePresaleCartConflict.getState().ask({ product, quantity: 1, uiSource: "product_card" });
+        return;
+      }
       if (!result.ok) {
         toast({
           description:

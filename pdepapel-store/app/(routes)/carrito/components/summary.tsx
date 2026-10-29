@@ -21,6 +21,8 @@ import {
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { DEPOSIT_NO_COUPON_NOTE } from "@/lib/presale-copy";
+import { isDepositPresaleItem } from "@/lib/presale-deposit";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { NATIONWIDE_SHIPPING_COPY } from "@/lib/trust-points";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
@@ -51,9 +53,11 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   const [showCoupon, setShowCoupon] = useState(false);
   const [stickyVisible, setStickyVisible] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
-  const coupon = couponState?.isValid ? couponState.coupon : null;
+  const depositCart = items.some((item) => isDepositPresaleItem(item));
+  // Una preventa con anticipo no lleva cupón: el guardado no se aplica.
+  const coupon = couponState?.isValid && !depositCart ? couponState.coupon : null;
 
-  const { total, subtotal, productSavings, couponDiscount, freeShipping } = useMemo(
+  const { total, subtotal, productSavings, couponDiscount, freeShipping, dueNow, balanceDue } = useMemo(
     () => calculateTotals(items, coupon, 0, freeShippingThreshold),
     [items, coupon, freeShippingThreshold],
   );
@@ -121,7 +125,27 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
       <h2 id="resumen-titulo" className="font-serif text-xl font-bold text-blue-yankees">
         Resumen del pedido
       </h2>
-      <FreeShippingProgress subtotal={subtotal} threshold={freeShippingThreshold} />
+      {!depositCart && <FreeShippingProgress subtotal={subtotal} threshold={freeShippingThreshold} />}
+      {depositCart ? (
+        <dl className="flex flex-col gap-2.5" aria-live="polite">
+          <div className={ROW}>
+            <dt>Total del producto</dt>
+            <dd className="font-quicksand font-semibold">{currencyFormatter.format(total)}</dd>
+          </div>
+          <div className={cn(ROW, "text-base font-bold")}>
+            <dt>Pagas hoy (anticipo)</dt>
+            <dd className="font-quicksand text-[22px] font-bold" data-testid="cart-deposit-due-now">{currencyFormatter.format(dueNow)}</dd>
+          </div>
+          <div className={ROW}>
+            <dt>Saldo al llegar</dt>
+            <dd className="font-quicksand font-semibold">{currencyFormatter.format(balanceDue)} + envío</dd>
+          </div>
+        </dl>
+      ) : null}
+      {depositCart ? (
+        <p className="font-sans text-xs text-gray-500">{DEPOSIT_NO_COUPON_NOTE}</p>
+      ) : null}
+      {!depositCart && (<>
       <dl className="flex flex-col gap-2.5">
         <div className={ROW}>
           <dt>
@@ -194,6 +218,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
         <span className="font-quicksand text-[28px] font-bold text-blue-yankees">{currencyFormatter.format(total)}</span>
       </div>
       <p className="-mt-2 font-sans text-xs text-gray-500">{freeShipping ? "Envío gratis incluido" : "Sin envío"} · Precio final con impuestos incluidos</p>
+      </>)}
 
       {disabledReason && (
         <p role="alert" className="rounded-lg bg-white px-3 py-2 font-sans text-xs font-semibold text-amber-800">
@@ -226,8 +251,8 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
             es la etiqueta del botón. */}
         <div className="flex h-14 items-center gap-2 rounded-full bg-white pl-4 pr-1.5 shadow-[0_8px_24px_rgba(34,27,65,0.22)] ring-1 ring-blue-baby">
           <span className="flex shrink-0 flex-col leading-tight">
-            <span className="font-sans text-xs text-gray-500">Total</span>
-            <span className="font-quicksand text-[15px] font-bold text-blue-yankees">{currencyFormatter.format(total)}</span>
+            <span className="font-sans text-xs text-gray-500">{depositCart ? "Pagas hoy" : "Total"}</span>
+            <span className="font-quicksand text-[15px] font-bold text-blue-yankees">{currencyFormatter.format(depositCart ? dueNow : total)}</span>
           </span>
           <Button onClick={goToCheckout} disabled={disabled} tabIndex={stickyVisible ? 0 : -1} className="h-11 min-w-0 flex-1 rounded-full bg-blue-yankees px-4 font-sans text-sm font-semibold text-white">
             <span className="truncate">Finalizar compra</span>

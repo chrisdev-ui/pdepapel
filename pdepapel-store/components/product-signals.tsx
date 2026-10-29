@@ -78,21 +78,31 @@ export function ProductSignals({ product, availability, quantity, className }: P
         <>
           <p className="flex items-center gap-2">
             <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
-            <span>
-              Pagas el total hoy y lo despachamos el{" "}
-              <strong>{availability.presale.arrivalLabel}</strong>.
-            </span>
+            {availability.presale.deposit ? (
+              <span>Hoy pagas el anticipo; el saldo y el envío, cuando llegue.</span>
+            ) : availability.presale.arrivalLabel ? (
+              <span>
+                Pagas el total hoy y lo despachamos el{" "}
+                <strong>{availability.presale.arrivalLabel}</strong>.
+              </span>
+            ) : (
+              <span>Pagas el total hoy y lo despachamos cuando llegue.</span>
+            )}
           </p>
-          <p className="flex items-center gap-2">
-            <Flame aria-hidden="true" className="h-4 w-4 shrink-0" />
-            <span>
-              Quedan <strong>{availability.presale.remaining}</strong> reservas.
-            </span>
-          </p>
+          {!availability.presale.uncapped && (
+            <p className="flex items-center gap-2">
+              <Flame aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span>
+                Quedan <strong>{availability.presale.remaining}</strong> reservas.
+              </span>
+            </p>
+          )}
           <p className="flex items-center gap-2">
             <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0" />
             <span>
-              Si la fecha cambia te avisamos y puedes pedir tu dinero de vuelta.
+              {availability.presale.deposit
+                ? "Si la fecha cambia te avisamos."
+                : "Si la fecha cambia te avisamos y puedes pedir tu dinero de vuelta."}
             </span>
           </p>
         </>
@@ -122,7 +132,8 @@ export function ProductSignals({ product, availability, quantity, className }: P
           />
         </>
       )}
-      {!availability.canBuy && availability.status !== "archived" && (
+      {/* Una preventa (abierta o con el cupo lleno) usa la lista de espera de la ficha, no el boletín. */}
+      {!availability.canBuy && availability.status !== "archived" && !availability.presale && (
         <NotifyMeForm
           productId={product.id}
           variant={availability.status === "coming-soon" ? "coming-soon" : "sold-out"}

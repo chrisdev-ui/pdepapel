@@ -21,7 +21,8 @@ export function resolvePaymentResult(
   order: Pick<Order, "status" | "paymentResult">,
 ): PaymentResult {
   if (order.paymentResult) return order.paymentResult;
-  if (order.status === OrderStatus.PAID) return "approved";
+  // El anticipo de una preventa es un pago aprobado: lo que falta se cobra al llegar.
+  if (order.status === OrderStatus.PAID || order.status === OrderStatus.DEPOSIT_PAID) return "approved";
   if (order.status === OrderStatus.CANCELLED || order.status === "REJECTED") return "declined";
   return "pending";
 }
