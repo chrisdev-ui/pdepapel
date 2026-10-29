@@ -258,6 +258,19 @@ test.describe("preventa con anticipo en el panel", () => {
       await entry.scrollIntoViewIfNeeded();
       await settled(entry);
       await expect(page.getByText("Anticipo de", { exact: false }).filter({ visible: true }).first()).toBeVisible();
+      if (viewport.confirm) {
+        // La lista vive dentro del <form> de la ficha (HTML del servidor): «Agregar»
+        // tiene que guardar en la lista y no enviar la ficha (2026-10-29, Paula).
+        const before = await db.product.findUniqueOrThrow({ where: { id: productId }, select: { updatedAt: true } });
+        const group = page.getByRole("group", { name: "Agregar a la lista de espera" });
+        await group.getByLabel("Nombre").fill("Clienta Agregada E2E");
+        await group.getByLabel("Teléfono o @usuario").fill("@clienta_agregada_e2e");
+        await group.getByRole("button", { name: "Agregar" }).click();
+        await expect(page.getByText("Clienta Agregada E2E").filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+        await expect.poll(() => db.preorderWaitlistEntry.count({ where: { productId, name: "Clienta Agregada E2E" } })).toBe(1);
+        const after = await db.product.findUniqueOrThrow({ where: { id: productId }, select: { updatedAt: true } });
+        expect(after.updatedAt.toISOString()).toBe(before.updatedAt.toISOString());
+      }
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-3-ficha.png`), fullPage: true });
 

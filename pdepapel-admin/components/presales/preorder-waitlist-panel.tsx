@@ -2,13 +2,14 @@
 
 import axios from "axios";
 import { MessageCircle } from "lucide-react";
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import useSWR from "swr";
 
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { formatPhoneNumber } from "@/lib/phone";
 import {
   emptyWaitlistCounts,
@@ -47,14 +48,6 @@ const STATUS_CLASSES: Record<WaitlistStatus, string> = {
 
 const fetcher = (url: string) => axios.get<WaitlistResponse>(url).then((response) => response.data);
 
-const errorMessage = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    const message = (error.response?.data as { message?: unknown } | undefined)?.message;
-    if (typeof message === "string" && message) return message;
-  }
-  return "Inténtalo de nuevo en un momento.";
-};
-
 const dateFormatter = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" });
 
 function contactLine(entry: WaitlistEntryRow): string | null {
@@ -83,8 +76,11 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
   const entries = data?.entries ?? [];
   const visible = showDiscarded ? entries : entries.filter((entry) => entry.status !== "DISCARDED");
 
-  const add = async (event: FormEvent) => {
-    event.preventDefault();
+  // Sin <form> propio: el panel vive dentro del <form> de la ficha, y un form
+  // anidado lo descarta el navegador (HTML del servidor) o React lo deja enviar
+  // la ficha. «Agregar» y Enter llaman a `add` directamente.
+  const add = async () => {
+    if (saving) return;
     if (!name.trim()) {
       toast({ description: "Escribe el nombre.", variant: "destructive" });
       return;
@@ -111,10 +107,16 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
       });
       await mutate();
     } catch (failure) {
-      toast({ title: "No se pudo agregar", description: errorMessage(failure), variant: "destructive" });
+      toast({ title: "No se pudo agregar", description: getErrorMessage(failure), variant: "destructive" });
     } finally {
       setSaving(false);
     }
+  };
+
+  const addOnEnter = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void add();
   };
 
   const setStatus = async (entry: WaitlistEntryRow, status: Exclude<WaitlistStatus, "CONVERTED">) => {
@@ -123,7 +125,7 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
       await axios.patch(`/api/${storeId}/preorder-waitlist/${entry.id}`, { status });
       await mutate();
     } catch (failure) {
-      toast({ title: "No se pudo cambiar el estado", description: errorMessage(failure), variant: "destructive" });
+      toast({ title: "No se pudo cambiar el estado", description: getErrorMessage(failure), variant: "destructive" });
     } finally {
       setBusyId(null);
     }
@@ -154,12 +156,12 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
       </dl>
 
       {canWrite ? (
-        <form onSubmit={add} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-end">
+        <div role="group" aria-label="Agregar a la lista de espera" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-end">
           <div className="space-y-1">
             <label htmlFor={`${formId}-name`} className="text-xs font-medium">
               Nombre
             </label>
-            <Input id={`${formId}-name`} value={name} onChange={(event) => setName(event.target.value)} maxLength={120} className="h-11" autoComplete="off" disabled={saving} />
+            <Input id={`${formId}-name`} onKeyDown={addOnEnter} value={name} onChange={(event) => setName(event.target.value)} maxLength={120} className="h-11" autoComplete="off" disabled={saving} />
           </div>
           <div className="space-y-1">
             <label htmlFor={`${formId}-channel`} className="text-xs font-medium">
@@ -167,6 +169,7 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
             </label>
             <select
               id={`${formId}-channel`}
+              onKeyDown={addOnEnter}
               value={channel}
               onChange={(event) => setChannel(event.target.value as PanelWaitlistChannel)}
               disabled={saving}
@@ -183,18 +186,18 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
             <label htmlFor={`${formId}-contact`} className="text-xs font-medium">
               Teléfono o @usuario
             </label>
-            <Input id={`${formId}-contact`} value={contact} onChange={(event) => setContact(event.target.value)} maxLength={80} className="h-11" autoComplete="off" disabled={saving} />
+            <Input id={`${formId}-contact`} onKeyDown={addOnEnter} value={contact} onChange={(event) => setContact(event.target.value)} maxLength={80} className="h-11" autoComplete="off" disabled={saving} />
           </div>
           <div className="space-y-1">
             <label htmlFor={`${formId}-note`} className="text-xs font-medium">
               Nota (opcional)
             </label>
-            <Input id={`${formId}-note`} value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} className="h-11" autoComplete="off" disabled={saving} />
+            <Input id={`${formId}-note`} onKeyDown={addOnEnter} value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} className="h-11" autoComplete="off" disabled={saving} />
           </div>
-          <Button type="submit" className="h-11 sm:col-span-2 lg:col-span-1" disabled={saving}>
+          <Button type="button" className="h-11 sm:col-span-2 lg:col-span-1" disabled={saving} onClick={() => void add()}>
             {saving ? "Agregando…" : "Agregar"}
           </Button>
-        </form>
+        </div>
       ) : null}
 
       {error ? (
