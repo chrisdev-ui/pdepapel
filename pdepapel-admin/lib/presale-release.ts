@@ -1,6 +1,7 @@
 import { ProductPresaleStatus } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
+import { availableStock } from "@/lib/available-stock";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import { PAID_PRESALE_LINE } from "@/lib/presale";
@@ -48,7 +49,7 @@ export async function getPresaleReleasePreview(
       unitLimit: true,
       committedUnits: true,
       product: {
-        select: { id: true, name: true, sku: true, stock: true, isKit: true },
+        select: { id: true, name: true, sku: true, stock: true, reservedUnits: true, isKit: true },
       },
     },
   });
@@ -77,12 +78,12 @@ export async function getPresaleReleasePreview(
     presale,
     lines,
     pendingUnits,
-    /** Un kit no guarda stock propio; sus componentes son los que mandan. */
-    availableStock: presale.product.stock,
+    /** Lo apartado para otras clientas no se le da a la preventa. Un kit no guarda stock propio; sus componentes son los que mandan. */
+    availableStock: availableStock(presale.product),
     canRelease:
       presale.status === ProductPresaleStatus.ACTIVE &&
       pendingUnits > 0 &&
-      presale.product.stock >= pendingUnits,
+      availableStock(presale.product) >= pendingUnits,
   };
 }
 
@@ -109,7 +110,7 @@ export async function releasePresale(input: {
   // en negativo y prometería despachos que no se pueden cumplir.
   if (preview.availableStock < preview.pendingUnits) {
     throw ErrorFactory.InvalidRequest(
-      `Faltan unidades en bodega: hay ${preview.availableStock} y se necesitan ${preview.pendingUnits} para liberar esta preventa.`,
+      `Faltan unidades en bodega: hay ${preview.availableStock} libres (sin contar lo apartado) y se necesitan ${preview.pendingUnits} para liberar esta preventa.`,
     );
   }
 

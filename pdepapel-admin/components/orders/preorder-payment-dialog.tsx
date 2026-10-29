@@ -50,6 +50,7 @@ export function PreorderPaymentDialog({
   defaultAmount,
   defaultShippingCost = 0,
   subjectLabel,
+  customerEmail,
   onDone,
 }: {
   storeId: string;
@@ -60,6 +61,8 @@ export function PreorderPaymentDialog({
   defaultShippingCost?: number;
   /** «el pedido #…» o el nombre de quien está en la lista. */
   subjectLabel: string;
+  /** Sin correo no se puede avisar por aquí: la casilla se apaga y el aviso dice que es por WhatsApp. */
+  customerEmail: string | null | undefined;
   onDone?: (result: { orderId?: string }) => void;
 }) {
   const { toast } = useToast();
@@ -75,6 +78,7 @@ export function PreorderPaymentDialog({
   const [note, setNote] = useState("");
   const [notifyCustomer, setNotifyCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
+  const hasEmail = Boolean(customerEmail?.trim());
 
   const balanceDue = target.mode === "balance" ? Math.max(0, defaultAmount + (shippingCost ?? 0) - defaultShippingCost) : null;
   const overRemaining = isInstallment && amount !== undefined && amount > defaultAmount;
@@ -88,7 +92,7 @@ export function PreorderPaymentDialog({
         paidAt: paidAt === bogotaToday() ? new Date().toISOString() : `${paidAt}T12:00:00-05:00`,
         method,
         note: note.trim() || null,
-        notifyCustomer,
+        notifyCustomer: hasEmail && notifyCustomer,
       };
       const { data } =
         target.mode === "deposit"
@@ -101,7 +105,11 @@ export function PreorderPaymentDialog({
             : await axios.post(`/api/${storeId}/orders/${target.orderId}/balance`, { ...common, shippingCost: shippingCost ?? 0 });
       toast({
         title: isDeposit ? "Anticipo anotado" : isInstallment ? "Abono anotado" : "Saldo anotado: pedido pagado",
-        description: notifyCustomer ? "La clienta recibe el aviso por correo." : "Sin avisar a la clienta: quedó anotado en «Avisos a la clienta».",
+        description: !hasEmail
+          ? "No tiene correo: avísale por WhatsApp. Quedó anotado en «Avisos a la clienta»."
+          : notifyCustomer
+            ? "La clienta recibe el aviso por correo."
+            : "Sin avisar a la clienta: quedó anotado en «Avisos a la clienta».",
         variant: "success",
       });
       onOpenChange(false);
@@ -189,9 +197,15 @@ export function PreorderPaymentDialog({
             <Label htmlFor="preorder-payment-note">Nota (opcional)</Label>
             <Textarea id="preorder-payment-note" rows={2} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ej.: comprobante por WhatsApp" />
           </div>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <Checkbox checked={notifyCustomer} onCheckedChange={(checked) => setNotifyCustomer(checked === true)} aria-label="Avisar a la clienta" />
-            Avisar a la clienta por correo
+          <label className={hasEmail ? "flex min-h-11 items-center gap-2 text-sm" : "flex min-h-11 items-center gap-2 text-sm text-muted-foreground"}>
+            <Checkbox
+              checked={hasEmail && notifyCustomer}
+              disabled={!hasEmail}
+              onCheckedChange={(checked) => setNotifyCustomer(checked === true)}
+              aria-label="Avisar a la clienta"
+              aria-describedby={hasEmail ? undefined : "preorder-payment-no-email"}
+            />
+            {hasEmail ? "Avisar a la clienta por correo" : <span id="preorder-payment-no-email">Sin correo: avísale por WhatsApp</span>}
           </label>
         </div>
 

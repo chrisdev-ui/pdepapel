@@ -6,6 +6,7 @@ import {
   isPresaleOverdue,
   PAID_PRESALE_LINE,
 } from "@/lib/presale";
+import { availableStock } from "@/lib/available-stock";
 import { sumPrepaid } from "@/lib/order-payment-amounts";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
@@ -56,7 +57,7 @@ export interface PresaleRow {
   depositsReceived: number;
   /** Pedidos con anticipo recibido y saldo pendiente. */
   depositOrders: number;
-  /** Stock real hoy: dice si ya se puede liberar. */
+  /** Lo que hay en bodega para la preventa: stock menos lo apartado para otras clientas. */
   productStock: number;
   canRelease: boolean;
   delayNotifiedAt: Date | null;
@@ -94,7 +95,7 @@ export async function getPresales(
     where: { storeId },
     orderBy: [{ status: "asc" }, { expectedArrivalAt: "asc" }],
     include: {
-      product: { select: { id: true, name: true, sku: true, stock: true } },
+      product: { select: { id: true, name: true, sku: true, stock: true, reservedUnits: true } },
     },
   });
 
@@ -192,11 +193,11 @@ export async function getPresales(
       collected: bucket?.collected ?? 0,
       depositsReceived: bucket?.deposits ?? 0,
       depositOrders: bucket?.depositOrders.size ?? 0,
-      productStock: presale.product.stock,
+      productStock: availableStock(presale.product),
       canRelease:
         presale.status === ProductPresaleStatus.ACTIVE &&
         pendingUnits > 0 &&
-        presale.product.stock >= pendingUnits,
+        availableStock(presale.product) >= pendingUnits,
       delayNotifiedAt: presale.delayNotifiedAt,
       releasedAt: presale.releasedAt,
     };

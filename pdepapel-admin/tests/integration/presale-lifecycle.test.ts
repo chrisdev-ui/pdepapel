@@ -691,6 +691,18 @@ describe("7. liberar", () => {
     ).rejects.toThrow(/Faltan unidades/);
   });
 
+  // Lo apartado para otra clienta no es de la preventa: 3 en bodega con 1 apartada no alcanzan para 3.
+  it("no cuenta lo apartado para otras clientas como mercancía de la preventa", async () => {
+    await testPrisma.product.update({ where: { id: agendaId }, data: { stock: 3, reservedUnits: 1 } });
+
+    const preview = await getPresaleReleasePreview(storeId, presaleId);
+    expect(preview.availableStock).toBe(2);
+    expect(preview.canRelease).toBe(false);
+    await expect(releasePresale({ storeId, presaleId, releasedBy: "user-paula" })).rejects.toThrow(/hay 2 libres/);
+
+    await testPrisma.product.update({ where: { id: agendaId }, data: { stock: 0, reservedUnits: 0 } });
+  });
+
   it("descuenta inventario, libera las líneas y cierra la campaña", async () => {
     // Llega la mercancía.
     await testPrisma.product.update({

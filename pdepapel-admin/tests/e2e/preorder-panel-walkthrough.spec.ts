@@ -267,6 +267,8 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
     await expect(card).toBeVisible({ timeout: 90_000 });
     await settled(card);
     await expect(card).toContainText("2");
+    // Lo que Paula le pide al proveedor: lo que falta menos lo que ya hay en bodega.
+    await expect(card).toContainText("Faltan 2 unidades por entregar · hay 0 en bodega · pide 2 al proveedor");
     const received = await db.orderPayment.aggregate({ where: { order: { orderItems: { some: { productId: ids.deposit } } } }, _sum: { amount: true } });
     expect(Number(received._sum.amount)).toBe(2 * DEPOSIT);
     await expect(page.getByText("Anticipos recibidos").filter({ visible: true }).first()).toBeVisible();
@@ -359,6 +361,12 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
     await late.scrollIntoViewIfNeeded();
     await settled(late);
     const delayNotified = () => db.productPresale.findUniqueOrThrow({ where: { id: ids.latePresale } }).then((row) => row.delayNotifiedAt !== null);
+
+    // Botones de 44 px en el teléfono.
+    for (const name of ["Notificar retraso", "Liberar"]) {
+      const box = await late.getByRole("button", { name }).boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
 
     // Nadie esperando: el mensaje del servidor se ve y no se anota nada.
     await late.getByRole("button", { name: "Notificar retraso" }).click();

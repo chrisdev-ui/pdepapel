@@ -50,6 +50,7 @@ export function PresaleWaitlistBlock({
           target={{ mode: "deposit", presaleId, source: { kind: "waitlist", entryId: entry.id } }}
           defaultAmount={unitDeposit}
           subjectLabel={entry.name ? entry.name : "esta persona"}
+          customerEmail={entry.email}
           onDone={async () => {
             await mutate(`/api/${storeId}/preorder-waitlist?productId=${encodeURIComponent(productId)}`);
             router.refresh();

@@ -92,6 +92,19 @@ describe("lista de espera dentro de la ficha del producto", () => {
     expect(productSubmit).not.toHaveBeenCalled();
   });
 
+  // #277: elegir el canal con el teclado (Enter abre o confirma la lista) no agrega a nadie.
+  it("Enter en «Canal» no agrega a la lista", async () => {
+    renderInsideProductForm(vi.fn());
+    await screen.findByText(/Todavía no hay nadie/);
+
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Clienta Uno" } });
+    fireEvent.change(screen.getByLabelText("Teléfono o @usuario"), { target: { value: "3001112233" } });
+    fireEvent.keyDown(screen.getByLabelText("Canal"), { key: "Enter" });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
   it("sin teléfono: el mensaje se ve y no se envía nada", async () => {
     const productSubmit = vi.fn();
     renderInsideProductForm(productSubmit);

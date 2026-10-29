@@ -48,6 +48,8 @@ interface OrderStatusBarProps {
   onTransition: (payload: TransitionPayload) => Promise<void> | void;
   /** Preventa con anticipo: «Marcar anticipo/saldo recibido». */
   paymentPlan?: "FULL" | "DEPOSIT" | null;
+  /** Trae una línea de preventa sin liberar: cancelar no mueve inventario. */
+  heldByPresale?: boolean;
   extraActions?: ReactNode;
 }
 
@@ -72,6 +74,7 @@ export function OrderStatusBar({
   loading,
   onTransition,
   paymentPlan = null,
+  heldByPresale = false,
   extraActions = null,
 }: OrderStatusBarProps) {
   const tone = nextStep?.tone ?? "slate";
@@ -87,6 +90,7 @@ export function OrderStatusBar({
     hasGuide,
     guideOnFile,
     paymentPlan,
+    heldByPresale,
     loading,
     onTransition,
   };

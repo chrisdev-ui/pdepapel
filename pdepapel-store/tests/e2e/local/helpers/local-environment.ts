@@ -197,3 +197,21 @@ export async function resetOrderRateLimits() {
   const keys = (await call(["KEYS", "orders:*"])) as string[];
   if (keys.length > 0) await call(["DEL", ...keys]);
 }
+
+/**
+ * Lo que hace `invalidateStoreProductsCache` del panel al guardar un producto,
+ * para cuando la prueba cambia la base sin pasar por el panel (el seed): sin
+ * esto el Redis falso sigue sirviendo la lista y la búsqueda de antes.
+ */
+export async function purgeAdminProductCache(storeId: string) {
+  const url = `http://127.0.0.1:${LOCAL_FAKE_UPSTASH_PORT}`;
+  const call = async (command: unknown[]) => {
+    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) });
+    if (!response.ok) throw new Error(`Redis falso de las e2e: ${response.status}`);
+    return ((await response.json()) as { result: unknown }).result;
+  };
+  for (const pattern of [`store:${storeId}:products:*`, `store:${storeId}:search:*`, `store:${storeId}:search-vocabulary:*`]) {
+    const keys = (await call(["KEYS", pattern])) as string[];
+    if (keys.length > 0) await call(["DEL", ...keys]);
+  }
+}

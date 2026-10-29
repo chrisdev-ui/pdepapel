@@ -33,6 +33,7 @@ function renderDialog(mode: "deposit" | "balance") {
       target={mode === "deposit" ? { mode, presaleId: "presale-1", source: { kind: "waitlist", entryId: "entry-1" } } : { mode, orderId: "order-1" }}
       defaultAmount={mode === "deposit" ? 30000 : 130000}
       subjectLabel="Clienta Uno"
+      customerEmail="clienta@example.com"
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: mode === "deposit" ? "Anotar anticipo" : "Anotar saldo" }));
@@ -64,6 +65,7 @@ describe("fecha del pago al anotar anticipo o saldo", () => {
         target={{ mode: "deposit", presaleId: "presale-1", source: { kind: "waitlist", entryId: "entry-1" } }}
         defaultAmount={30000}
         subjectLabel="Clienta Uno"
+        customerEmail="clienta@example.com"
       />,
     );
     fireEvent.change(screen.getByLabelText("Fecha del pago"), { target: { value: "2026-10-27" } });

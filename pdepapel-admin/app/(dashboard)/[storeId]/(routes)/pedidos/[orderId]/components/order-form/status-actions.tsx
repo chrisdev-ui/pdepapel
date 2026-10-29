@@ -51,6 +51,8 @@ interface StatusActionsProps {
   /** Solo las acciones normales; las destructivas van aparte. */
   variant: "card" | "care";
   paymentPlan?: "FULL" | "DEPOSIT" | null;
+  /** Trae una línea de preventa sin liberar: cancelar devuelve el cupo, no inventario. */
+  heldByPresale?: boolean;
   onTransition: (payload: TransitionPayload) => Promise<void> | void;
 }
 
@@ -83,6 +85,7 @@ export function StatusActions({
   variant,
   onTransition,
   paymentPlan = null,
+  heldByPresale = false,
 }: StatusActionsProps) {
   // Solo lectura: las transiciones se ven pero no se pueden pulsar.
   const canWrite = useCanWrite();
@@ -212,12 +215,16 @@ export function StatusActions({
       ];
     }
     return [
-      paid
-        ? "El inventario vuelve con un movimiento de cancelación."
-        : "No se toca el inventario: nunca se descontó.",
+      heldByPresale && paid
+        ? "No se toca el inventario: la preventa no se ha liberado. La unidad vuelve al cupo de la preventa."
+        : paid
+          ? "El inventario vuelve con un movimiento de cancelación."
+          : "No se toca el inventario: nunca se descontó.",
       ...(paid
         ? [
-            "El cobro no se devuelve solo: el reembolso se gestiona aparte, con Bold o por transferencia.",
+            heldByPresale && paymentPlan === "DEPOSIT"
+              ? "El anticipo y los abonos no se devuelven solos: si corresponde, devuélvelos aparte, con Bold o por transferencia."
+              : "El cobro no se devuelve solo: el reembolso se gestiona aparte, con Bold o por transferencia.",
           ]
         : []),
       ...(hasGuide

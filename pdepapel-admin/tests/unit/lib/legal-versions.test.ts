@@ -19,9 +19,14 @@ describe("versiones legales: copia de la tienda", () => {
     expect(KNOWN_LEGAL_VERSIONS.privacy[0]).toBe(privacy);
   });
 
+  it("2026-10-29 se acepta antes de que la tienda la publique, sin ser la vigente", () => {
+    expect(LEGAL_VERSIONS.terms).toBe("2026-10-28");
+    expect(parseLegalVersions({ terms: "2026-10-29", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-29", privacy: "2026-10-26" });
+  });
+
   it("los términos 2026-10-28 (preventas y anticipos) son los vigentes y los 2026-10-21 se siguen aceptando", () => {
     expect(LEGAL_VERSIONS.terms).toBe("2026-10-28");
-    expect(KNOWN_LEGAL_VERSIONS.terms).toEqual(["2026-10-28", "2026-10-21"]);
+    expect(KNOWN_LEGAL_VERSIONS.terms).toEqual(["2026-10-28", "2026-10-21", "2026-10-29"]);
     expect(parseLegalVersions({ terms: "2026-10-28", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-28", privacy: "2026-10-26" });
     expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-26" });
   });

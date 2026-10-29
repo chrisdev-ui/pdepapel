@@ -26,6 +26,25 @@ describe("StatusActions", () => {
     expect(onTransition).toHaveBeenCalledWith(expect.objectContaining({ to: OrderStatus.SENT, trackingCode: undefined }));
   });
 
+  // Cancelar antes de liberar: el inventario nunca se descontó, solo vuelve el cupo.
+  it("cancelar un pedido con anticipo que espera la preventa no promete devolver inventario", () => {
+    render(
+      <StatusActions status={OrderStatus.DEPOSIT_PAID} type={OrderType.STANDARD} paymentMethod={PaymentMethod.BankTransfer} shippingProvider={ShippingProvider.ENVIOCLICK} loading={false} variant="care" paymentPlan="DEPOSIT" heldByPresale onTransition={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/ }));
+    expect(screen.getByText(/No se toca el inventario: la preventa no se ha liberado/)).toBeInTheDocument();
+    expect(screen.getByText(/El anticipo y los abonos no se devuelven solos/)).toBeInTheDocument();
+    expect(screen.queryByText("El inventario vuelve con un movimiento de cancelación.")).not.toBeInTheDocument();
+  });
+
+  it("un pedido pagado ya despachable sigue diciendo que el inventario vuelve", () => {
+    render(
+      <StatusActions status={OrderStatus.PAID} type={OrderType.STANDARD} paymentMethod={PaymentMethod.BankTransfer} shippingProvider={ShippingProvider.ENVIOCLICK} loading={false} variant="care" onTransition={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/ }));
+    expect(screen.getByText("El inventario vuelve con un movimiento de cancelación.")).toBeInTheDocument();
+  });
+
   it("still requires the guide for an EnvioClick shipment without one", () => {
     render(
       <StatusActions status={OrderStatus.PAID} type={OrderType.STANDARD} paymentMethod={PaymentMethod.BankTransfer} shippingProvider={ShippingProvider.ENVIOCLICK} loading={false} variant="card" onTransition={vi.fn()} />,

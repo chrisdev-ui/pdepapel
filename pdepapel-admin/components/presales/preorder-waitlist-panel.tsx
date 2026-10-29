@@ -169,7 +169,6 @@ export function PreorderWaitlistPanel({ storeId, productId, presaleId, renderDep
             </label>
             <select
               id={`${formId}-channel`}
-              onKeyDown={addOnEnter}
               value={channel}
               onChange={(event) => setChannel(event.target.value as PanelWaitlistChannel)}
               disabled={saving}

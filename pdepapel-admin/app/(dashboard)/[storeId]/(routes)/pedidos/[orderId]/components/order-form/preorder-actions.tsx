@@ -31,6 +31,7 @@ export function PreorderPaymentActions({
     shippingCost?: number | null;
     presaleId: string | null;
     heldByPresale: boolean;
+    email?: string | null;
   };
 }) {
   const canWrite = useCanWrite();
@@ -89,6 +90,7 @@ export function PreorderPaymentActions({
           defaultAmount={dialog === "deposit" ? deposit : Math.max(0, order.balanceDue)}
           defaultShippingCost={Math.round(Number(order.shippingCost ?? 0))}
           subjectLabel={`el pedido #${order.orderNumber}`}
+          customerEmail={order.email}
           onDone={() => router.refresh()}
         />
       ) : null}

@@ -271,7 +271,9 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                     ) : null}
                     <p className="text-xs text-muted-foreground">
                       {row.pendingUnits > 0
-                        ? `${row.pendingUnits === 1 ? "Falta 1 unidad" : `Faltan ${row.pendingUnits} unidades`} por entregar · hay ${row.productStock} en bodega`
+                        ? `${row.pendingUnits === 1 ? "Falta 1 unidad" : `Faltan ${row.pendingUnits} unidades`} por entregar · hay ${row.productStock} en bodega${
+                            row.pendingUnits > row.productStock ? ` · pide ${row.pendingUnits - row.productStock} al proveedor` : ""
+                          }`
                         : "Todo entregado"}
                     </p>
                     {/* El contador se suma al confirmarse el pago y, si ese
@@ -314,6 +316,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="min-h-11"
                         disabled={loading !== null}
                         onClick={() => onNotifyDelay(row)}
                       >
@@ -330,11 +333,12 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                     {canWrite && row.status === ProductPresaleStatus.ACTIVE ? (
                       <Button
                         size="sm"
+                        className="min-h-11"
                         disabled={loading !== null || !row.canRelease}
                         title={
                           row.canRelease
                             ? undefined
-                            : `Necesitas ${row.pendingUnits} unidades en bodega y hay ${row.productStock}`
+                            : `Necesitas ${row.pendingUnits} unidades libres en bodega y hay ${row.productStock}`
                         }
                         onClick={() => onRelease(row)}
                       >

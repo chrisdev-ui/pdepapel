@@ -885,6 +885,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   loading={loading}
                   onTransition={onTransition}
                   paymentPlan={initialData.paymentPlan}
+                  heldByPresale={isOrderHeldByPresale(initialData)}
                   extraActions={
                     <PreorderPaymentActions
                       storeId={storeId}
@@ -899,6 +900,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         shippingCost: initialData.shipping?.cost ?? 0,
                         presaleId: initialData.orderItems.find((item) => item.presaleId)?.presaleId ?? null,
                         heldByPresale: isOrderHeldByPresale(initialData),
+                        email: initialData.email,
                       }}
                     />
                   }
