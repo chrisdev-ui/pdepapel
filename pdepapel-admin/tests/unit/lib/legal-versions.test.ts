@@ -9,20 +9,21 @@ import { KNOWN_LEGAL_VERSIONS, LEGAL_VERSIONS, parseLegalVersions } from "@/lib/
 const repo = path.resolve(__dirname, "../../../..");
 
 describe("versiones legales: copia de la tienda", () => {
-  it("la versión vigente de la tienda es conocida por la administración (la vigente o la que sale en el próximo despliegue)", () => {
+  it("la versión vigente de la tienda es la primera conocida de la administración", () => {
     const store = readFileSync(path.join(repo, "pdepapel-store/lib/legal-versions.ts"), "utf8");
     const terms = /terms:\s*"(\d{4}-\d{2}-\d{2})"/.exec(store)?.[1];
     const privacy = /privacy:\s*"(\d{4}-\d{2}-\d{2})"/.exec(store)?.[1];
-    // Una versión por salir se agrega AL FINAL (lib/legal-versions.ts): la tienda puede ir una adelante.
-    expect([KNOWN_LEGAL_VERSIONS.terms[0], KNOWN_LEGAL_VERSIONS.terms.at(-1)]).toContain(terms);
+    expect(terms).toBe(LEGAL_VERSIONS.terms);
+    expect(KNOWN_LEGAL_VERSIONS.terms[0]).toBe(terms);
     expect(privacy).toBe(LEGAL_VERSIONS.privacy);
     expect(KNOWN_LEGAL_VERSIONS.privacy[0]).toBe(privacy);
   });
 
-  it("los términos 2026-10-28 (preventas y anticipos) se aceptan antes de ser los vigentes", () => {
-    expect(LEGAL_VERSIONS.terms).toBe("2026-10-21");
-    expect(KNOWN_LEGAL_VERSIONS.terms.at(-1)).toBe("2026-10-28");
+  it("los términos 2026-10-28 (preventas y anticipos) son los vigentes y los 2026-10-21 se siguen aceptando", () => {
+    expect(LEGAL_VERSIONS.terms).toBe("2026-10-28");
+    expect(KNOWN_LEGAL_VERSIONS.terms).toEqual(["2026-10-28", "2026-10-21"]);
     expect(parseLegalVersions({ terms: "2026-10-28", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-28", privacy: "2026-10-26" });
+    expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-26" });
   });
 
   it("la política 2026-10-26 es la vigente y la anterior se sigue aceptando (la tienda puede llegar después)", () => {

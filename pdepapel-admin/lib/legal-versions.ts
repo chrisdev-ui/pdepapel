@@ -9,8 +9,8 @@
  * sin que un pedido quede sin consentimiento.
  */
 export const KNOWN_LEGAL_VERSIONS = {
-  // 2026-10-28: «Preventas y anticipos». Aceptada antes de publicarla: pasa al principio después del despliegue.
-  terms: ["2026-10-21", "2026-10-28"],
+  // 2026-10-28: «Preventas y anticipos», vigente desde que la tienda la publicó (606fd5f7). 2026-10-21 se sigue aceptando.
+  terms: ["2026-10-28", "2026-10-21"],
   // 2026-10-26: «Publicidad» (TikTok). Se aceptó antes de publicarla (197c8ee3) para que el orden de despliegue no importe.
   privacy: ["2026-10-26", "2026-10-21"],
 } as const;

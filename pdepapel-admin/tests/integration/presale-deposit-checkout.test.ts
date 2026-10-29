@@ -13,7 +13,7 @@ import {
 } from "@prisma/client";
 
 import { generateGiftCardCode } from "@/lib/gift-card-codes";
-import { KNOWN_LEGAL_VERSIONS } from "@/lib/legal-versions";
+import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
@@ -81,7 +81,7 @@ vi.mock("@upstash/redis", () => {
 const WOMPI_EVENTS_KEY = process.env.WOMPI_EVENTS_KEY ?? "test-stub";
 const UNIT_PRICE = 16000;
 const UNIT_DEPOSIT = 3000;
-const TERMS = KNOWN_LEGAL_VERSIONS.terms[KNOWN_LEGAL_VERSIONS.terms.length - 1];
+const TERMS = LEGAL_VERSIONS.terms;
 
 let f: InventoryFixture;
 let calendarId = "";
