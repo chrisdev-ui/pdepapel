@@ -89,7 +89,7 @@ describe("ficha de una preventa con anticipo", () => {
       "Hoy pagas un anticipo de $ 30.000 por unidad y tu producto queda apartado.",
       "Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.",
       "El precio queda fijo desde que reservas.",
-      "El anticipo no es reembolsable, salvo el derecho de retracto de ley o si el producto no llega (en ese caso te devolvemos todo).",
+      "Solo los primeros $ 30.000 por unidad no son reembolsables, salvo el derecho de retracto de ley o si el producto no llega; lo abonado por encima se devuelve o queda como saldo a favor. Si el producto no llega, te devolvemos todo.",
       "La preventa se compra sola: no se mezcla con otros productos en el mismo pedido.",
     ]);
     expect(details).toHaveTextContent("Incluye 24 ventanas sorpresa.");

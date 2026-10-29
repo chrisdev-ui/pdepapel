@@ -95,7 +95,7 @@ describe("tarjeta de regalo · compra", () => {
       userId: null,
       guestId: "guest-1",
       website: "",
-      legalConsent: { terms: "2026-10-28", privacy: "2026-10-26" },
+      legalConsent: { terms: "2026-10-29", privacy: "2026-10-26" },
     });
     expect(typeof payload.formStartedAt).toBe("number");
     expect(payload.recipientEmail).toBeUndefined();

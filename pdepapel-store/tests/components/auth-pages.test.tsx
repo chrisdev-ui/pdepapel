@@ -114,7 +114,7 @@ describe("full-page sign-in and sign-up", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Crea tu cuenta" })).toBeInTheDocument();
     expect(screen.queryByTestId("legal-consent")).not.toBeInTheDocument();
     // Prueba de consentimiento: el webhook de la administración lee estas versiones si Clerk no trae legal_accepted_at.
-    expect(state.signUpProps).toMatchObject({ unsafeMetadata: { legalConsent: { terms: "2026-10-28", privacy: "2026-10-26", channel: "registro" } } });
+    expect(state.signUpProps).toMatchObject({ unsafeMetadata: { legalConsent: { terms: "2026-10-29", privacy: "2026-10-26", channel: "registro" } } });
     expect(state.signUpProps).toMatchObject({ path: "/crear-cuenta", routing: "path" });
   });
 });

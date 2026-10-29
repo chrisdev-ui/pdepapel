@@ -21,11 +21,19 @@ export function depositTeaser(depositNow: number, balance: number): string {
 
 /**
  * Qué no se devuelve si la clienta desiste. Un solo lugar (ficha, caja y
- * términos): Paula está decidiendo si es solo el primer anticipo o también
- * los abonos. Cambiar la frase es un cambio de términos: sube la versión en
+ * términos). Redacción por defecto del 2026-10-29, pendiente de revisión de
+ * Paula y la abogada: solo el anticipo se retiene; los abonos por encima, no.
+ * Cambiar la frase es un cambio de términos: sube la versión en
  * lib/legal-versions.ts de las dos apps.
  */
-export const PRESALE_NON_REFUNDABLE = "El anticipo no es reembolsable";
+export const PRESALE_NON_REFUNDABLE = "Solo el anticipo no es reembolsable";
+export const PRESALE_EXCESS_REFUND = "lo abonado por encima se devuelve o queda como saldo a favor";
+
+/** «Solo los primeros $30.000 por unidad no son reembolsables, salvo…; lo abonado por encima…». Sin valor, la frase general. */
+export function presaleRefundRule(unitDeposit?: number): string {
+  const retained = unitDeposit ? `Solo los primeros ${money(unitDeposit)} por unidad no son reembolsables` : PRESALE_NON_REFUNDABLE;
+  return `${retained}, salvo el derecho de retracto de ley o si el producto no llega; ${PRESALE_EXCESS_REFUND}`;
+}
 
 /** Los cinco puntos fijos de «Cómo funciona la preventa»; el anticipo es por unidad. */
 export function presaleHowItWorks(unitDeposit: number): string[] {
@@ -33,14 +41,14 @@ export function presaleHowItWorks(unitDeposit: number): string[] {
     `Hoy pagas un anticipo de ${money(unitDeposit)} por unidad y tu producto queda apartado.`,
     "Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.",
     "El precio queda fijo desde que reservas.",
-    `${PRESALE_NON_REFUNDABLE}, salvo el derecho de retracto de ley o si el producto no llega (en ese caso te devolvemos todo).`,
+    `${presaleRefundRule(unitDeposit)}. Si el producto no llega, te devolvemos todo.`,
     "La preventa se compra sola: no se mezcla con otros productos en el mismo pedido.",
   ];
 }
 
 /** La casilla obligatoria del checkout, con el anticipo de este pedido. */
 export function depositTermsCheckboxText(depositNow: number): string {
-  return `Acepto las condiciones de la preventa: hoy pago un anticipo de ${money(depositNow)}; el saldo y el envío los pago cuando llegue el producto. ${PRESALE_NON_REFUNDABLE}, salvo el derecho de retracto de ley o si el producto no llega.`;
+  return `Acepto las condiciones de la preventa: hoy pago un anticipo de ${money(depositNow)}; el saldo y el envío los pago cuando llegue el producto. ${presaleRefundRule()}.`;
 }
 
 export function depositSubmitLabel(depositNow: number): string {

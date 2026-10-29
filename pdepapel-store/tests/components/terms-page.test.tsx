@@ -16,7 +16,7 @@ describe("Términos y condiciones", () => {
   it("tiene sus secciones en orden, la fecha y ningún marcador sin llenar", () => {
     const { container } = render(<TermsPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Términos y condiciones de P de Papel" })).toBeInTheDocument();
-    expect(screen.getByText("28 de octubre de 2026")).toBeInTheDocument();
+    expect(screen.getByText("29 de octubre de 2026")).toBeInTheDocument();
     const article = container.querySelector("article") ?? container;
     const titles = within(article as HTMLElement).getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(titles.slice(0, 14)).toEqual([
@@ -54,7 +54,8 @@ describe("Términos y condiciones", () => {
     expect(section).not.toBeNull();
     const text = section!.textContent!.replace(/\s+/g, " ");
     expect(text).toContain("Preventas y anticipos");
-    expect(text).toContain("no es reembolsable");
+    expect(text).toContain("Solo el anticipo no es reembolsable");
+    expect(text).toContain("lo abonado por encima se devuelve o queda como saldo a favor");
     expect(text).toContain("salvo el derecho de retracto de ley o si el producto no llega");
     expect(text).toContain("te devolvemos el 100 % de lo que pagaste, incluido el anticipo");
     expect(text).toContain("dentro del plazo que te indiquemos al avisarte");

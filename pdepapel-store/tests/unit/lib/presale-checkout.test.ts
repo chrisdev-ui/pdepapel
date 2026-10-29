@@ -43,7 +43,7 @@ describe("pedido de una preventa con anticipo", () => {
   it("manda la casilla y su versión, envío manual en 0 y total = subtotal, sin cupón ni tarjeta", () => {
     const data = applyDepositCheckout(payload());
     expect(data.preorderTermsAccepted).toBe(true);
-    expect(data.preorderTermsVersion).toBe("2026-10-28");
+    expect(data.preorderTermsVersion).toBe("2026-10-29");
     expect(data.preorderTermsVersion).toBe(PREORDER_TERMS_VERSION);
     expect(data.couponCode).toBeNull();
     expect(data.giftCardCode).toBeNull();

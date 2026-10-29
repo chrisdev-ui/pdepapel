@@ -116,7 +116,7 @@ describe("checkout de una preventa con anticipo", () => {
     expect(checkbox.type).toBe("checkbox");
     expect(checkbox.checked).toBe(false);
     expect(checkbox.closest("label")!.textContent!.replace(/\s+/g, " ")).toContain(
-      "Acepto las condiciones de la preventa: hoy pago un anticipo de $ 30.000; el saldo y el envío los pago cuando llegue el producto. El anticipo no es reembolsable, salvo el derecho de retracto de ley o si el producto no llega.",
+      "Acepto las condiciones de la preventa: hoy pago un anticipo de $ 30.000; el saldo y el envío los pago cuando llegue el producto. Solo el anticipo no es reembolsable, salvo el derecho de retracto de ley o si el producto no llega; lo abonado por encima se devuelve o queda como saldo a favor.",
     );
     expect(within(checkbox.closest("label")!).getByRole("link")).toHaveAttribute("href", "/politicas/terminos#preventas");
 
@@ -158,7 +158,7 @@ describe("checkout de una preventa con anticipo", () => {
     const [payload] = spies.checkout.mock.calls[0];
     expect(payload).toMatchObject({
       preorderTermsAccepted: true,
-      preorderTermsVersion: "2026-10-28",
+      preorderTermsVersion: "2026-10-29",
       couponCode: null,
       giftCardCode: null,
       subtotal: 160000,
