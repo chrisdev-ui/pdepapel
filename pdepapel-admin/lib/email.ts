@@ -585,6 +585,8 @@ export const sendOrderEmail = async (
     notifyAdmin?: boolean;
     /** Solo estos destinatarios (el barrido de reintentos manda uno a la vez). */
     roles?: EmailRole[];
+    /** «Abono recibido»: el pedido sigue con anticipo; el correo cuenta este abono. */
+    installmentAmount?: number;
     /** false: quien llama registra los fallos (el barrido cuenta intentos). */
     recordFailures?: boolean;
     /**

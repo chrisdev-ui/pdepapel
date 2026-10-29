@@ -18,10 +18,13 @@ export function balanceChargeReference(orderNumber: string): string {
   return `${orderNumber}${BALANCE_REFERENCE_SUFFIX}`;
 }
 
-/** Lo que ya entró antes del saldo: los anticipos aprobados. */
+/** Cobros que entran antes del saldo: el anticipo y los abonos. */
+export const PREPAYMENT_KINDS: OrderPaymentKind[] = [OrderPaymentKind.DEPOSIT, OrderPaymentKind.INSTALLMENT];
+
+/** Lo que ya entró antes del saldo: anticipo y abonos aprobados. */
 export function sumPrepaid(payments: ReadonlyArray<{ kind: OrderPaymentKind; status: OrderPaymentStatus; amount: number }> | null | undefined): number {
   return (payments ?? [])
-    .filter((payment) => payment.kind === OrderPaymentKind.DEPOSIT && payment.status === OrderPaymentStatus.APPROVED)
+    .filter((payment) => PREPAYMENT_KINDS.includes(payment.kind) && payment.status === OrderPaymentStatus.APPROVED)
     .reduce((sum, payment) => sum + Math.round(Number(payment.amount)), 0);
 }
 

@@ -24,7 +24,7 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await requireJsonBody<Record<string, unknown>>(req, "ORDER_BALANCE_POST");
-    const payment = parseManualPaymentBody(body);
+    const payment = parseManualPaymentBody(body, new Date(), { allowZero: true });
     const rawShipping = body?.shippingCost;
     const shippingCost = rawShipping === undefined || rawShipping === null || rawShipping === "" ? null : Number(rawShipping);
 

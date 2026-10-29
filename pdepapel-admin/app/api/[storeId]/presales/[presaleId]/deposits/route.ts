@@ -51,6 +51,19 @@ const sourceSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/**
+ * El primer pago a mano: al menos el anticipo de las unidades (abonos libres:
+ * puede ser más) y nunca más que el total del pedido.
+ */
+function assertDepositAmount(amount: number, minimum: number, total: number) {
+  if (amount < minimum) {
+    throw ErrorFactory.InvalidRequest(`El anticipo mínimo es ${minimum.toLocaleString("es-CO")} pesos.`);
+  }
+  if (amount > total) {
+    throw ErrorFactory.InvalidRequest(`El pago pasa del total del pedido (${total.toLocaleString("es-CO")} pesos).`);
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; presaleId: string } },
@@ -80,12 +93,16 @@ export async function POST(
     if (source.kind === "order") {
       const order = await prismadb.order.findFirst({
         where: { id: source.orderId, storeId: params.storeId },
-        select: { id: true, paymentPlan: true, status: true, orderItems: { select: { presaleId: true } } },
+        select: { id: true, paymentPlan: true, status: true, depositAmount: true, total: true, giftCardAmount: true, orderItems: { select: { presaleId: true } } },
       });
       if (!order) throw ErrorFactory.NotFound("El pedido no existe en esta tienda");
       if (order.paymentPlan !== OrderPaymentPlan.DEPOSIT || !order.orderItems.some((item) => item.presaleId === presale.id)) {
         throw ErrorFactory.InvalidRequest("Este pedido no es de esta preventa con anticipo.");
       }
+      if (order.status === OrderStatus.DEPOSIT_PAID) {
+        throw ErrorFactory.Conflict("Este pedido ya tiene anticipo: anota el pago con «Registrar abono».");
+      }
+      assertDepositAmount(payment.amount, Math.round(Number(order.depositAmount ?? 0)), Math.round(order.total - Number(order.giftCardAmount ?? 0)));
       orderId = order.id;
       await prismadb.paymentDetails.updateMany({ where: { orderId: order.id }, data: { method: payment.method } });
     } else {
@@ -109,6 +126,7 @@ export async function POST(
       const unitPrice = Math.round(presale.product.price);
       const depositAmount = presaleUnitDeposit(presale, unitPrice) * source.quantity;
       const subtotal = unitPrice * source.quantity;
+      assertDepositAmount(payment.amount, depositAmount, subtotal);
       const image = presale.product.images.find((img) => img.isMain)?.url || presale.product.images[0]?.url || "";
       const created = await prismadb.order.create({
         data: {

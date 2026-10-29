@@ -3353,6 +3353,8 @@ enum OrderPaymentPlan {
 enum OrderPaymentKind {
   DEPOSIT
   BALANCE
+  /// Abono: un pago entre el anticipo y el saldo (abonos libres).
+  INSTALLMENT
 }
 
 enum OrderPaymentStatus {
@@ -3362,7 +3364,7 @@ enum OrderPaymentStatus {
   REFUNDED
 }
 
-/// Cada cobro de un pedido con anticipo (anticipo y saldo). `PaymentDetails`
+/// Cada cobro de un pedido con anticipo (anticipo, abonos y saldo). `PaymentDetails`
 /// sigue guardando el medio del pedido y la última transacción, como siempre.
 model OrderPayment {
   id               String             @id @default(uuid())

@@ -225,6 +225,19 @@ async function balance(orderId: string, amount: number, shippingCost: number) {
   return response;
 }
 
+async function installment(orderId: string, amount: number, notifyCustomer = false) {
+  const { POST } = await import("@/app/api/[storeId]/orders/[orderId]/installments/route");
+  const response = await POST(
+    json("POST", { amount, method: PaymentMethod.CASH, paidAt: new Date().toISOString(), notifyCustomer }),
+    { params: { storeId: f.store.id, orderId } },
+  );
+  await flushBackground();
+  return response;
+}
+
+const approvedSum = (payments: { status: OrderPaymentStatus; amount: number }[]) =>
+  payments.filter((payment) => payment.status === OrderPaymentStatus.APPROVED).reduce((sum, payment) => sum + payment.amount, 0);
+
 describe("abonos libres", () => {
   it("…393: con el doble del anticipo pagado, el saldo es total − lo pagado + envío (no total − anticipo)", async () => {
     const order = await depositOrder(1, PaymentMethod.BankTransfer);
@@ -241,5 +254,90 @@ describe("abonos libres", () => {
     const after = await orderOf(order.id);
     expect(after.status).toBe(OrderStatus.PAID);
     expect(after.payments.filter((payment) => payment.status === OrderPaymentStatus.APPROVED).reduce((sum, payment) => sum + payment.amount, 0)).toBe(UNIT_PRICE + 9000);
+  });
+  it("el primer pago a mano es al menos el anticipo y nunca más que el total; un segundo «anticipo» pide «Registrar abono»", async () => {
+    const order = await depositOrder(1, PaymentMethod.BankTransfer);
+    const low = await manualDeposit(order.id, UNIT_DEPOSIT - 1);
+    expect(low.status).toBe(400);
+    expect((await low.json()).error).toBe(`El anticipo mínimo es ${UNIT_DEPOSIT.toLocaleString("es-CO")} pesos.`);
+    const high = await manualDeposit(order.id, UNIT_PRICE + 1);
+    expect(high.status).toBe(400);
+    expect((await high.json()).error).toBe(`El pago pasa del total del pedido (${UNIT_PRICE.toLocaleString("es-CO")} pesos).`);
+    expect((await orderOf(order.id)).status).toBe(OrderStatus.PENDING);
+
+    expect((await manualDeposit(order.id, UNIT_DEPOSIT)).status).toBe(200);
+    const again = await manualDeposit(order.id, UNIT_DEPOSIT);
+    expect(again.status).toBe(409);
+    expect((await again.json()).error).toBe("Este pedido ya tiene anticipo: anota el pago con «Registrar abono».");
+    expect((await orderOf(order.id)).payments).toHaveLength(1);
+  });
+
+  it("«Registrar abono»: suma un INSTALLMENT, no cambia el estado ni el inventario, no pasa del total y avisa solo si se pide", async () => {
+    const order = await depositOrder(1, PaymentMethod.BankTransfer);
+    expect((await manualDeposit(order.id, UNIT_DEPOSIT)).status).toBe(200);
+    const moves = await calendarMoves();
+
+    const first = await installment(order.id, 2000);
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ paid: UNIT_DEPOSIT + 2000, remaining: UNIT_PRICE - UNIT_DEPOSIT - 2000 });
+    let row = await orderOf(order.id);
+    expect(row.status).toBe(OrderStatus.DEPOSIT_PAID);
+    expect(row.paidAt).toBeNull();
+    expect(row.payments.map((payment) => payment.kind).sort()).toEqual([OrderPaymentKind.DEPOSIT, OrderPaymentKind.INSTALLMENT]);
+    expect(await calendarMoves()).toBe(moves);
+    const silent = await testPrisma.orderNotification.findMany({ where: { orderId: order.id, reason: "Abono registrado sin avisar" } });
+    expect(silent).toHaveLength(1);
+    expect(silent[0].status).toBe(OrderNotificationStatus.SKIPPED);
+    expect(emails.order).not.toHaveBeenCalled();
+
+    const remaining = UNIT_PRICE - UNIT_DEPOSIT - 2000;
+    const over = await installment(order.id, remaining + 1);
+    expect(over.status).toBe(400);
+    expect((await over.json()).error).toBe(`El abono pasa del total: falta ${remaining.toLocaleString("es-CO")} pesos.`);
+
+    const notified = await installment(order.id, 1000, true);
+    expect(notified.status).toBe(200);
+    expect(emails.order).toHaveBeenCalledWith(order.id, OrderStatus.DEPOSIT_PAID, { installmentAmount: 1000 });
+    row = await orderOf(order.id);
+    expect(approvedSum(row.payments)).toBe(UNIT_DEPOSIT + 3000);
+  });
+
+  it("pagado todo antes de que llegue: no admite más abonos y al liberar el saldo es solo el envío (o $0, sin fila de saldo)", async () => {
+    const free = await depositOrder(1, PaymentMethod.BankTransfer);
+    const shipped = await depositOrder(1, PaymentMethod.BankTransfer);
+    for (const order of [free, shipped]) {
+      expect((await manualDeposit(order.id, UNIT_DEPOSIT)).status).toBe(200);
+      expect((await installment(order.id, UNIT_PRICE - UNIT_DEPOSIT)).status).toBe(200);
+      const more = await installment(order.id, 1);
+      expect(more.status).toBe(409);
+      expect((await more.json()).error).toBe("Ya está pagado todo: al llegar solo falta el envío.");
+      expect((await orderOf(order.id)).status).toBe(OrderStatus.DEPOSIT_PAID);
+    }
+
+    expect((await releasePresale()).status).toBe(200);
+    const late = await installment(free.id, 1000);
+    expect(late.status).toBe(409);
+    expect((await late.json()).error).toBe("La preventa ya se liberó: lo que falta se anota con «Marcar saldo recibido».");
+
+    expect((await balance(free.id, 0, 0)).status).toBe(200);
+    const freeAfter = await orderOf(free.id);
+    expect(freeAfter.status).toBe(OrderStatus.PAID);
+    expect(freeAfter.paidAt).not.toBeNull();
+    expect(freeAfter.payments.some((payment) => payment.kind === OrderPaymentKind.BALANCE)).toBe(false);
+
+    expect((await balance(shipped.id, 0, 9000)).status).toBe(400);
+    expect((await balance(shipped.id, 9000, 9000)).status).toBe(200);
+    const shippedAfter = await orderOf(shipped.id);
+    expect(shippedAfter.status).toBe(OrderStatus.PAID);
+    expect(shippedAfter.total).toBe(UNIT_PRICE + 9000);
+    expect(shippedAfter.payments.find((payment) => payment.kind === OrderPaymentKind.BALANCE)?.amount).toBe(9000);
+    expect(approvedSum(shippedAfter.payments)).toBe(UNIT_PRICE + 9000);
+  });
+
+  it("un abono en un pedido sin anticipo recibido se rechaza", async () => {
+    const order = await depositOrder(1, PaymentMethod.BankTransfer);
+    const response = await installment(order.id, 1000);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("El abono solo se anota en un pedido con anticipo recibido.");
   });
 });

@@ -54,6 +54,7 @@ export {
 /** «Anticipo registrado sin avisar» en «Avisos a la clienta». */
 export const DEPOSIT_SILENT_REASON = "Anticipo registrado sin avisar";
 export const BALANCE_SILENT_REASON = "Saldo registrado sin avisar";
+export const INSTALLMENT_SILENT_REASON = "Abono registrado sin avisar";
 
 /** El cobro al que apunta una referencia de pasarela, si es de un pedido con anticipo. */
 export async function findChargeByReference(reference: string | null | undefined, storeId?: string | null) {
@@ -283,7 +284,8 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
       });
       if (claim.count === 0) return { outcome: "already" as const, paymentId: null };
 
-      const payment = await tx.orderPayment.create({
+      // Pagado todo con abonos antes de que llegara: sin saldo no hay cobro que anotar.
+      const payment = amount === 0 ? null : await tx.orderPayment.create({
         data: {
           storeId: order.storeId,
           orderId: order.id,
@@ -308,7 +310,7 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
       if (order.shipping && shippingCost !== null) {
         await tx.shipping.update({ where: { id: order.shipping.id }, data: { cost: shippingCost } });
       }
-      return { outcome: "applied" as const, paymentId: payment.id };
+      return { outcome: "applied" as const, paymentId: payment?.id ?? null };
     }),
   );
 
@@ -320,6 +322,71 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
     runInBackground("correo de saldo recibido", () => sendOrderEmail(input.orderId, OrderStatus.PAID));
   } else {
     await recordSilentPaymentNotice(input.orderId, input.storeId, OrderStatus.PAID, BALANCE_SILENT_REASON, input.createdBy);
+  }
+  return result;
+}
+
+export interface InstallmentInput {
+  orderId: string;
+  storeId: string;
+  amount: number;
+  method: PaymentMethod;
+  paidAt: Date;
+  createdBy: string;
+  note?: string | null;
+  notifyCustomer: boolean;
+}
+
+/**
+ * «Registrar abono»: un pago entre el anticipo y el saldo, mientras la
+ * preventa espera. Nunca pasa de lo que falta del total (sin envío, que se
+ * cotiza al llegar), no cambia el estado ni mueve inventario y no es venta:
+ * el pedido sigue «Anticipo recibido» hasta «Marcar saldo recibido».
+ */
+export async function recordInstallment(input: InstallmentInput): Promise<{ paymentId: string; paid: number; remaining: number }> {
+  const amount = Math.round(Number(input.amount));
+  if (!Number.isFinite(amount) || amount <= 0) throw ErrorFactory.InvalidRequest("Pon el valor del abono");
+
+  const result = await withDeadlockRetry(() =>
+    prismadb.$transaction(async (tx: Tx) => {
+      const order = await tx.order.findFirst({ where: { id: input.orderId, storeId: input.storeId }, include: ORDER_FOR_PAYMENT });
+      if (!order) throw ErrorFactory.NotFound("El pedido no existe en esta tienda");
+      if (order.paymentPlan !== OrderPaymentPlan.DEPOSIT || order.status !== OrderStatus.DEPOSIT_PAID) {
+        throw ErrorFactory.InvalidRequest("El abono solo se anota en un pedido con anticipo recibido.");
+      }
+      if (!order.orderItems.some(isUnreleasedPreorderLine)) {
+        throw ErrorFactory.Conflict("La preventa ya se liberó: lo que falta se anota con «Marcar saldo recibido».");
+      }
+      // La suma se lee dentro de la transacción: dos abonos a la vez no pasan del total.
+      const paid = sumPrepaid(await tx.orderPayment.findMany({ where: { orderId: order.id }, select: { kind: true, status: true, amount: true } }));
+      const remaining = getAmountDueNow(order, paid);
+      if (remaining <= 0) throw ErrorFactory.Conflict("Ya está pagado todo: al llegar solo falta el envío.");
+      if (amount > remaining) {
+        throw ErrorFactory.InvalidRequest(`El abono pasa del total: falta ${remaining.toLocaleString("es-CO")} pesos.`);
+      }
+      const payment = await tx.orderPayment.create({
+        data: {
+          storeId: order.storeId,
+          orderId: order.id,
+          kind: OrderPaymentKind.INSTALLMENT,
+          status: OrderPaymentStatus.APPROVED,
+          amount,
+          method: input.method,
+          paidAt: input.paidAt,
+          createdBy: input.createdBy,
+          note: input.note ?? null,
+        },
+        select: { id: true },
+      });
+      return { paymentId: payment.id, paid: paid + amount, remaining: remaining - amount };
+    }),
+  );
+
+  await invalidateStoreProductsCache(input.storeId, { orderIds: [input.orderId] });
+  if (input.notifyCustomer) {
+    runInBackground("correo de abono recibido", () => sendOrderEmail(input.orderId, OrderStatus.DEPOSIT_PAID, { installmentAmount: amount }));
+  } else {
+    await recordSilentPaymentNotice(input.orderId, input.storeId, OrderStatus.DEPOSIT_PAID, INSTALLMENT_SILENT_REASON, input.createdBy);
   }
   return result;
 }
@@ -344,10 +411,11 @@ export interface ManualPaymentBody {
  * el futuro), medio, nota y la casilla «Avisar a la clienta» (apagada si no
  * llega).
  */
-export function parseManualPaymentBody(body: unknown, now = new Date()): ManualPaymentBody {
+export function parseManualPaymentBody(body: unknown, now = new Date(), options: { allowZero?: boolean } = {}): ManualPaymentBody {
   const raw = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const amount = Math.round(Number(raw.amount));
-  if (!Number.isFinite(amount) || amount <= 0) throw ErrorFactory.InvalidRequest("Pon el valor que recibiste");
+  // Un saldo puede ser $0: todo se pagó con abonos y el envío fue gratis.
+  if (!Number.isFinite(amount) || amount < 0 || (amount === 0 && !options.allowZero)) throw ErrorFactory.InvalidRequest("Pon el valor que recibiste");
   const paidAt = raw.paidAt ? new Date(String(raw.paidAt)) : now;
   if (Number.isNaN(paidAt.getTime())) throw ErrorFactory.InvalidRequest("La fecha del pago no es válida");
   if (paidAt.getTime() > now.getTime() + 5 * 60_000) throw ErrorFactory.InvalidRequest("La fecha del pago no puede estar en el futuro");
