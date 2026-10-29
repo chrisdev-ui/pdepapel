@@ -340,4 +340,14 @@ describe("abonos libres", () => {
     expect(response.status).toBe(400);
     expect((await response.json()).error).toBe("El abono solo se anota en un pedido con anticipo recibido.");
   });
+  it("Preventas «Anticipos recibidos» suma lo que entró (anticipo + abonos), no el anticipo esperado", async () => {
+    const { getPresales } = await import("@/app/(dashboard)/[storeId]/(routes)/preventas/server/get-presales");
+    // Otros pedidos de este archivo siguen con anticipo: se mide lo que suma este.
+    const received = async () => (await getPresales(f.store.id)).rows.find((presale) => presale.id === presaleId)?.depositsReceived ?? 0;
+    const before = await received();
+    const order = await depositOrder(1, PaymentMethod.BankTransfer);
+    expect((await manualDeposit(order.id, UNIT_DEPOSIT * 2)).status).toBe(200);
+    expect((await installment(order.id, 1500)).status).toBe(200);
+    expect((await received()) - before).toBe(UNIT_DEPOSIT * 2 + 1500);
+  });
 });

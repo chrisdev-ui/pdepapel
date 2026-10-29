@@ -83,6 +83,7 @@ import {
   type OrderFormValues,
   type ShippingQuote,
 } from "./order-form/schema";
+import { PaymentsHistoryCard } from "./order-form/payments-history-card";
 import { SectionCard } from "./order-form/section-card";
 import { OrderStatusBar } from "./order-form/status-bar";
 import { PreorderPaymentActions } from "./order-form/preorder-actions";
@@ -1079,7 +1080,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   onTransition={onTransition}
                 />
               )}
-              
+              {initialData ? <PaymentsHistoryCard order={initialData} /> : null}
             </div>
             {initialData && (
               <div className="order-10 lg:order-none">

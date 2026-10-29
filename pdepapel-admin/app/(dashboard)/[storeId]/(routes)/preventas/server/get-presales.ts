@@ -1,4 +1,4 @@
-import { OrderStatus, PresaleDepositType, PresalePaymentMode, ProductPresaleStatus } from "@prisma/client";
+import { OrderPaymentStatus, OrderStatus, PresaleDepositType, PresalePaymentMode, ProductPresaleStatus } from "@prisma/client";
 
 import {
   getHeldUnitsByPresale,
@@ -6,6 +6,7 @@ import {
   isPresaleOverdue,
   PAID_PRESALE_LINE,
 } from "@/lib/presale";
+import { sumPrepaid } from "@/lib/order-payment-amounts";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
 import { scrubPresales } from "@/lib/viewer-payloads";
@@ -118,7 +119,13 @@ export async function getPresales(
           quantity: true,
           price: true,
           preorderReleasedAt: true,
-          order: { select: { status: true, depositAmount: true } },
+          order: {
+            select: {
+              status: true,
+              depositAmount: true,
+              payments: { where: { status: OrderPaymentStatus.APPROVED }, select: { kind: true, status: true, amount: true } },
+            },
+          },
         },
       })
     : [];
@@ -140,7 +147,8 @@ export async function getPresales(
     // Lo cobrado cuenta lo vendido completo; con anticipo solo entró el anticipo,
     // una vez por pedido (la preventa con anticipo se compra sola).
     if (line.order?.status === OrderStatus.DEPOSIT_PAID) {
-      if (!bucket.depositOrders.has(line.orderId)) bucket.deposits += Number(line.order.depositAmount ?? 0);
+      // Lo que de verdad entró (anticipo + abonos), no el anticipo esperado.
+      if (!bucket.depositOrders.has(line.orderId)) bucket.deposits += sumPrepaid(line.order.payments);
       bucket.depositOrders.add(line.orderId);
     } else {
       bucket.collected += line.price * line.quantity;

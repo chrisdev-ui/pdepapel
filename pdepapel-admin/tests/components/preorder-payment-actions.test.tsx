@@ -90,6 +90,36 @@ describe("anticipo y saldo en la página del pedido", () => {
     expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/balance", expect.objectContaining({ amount: 112000, shippingCost: 12000 }));
   });
 
+  it("esperando la mercancía: «Registrar abono» anota un abono, avisa si pasa de lo que falta y no deja guardarlo", async () => {
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: true, balanceDue: 70000 });
+    expect(screen.getByRole("button", { name: "Marcar saldo recibido" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Registrar abono" }));
+    expect(screen.getByRole("dialog", { name: "Registrar abono" })).toBeInTheDocument();
+    expect(screen.getByText("Falta $ 70.000 + envío.", { normalizer: (text) => text.replace(/\s+/g, " ").trim() })).toBeInTheDocument();
+    const value = screen.getByLabelText("Valor recibido");
+    fireEvent.change(value, { target: { value: "80000" } });
+    expect(screen.getByText(/Pasa de lo que falta: el abono puede ser hasta/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Anotar abono" })).toBeDisabled();
+    fireEvent.change(value, { target: { value: "20000" } });
+    expect(screen.getByRole("checkbox", { name: "Avisar a la clienta" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Anotar abono" }));
+    await vi.waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/installments", expect.objectContaining({ amount: 20000, notifyCustomer: false, method: "BankTransfer" }));
+  });
+
+  it("pagado todo antes de que llegue: «Saldo pagado», sin «Registrar abono»; liberado, el saldo es solo el envío", async () => {
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: true, balanceDue: 0 });
+    expect(screen.getByTestId("saldo-pagado")).toHaveTextContent("Saldo pagado");
+    expect(screen.queryByRole("button", { name: "Registrar abono" })).toBeNull();
+    cleanup();
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: false, balanceDue: 0 });
+    expect(screen.queryByRole("button", { name: "Registrar abono" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Marcar saldo recibido" }));
+    expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/\$\s?0/);
+    fireEvent.change(screen.getByLabelText("Envío cobrado con el saldo"), { target: { value: "9000" } });
+    expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/9\.000/);
+  });
+
   it("ni solo lectura ni un pedido normal ven los botones", () => {
     renderAs({}, "viewer");
     renderAs({ paymentPlan: "FULL" });

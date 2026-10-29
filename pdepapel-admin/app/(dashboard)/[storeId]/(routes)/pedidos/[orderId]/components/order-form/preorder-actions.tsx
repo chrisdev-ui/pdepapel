@@ -8,9 +8,11 @@ import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 
 /**
- * Los dos botones de una preventa con anticipo en la página del pedido: el
- * anticipo mientras está pendiente y el saldo cuando ya llegó (liberada). El
- * cambio de estado genérico no los ofrece (`getAllowedTransitions`).
+ * Los botones de una preventa con anticipo en la página del pedido: el
+ * anticipo mientras está pendiente, los abonos mientras espera la mercancía y
+ * el saldo cuando ya llegó (liberada). Pagado todo antes de que llegue, se ve
+ * «Saldo pagado» y al liberar el saldo es solo el envío. El cambio de estado
+ * genérico no los ofrece (`getAllowedTransitions`).
  */
 export function PreorderPaymentActions({
   storeId,
@@ -33,7 +35,7 @@ export function PreorderPaymentActions({
 }) {
   const canWrite = useCanWrite();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState<"deposit" | "installment" | "balance" | null>(null);
   if (!canWrite || order.paymentPlan !== "DEPOSIT") return null;
 
   const pending = order.status === "PENDING" || order.status === "CREATED";
@@ -41,34 +43,50 @@ export function PreorderPaymentActions({
   if (!(pending && order.presaleId) && !depositPaid) return null;
 
   const deposit = Math.round(Number(order.depositAmount ?? 0));
+  // Pagado todo con abonos antes de que llegue: al liberar solo falta el envío.
+  const fullyPaid = depositPaid && order.balanceDue <= 0;
+  const target =
+    dialog === "deposit" && order.presaleId
+      ? ({ mode: "deposit", presaleId: order.presaleId, source: { kind: "order", orderId: order.id } } as const)
+      : dialog === "installment"
+        ? ({ mode: "installment", orderId: order.id } as const)
+        : ({ mode: "balance", orderId: order.id } as const);
   return (
     <>
       {pending && order.presaleId ? (
-        <Button type="button" className="min-h-11" onClick={() => setOpen(true)}>
+        <Button type="button" className="min-h-11" onClick={() => setDialog("deposit")}>
           Marcar anticipo recibido
         </Button>
       ) : (
-        <Button
-          type="button"
-          className="min-h-11"
-          disabled={order.heldByPresale}
-          title={order.heldByPresale ? "Primero libera la preventa: el saldo se cobra cuando llega la mercancía." : undefined}
-          onClick={() => setOpen(true)}
-        >
-          Marcar saldo recibido
-        </Button>
+        <>
+          {fullyPaid ? (
+            <span className="inline-flex min-h-11 items-center rounded-full bg-emerald-50 px-3 text-sm font-semibold text-emerald-800" data-testid="saldo-pagado">
+              Saldo pagado
+            </span>
+          ) : null}
+          {order.heldByPresale && !fullyPaid ? (
+            <Button type="button" variant="outline" className="min-h-11" onClick={() => setDialog("installment")}>
+              Registrar abono
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            className="min-h-11"
+            disabled={order.heldByPresale}
+            title={order.heldByPresale ? "Primero libera la preventa: el saldo se cobra cuando llega la mercancía." : undefined}
+            onClick={() => setDialog("balance")}
+          >
+            Marcar saldo recibido
+          </Button>
+        </>
       )}
-      {open ? (
+      {dialog ? (
         <PreorderPaymentDialog
           storeId={storeId}
-          open={open}
-          onOpenChange={setOpen}
-          target={
-            pending && order.presaleId
-              ? { mode: "deposit", presaleId: order.presaleId, source: { kind: "order", orderId: order.id } }
-              : { mode: "balance", orderId: order.id }
-          }
-          defaultAmount={pending ? deposit : order.balanceDue}
+          open
+          onOpenChange={(open) => !open && setDialog(null)}
+          target={target}
+          defaultAmount={dialog === "deposit" ? deposit : Math.max(0, order.balanceDue)}
           defaultShippingCost={Math.round(Number(order.shippingCost ?? 0))}
           subjectLabel={`el pedido #${order.orderNumber}`}
           onDone={() => router.refresh()}

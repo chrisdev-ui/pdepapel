@@ -34,10 +34,11 @@ function bogotaToday(): string {
 
 export type PreorderPaymentTarget =
   | { mode: "deposit"; presaleId: string; source: { kind: "order"; orderId: string } | { kind: "waitlist"; entryId: string } }
+  | { mode: "installment"; orderId: string }
   | { mode: "balance"; orderId: string };
 
 /**
- * «Marcar anticipo recibido» y «Marcar saldo recibido»: valor, fecha, medio,
+ * «Marcar anticipo recibido», «Registrar abono» y «Marcar saldo recibido»: valor, fecha, medio,
  * nota y «Avisar a la clienta», que arranca APAGADA. Sin la casilla no sale
  * correo ni WhatsApp: queda anotado en «Avisos a la clienta».
  */
@@ -63,7 +64,10 @@ export function PreorderPaymentDialog({
 }) {
   const { toast } = useToast();
   const isDeposit = target.mode === "deposit";
-  const [amount, setAmount] = useState<number | undefined>(defaultAmount);
+  const isInstallment = target.mode === "installment";
+  // Anticipo y abono: el valor lo escribe Paula. Saldo: lo calcula el servidor.
+  const amountEditable = isDeposit || isInstallment;
+  const [amount, setAmount] = useState<number | undefined>(isInstallment ? undefined : defaultAmount);
   const [quantity, setQuantity] = useState("1");
   const [shippingCost, setShippingCost] = useState<number | undefined>(defaultShippingCost);
   const [paidAt, setPaidAt] = useState(bogotaToday());
@@ -72,13 +76,14 @@ export function PreorderPaymentDialog({
   const [notifyCustomer, setNotifyCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const balanceDue = !isDeposit ? Math.max(0, defaultAmount + (shippingCost ?? 0) - defaultShippingCost) : null;
+  const balanceDue = target.mode === "balance" ? Math.max(0, defaultAmount + (shippingCost ?? 0) - defaultShippingCost) : null;
+  const overRemaining = isInstallment && amount !== undefined && amount > defaultAmount;
 
   const submit = async () => {
     try {
       setSaving(true);
       const common = {
-        amount: isDeposit ? amount : balanceDue,
+        amount: amountEditable ? amount : balanceDue,
         // Hoy va con la hora actual: el mediodía de hoy es futuro antes de las 12 y el servidor lo rechaza.
         paidAt: paidAt === bogotaToday() ? new Date().toISOString() : `${paidAt}T12:00:00-05:00`,
         method,
@@ -91,9 +96,11 @@ export function PreorderPaymentDialog({
               ...common,
               source: target.source.kind === "waitlist" ? { ...target.source, quantity: Number(quantity) || 1 } : target.source,
             })
-          : await axios.post(`/api/${storeId}/orders/${target.orderId}/balance`, { ...common, shippingCost: shippingCost ?? 0 });
+          : target.mode === "installment"
+            ? await axios.post(`/api/${storeId}/orders/${target.orderId}/installments`, common)
+            : await axios.post(`/api/${storeId}/orders/${target.orderId}/balance`, { ...common, shippingCost: shippingCost ?? 0 });
       toast({
-        title: isDeposit ? "Anticipo anotado" : "Saldo anotado: pedido pagado",
+        title: isDeposit ? "Anticipo anotado" : isInstallment ? "Abono anotado" : "Saldo anotado: pedido pagado",
         description: notifyCustomer ? "La clienta recibe el aviso por correo." : "Sin avisar a la clienta: quedó anotado en «Avisos a la clienta».",
         variant: "success",
       });
@@ -110,11 +117,13 @@ export function PreorderPaymentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isDeposit ? "Marcar anticipo recibido" : "Marcar saldo recibido"}</DialogTitle>
+          <DialogTitle>{isDeposit ? "Marcar anticipo recibido" : isInstallment ? "Registrar abono" : "Marcar saldo recibido"}</DialogTitle>
           <DialogDescription>
             {isDeposit
               ? `Anota el anticipo de ${subjectLabel}. No es venta: el pedido queda «Anticipo recibido» y espera la mercancía.`
-              : `Anota el saldo de ${subjectLabel}. El pedido pasa a pagado y entra al despacho.`}
+              : isInstallment
+                ? `Anota un abono de ${subjectLabel}. No es venta: el pedido sigue «Anticipo recibido» hasta el saldo.`
+                : `Anota el saldo de ${subjectLabel}. El pedido pasa a pagado y entra al despacho.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -125,10 +134,24 @@ export function PreorderPaymentDialog({
               <Input id="preorder-payment-quantity" type="number" min={1} max={20} className="h-11" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             </div>
           ) : null}
-          {isDeposit ? (
+          {amountEditable ? (
             <div className="space-y-2">
               <Label htmlFor="preorder-payment-amount">Valor recibido</Label>
-              <CurrencyInput id="preorder-payment-amount" className="h-11" value={amount} onChange={setAmount} />
+              <CurrencyInput
+                id="preorder-payment-amount"
+                className="h-11"
+                value={amount}
+                onChange={setAmount}
+                aria-describedby={isInstallment ? "preorder-payment-remaining" : undefined}
+                aria-invalid={overRemaining || undefined}
+              />
+              {isInstallment ? (
+                <p id="preorder-payment-remaining" className={overRemaining ? "text-sm font-medium text-destructive" : "text-sm text-muted-foreground"}>
+                  {overRemaining
+                    ? `Pasa de lo que falta: el abono puede ser hasta ${currencyFormatter(defaultAmount)}.`
+                    : `Falta ${currencyFormatter(defaultAmount)} + envío.`}
+                </p>
+              ) : null}
             </div>
           ) : (
             <>
@@ -176,8 +199,8 @@ export function PreorderPaymentDialog({
           <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="button" className="min-h-11" disabled={saving || (isDeposit ? !amount : balanceDue === null)} onClick={submit}>
-            {isDeposit ? "Anotar anticipo" : "Anotar saldo"}
+          <Button type="button" className="min-h-11" disabled={saving || (amountEditable ? !amount || overRemaining : balanceDue === null)} onClick={submit}>
+            {isDeposit ? "Anotar anticipo" : isInstallment ? "Anotar abono" : "Anotar saldo"}
           </Button>
         </DialogFooter>
       </DialogContent>
