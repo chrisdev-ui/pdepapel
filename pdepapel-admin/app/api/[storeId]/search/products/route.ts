@@ -21,6 +21,9 @@ const getCorsHeaders = (request: Request) => ({
   ...CACHE_HEADERS.DYNAMIC,
 });
 
+/** Solo si tiene una preventa abierta: la tienda la muestra como preventa, no como «Agotado». */
+const ACTIVE_PRESALE_FLAG = { where: { status: "ACTIVE" as const }, select: { id: true }, take: 1 };
+
 export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
@@ -48,7 +51,8 @@ export async function GET(
     // ---------------------------------------------------------
     // REDIS CACHING (1 Hour)
     // ---------------------------------------------------------
-    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v5`;
+    // v6: cada resultado dice si está en preventa (con stock 0 no es «Agotado»).
+    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v6`;
     try {
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();
@@ -155,6 +159,7 @@ export async function GET(
           orderBy: { isMain: "desc" },
           take: 1,
         },
+        presales: ACTIVE_PRESALE_FLAG,
         productGroup: {
           include: {
             images: {
@@ -165,6 +170,7 @@ export async function GET(
               select: {
                 stock: true,
                 reservedUnits: true,
+                presales: ACTIVE_PRESALE_FLAG,
               },
             },
           },
@@ -204,6 +210,7 @@ export async function GET(
               (acc, p) => acc + availableStock(p),
               0,
             ),
+            isPreorder: product.productGroup.products.some((p) => p.presales.length > 0),
           });
         }
       } else {
@@ -220,6 +227,7 @@ export async function GET(
             image: product.images[0],
             isGroup: false,
             stock: availableStock(product),
+            isPreorder: product.presales.length > 0,
           });
         }
       }

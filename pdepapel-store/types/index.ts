@@ -503,6 +503,8 @@ export interface SearchResult {
   minPrice?: number;
   isGroup?: boolean;
   image: Image;
+  /** Con preventa abierta: stock 0 no es «Agotado». */
+  isPreorder?: boolean;
 }
 
 export type SearchResponse = SearchResult[] | { products: SearchResult[] };

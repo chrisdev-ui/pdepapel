@@ -164,6 +164,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (storeId) {
+    await testPrisma.productPresale.deleteMany({ where: { storeId } });
     await testPrisma.product.deleteMany({ where: { storeId } });
     await testPrisma.design.deleteMany({ where: { storeId } });
     await testPrisma.color.deleteMany({ where: { storeId } });
@@ -323,5 +324,23 @@ describe("el listado de /tienda con ?search= (/products?fromShop=true)", () => {
     expect(await listado("cuadernos", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
     expect(await listado("lápices", panel)).toEqual(["Lápices de colores x12", "Lápiz Hello Kitty"]);
     expect(await listado("rosada", panel)).toEqual(["Cartuchera Wisdom Rosa"]);
+  });
+});
+
+// El calendario (2026-10-29): en preventa el stock es 0 y el desplegable lo
+// marcaba «Agotado». Cada resultado dice si tiene una preventa abierta.
+describe("la barra de búsqueda marca la preventa", () => {
+  it("un producto con preventa abierta llega con isPreorder; uno agotado sin preventa, no", async () => {
+    const template = await testPrisma.product.findFirstOrThrow({ where: { storeId } });
+    const base = { storeId, categoryId: template.categoryId, colorId: template.colorId, sizeId: template.sizeId, designId: template.designId, description: "d", stock: 0, price: 160000 };
+    const presaleProduct = await testPrisma.product.create({ data: { ...base, name: "Calendario de adviento Prueba", slug: `calendario-adviento-${suffix}`, sku: `CAL-SRCH-${suffix}` } });
+    await testPrisma.product.create({ data: { ...base, name: "Calendario de escritorio Prueba", slug: `calendario-escritorio-${suffix}`, sku: `CAL-ESC-${suffix}` } });
+    await testPrisma.productPresale.create({
+      data: { storeId, productId: presaleProduct.id, status: "ACTIVE", unitLimit: null, expectedArrivalAt: null, paymentMode: "DEPOSIT", depositType: "FIXED", depositValue: 30000, createdBy: "test" } as never,
+    });
+    const response = await searchGET(request(`http://admin.test/api/x/search/products?search=${encodeURIComponent("calendario")}`), { params: { storeId } });
+    const rows = (await response.json()) as { name: string; stock: number; isPreorder: boolean }[];
+    expect(rows.find((row) => row.name === "Calendario de adviento Prueba")).toMatchObject({ stock: 0, isPreorder: true });
+    expect(rows.find((row) => row.name === "Calendario de escritorio Prueba")).toMatchObject({ stock: 0, isPreorder: false });
   });
 });

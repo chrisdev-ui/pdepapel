@@ -41,6 +41,7 @@ interface SearchItemProps {
   minPrice?: number;
   isGroup?: boolean;
   stock?: number;
+  isPreorder?: boolean;
   query?: string;
   optionId?: string;
   active?: boolean;
@@ -48,8 +49,9 @@ interface SearchItemProps {
 }
 
 /** Fila de producto del desplegable: miniatura de 44 px, nombre resaltado y precio. */
-export const SearchItem: React.FC<SearchItemProps> = ({ id, slug, image, name, price, minPrice, isGroup, stock, query = "", optionId, active = false, closeAll }) => {
-  const soldOut = stock === 0;
+export const SearchItem: React.FC<SearchItemProps> = ({ id, slug, image, name, price, minPrice, isGroup, stock, isPreorder = false, query = "", optionId, active = false, closeAll }) => {
+  // Una preventa tiene stock 0 por definición: se vende contra la campaña, no es «Agotado».
+  const soldOut = stock === 0 && !isPreorder;
   return (
     <li id={optionId} role="option" aria-selected={active}>
       <Link
@@ -66,7 +68,11 @@ export const SearchItem: React.FC<SearchItemProps> = ({ id, slug, image, name, p
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate font-sans text-sm font-semibold leading-tight text-blue-yankees">{highlightMatch(name, query)}</span>
-          {soldOut ? <span className="font-sans text-xs font-medium text-rose-700">Agotado</span> : null}
+          {isPreorder ? (
+            <span className="font-sans text-xs font-medium text-blue-800">Preventa</span>
+          ) : soldOut ? (
+            <span className="font-sans text-xs font-medium text-rose-700">Agotado</span>
+          ) : null}
         </span>
         <span className="flex flex-col items-end font-sans text-sm font-bold text-blue-yankees">
           {isGroup && <span className="text-[11px] font-medium text-muted-foreground">Desde</span>}
