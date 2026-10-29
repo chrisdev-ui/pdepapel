@@ -153,6 +153,8 @@ export function scrubProducts<T extends AnyRecord>(products: T[]): T[] {
 export function scrubOrder<T extends AnyRecord | null | undefined>(order: T): T {
   if (!order) return order;
   const clean = omit(order as AnyRecord, VIEWER_HIDDEN_ORDER_FIELDS);
+  // Los cobros de la clienta (montos, medio, notas) tampoco: es plata recibida.
+  if ("payments" in clean) clean.payments = [];
   // El comprobante de una transferencia trae datos bancarios de la clienta:
   // la cuenta de solo lectura no ve ni el enlace (la ruta que lo sirve
   // tampoco se lo daría).

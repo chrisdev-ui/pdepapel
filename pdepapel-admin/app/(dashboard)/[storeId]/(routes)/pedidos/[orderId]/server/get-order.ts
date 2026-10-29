@@ -1,5 +1,7 @@
 import "server-only";
 
+import { OrderPaymentStatus } from "@prisma/client";
+
 import { requireStoreRead } from "@/lib/store-access";
 
 import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
@@ -22,6 +24,12 @@ export async function getOrder(orderId: string, storeId: string) {
       payment: true,
       shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       coupon: true,
+      // Lo que ya pagó la clienta (anticipos y saldo), sin quién lo anotó.
+      payments: {
+        where: { status: OrderPaymentStatus.APPROVED },
+        orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }],
+        select: { id: true, kind: true, status: true, amount: true, method: true, paidAt: true, note: true, createdAt: true },
+      },
       inventoryIssues: {
         where: { resolvedAt: null },
         orderBy: { createdAt: "asc" },

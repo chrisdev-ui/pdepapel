@@ -24,6 +24,8 @@ export function PreorderPaymentActions({
     paymentPlan?: string | null;
     depositAmount?: number | null;
     total: number;
+    /** Lo que el servidor cobra de saldo con el envío actual: total − lo ya pagado. */
+    balanceDue: number;
     shippingCost?: number | null;
     presaleId: string | null;
     heldByPresale: boolean;
@@ -66,7 +68,7 @@ export function PreorderPaymentActions({
               ? { mode: "deposit", presaleId: order.presaleId, source: { kind: "order", orderId: order.id } }
               : { mode: "balance", orderId: order.id }
           }
-          defaultAmount={pending ? deposit : Math.max(0, Math.round(order.total) - deposit)}
+          defaultAmount={pending ? deposit : order.balanceDue}
           defaultShippingCost={Math.round(Number(order.shippingCost ?? 0))}
           subjectLabel={`el pedido #${order.orderNumber}`}
           onDone={() => router.refresh()}

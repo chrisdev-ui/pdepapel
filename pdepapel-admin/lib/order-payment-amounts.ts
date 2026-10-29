@@ -1,4 +1,4 @@
-import { OrderPaymentPlan, OrderStatus } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentPlan, OrderPaymentStatus, OrderStatus } from "@prisma/client";
 
 import { getAmountDue } from "@/lib/gift-card-amounts";
 
@@ -16,6 +16,13 @@ export function depositChargeReference(orderNumber: string): string {
 
 export function balanceChargeReference(orderNumber: string): string {
   return `${orderNumber}${BALANCE_REFERENCE_SUFFIX}`;
+}
+
+/** Lo que ya entró antes del saldo: los anticipos aprobados. */
+export function sumPrepaid(payments: ReadonlyArray<{ kind: OrderPaymentKind; status: OrderPaymentStatus; amount: number }> | null | undefined): number {
+  return (payments ?? [])
+    .filter((payment) => payment.kind === OrderPaymentKind.DEPOSIT && payment.status === OrderPaymentStatus.APPROVED)
+    .reduce((sum, payment) => sum + Math.round(Number(payment.amount)), 0);
 }
 
 export interface AmountDueOrder {

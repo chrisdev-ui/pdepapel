@@ -16,7 +16,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withDeadlockRetry } from "@/lib/deadlock-retry";
 import { sendOrderEmail } from "@/lib/email";
 import { calculateOrderFinancials } from "@/lib/financial";
-import { BALANCE_REFERENCE_SUFFIX, DEPOSIT_REFERENCE_SUFFIX, getAmountDueNow } from "@/lib/order-payment-amounts";
+import { BALANCE_REFERENCE_SUFFIX, DEPOSIT_REFERENCE_SUFFIX, getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
 import { recordDepositInGoogleAnalytics, recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
@@ -272,10 +272,7 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
       const previousShipping = Math.round(Number(order.shipping?.cost ?? 0));
       const newShipping = shippingCost ?? previousShipping;
       const total = Math.round(Number(order.total)) - previousShipping + newShipping;
-      const deposits = order.payments
-        .filter((p) => p.kind === OrderPaymentKind.DEPOSIT && p.status === OrderPaymentStatus.APPROVED)
-        .reduce((sum, p) => sum + p.amount, 0);
-      const due = getAmountDueNow({ ...order, total }, deposits);
+      const due = getAmountDueNow({ ...order, total }, sumPrepaid(order.payments));
       if (amount !== due) {
         throw ErrorFactory.InvalidRequest(`El saldo que falta es ${due.toLocaleString("es-CO")} pesos: revisa el valor o el envío.`);
       }

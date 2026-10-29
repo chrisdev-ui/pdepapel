@@ -9,6 +9,7 @@ vi.mock("axios", () => ({ default: { post } }));
 
 import { PreorderPaymentActions } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/components/order-form/preorder-actions";
 import { ViewerAccessProvider } from "@/components/shell/viewer-access";
+import { getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
 
 afterEach(() => {
   cleanup();
@@ -22,6 +23,7 @@ const base = {
   paymentPlan: "DEPOSIT",
   depositAmount: 30000,
   total: 160000,
+  balanceDue: 130000,
   shippingCost: 0,
   presaleId: "presale-1",
   heldByPresale: true,
@@ -70,6 +72,22 @@ describe("anticipo y saldo en la página del pedido", () => {
     fireEvent.click(screen.getByRole("button", { name: "Anotar saldo" }));
     await vi.waitFor(() => expect(post).toHaveBeenCalled());
     expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/balance", expect.objectContaining({ amount: 139000, shippingCost: 9000, notifyCustomer: false }));
+  });
+
+  // El pedido …393 (2026-10-29): la clienta pagó $60.000 de anticipo. El
+  // saldo sale de lo pagado, como lo calcula el servidor: $100.000 + envío.
+  it("con $60.000 pagados el saldo es $100.000 + envío, no total − anticipo", async () => {
+    const order = { status: "DEPOSIT_PAID" as const, paymentPlan: "DEPOSIT" as const, total: 160000, depositAmount: 30000, giftCardAmount: 0 };
+    const balanceDue = getAmountDueNow(order, sumPrepaid([{ kind: "DEPOSIT", status: "APPROVED", amount: 60000 }]));
+    expect(balanceDue).toBe(100000);
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: false, balanceDue });
+    fireEvent.click(screen.getByRole("button", { name: "Marcar saldo recibido" }));
+    expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/100\.000/);
+    fireEvent.change(screen.getByLabelText("Envío cobrado con el saldo"), { target: { value: "12000" } });
+    expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/112\.000/);
+    fireEvent.click(screen.getByRole("button", { name: "Anotar saldo" }));
+    await vi.waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/balance", expect.objectContaining({ amount: 112000, shippingCost: 12000 }));
   });
 
   it("ni solo lectura ni un pedido normal ven los botones", () => {
