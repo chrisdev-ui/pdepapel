@@ -47,6 +47,7 @@ test.describe.configure({ mode: "serial" });
 let db: PrismaClient;
 let productId = "";
 let presaleId = "";
+let noCampaignProductId = "";
 const orders: string[] = [];
 
 async function settled(locator: Locator) {
@@ -129,6 +130,25 @@ test.describe("preventa con anticipo en el panel", () => {
       },
     });
     productId = product.id;
+    noCampaignProductId = (
+      await db.product.create({
+        data: {
+          storeId,
+          name: "Calendario sin preventa e2e",
+          slug: `calendario-sin-preventa-e2e-${randomUUID().slice(0, 6)}`,
+          description: "Calendario de prueba.",
+          stock: 0,
+          price: PRICE,
+          acqPrice: 123778,
+          sku: `CAL-SIN-${randomUUID().slice(0, 6)}`,
+          categoryId: template.categoryId,
+          sizeId: template.sizeId,
+          colorId: template.colorId,
+          designId: template.designId,
+          isArchived: true,
+        },
+      })
+    ).id;
     presaleId = (
       await db.productPresale.create({
         data: {
@@ -162,8 +182,27 @@ test.describe("preventa con anticipo en el panel", () => {
     await db.preorderWaitlistEntry.deleteMany({ where: { productId } });
     await db.productPresale.deleteMany({ where: { productId } });
     await db.inventoryMovement.deleteMany({ where: { productId } });
-    await db.product.deleteMany({ where: { id: productId } });
+    await db.product.deleteMany({ where: { id: { in: [productId, noCampaignProductId] } } });
     await db.$disconnect();
+  });
+
+  // Paula llegó a la ficha archivada sin campaña y buscaba la lista de espera:
+  // sin preventa abierta solo hay configuración y una línea que lo explica.
+  test("sin campaña abierta en 390: «Abrir preventa» y la línea que lo explica, sin lista de espera", async ({ page }) => {
+    test.setTimeout(300_000);
+    mkdirSync(SHOTS, { recursive: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, `/${storeId}/productos/${noCampaignProductId}`);
+    const line = page.getByTestId("presale-open-first");
+    await expect(line).toBeVisible({ timeout: 90_000 });
+    await line.scrollIntoViewIfNeeded();
+    await settled(line);
+    await expect(line).toHaveText("Abre la preventa para usar la lista de espera y registrar anticipos (con el producto archivado la tienda no la muestra).");
+    await expect(page.getByRole("button", { name: "Abrir preventa" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Lista de espera" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Marcar anticipo recibido" })).toHaveCount(0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: path.join(SHOTS, "telefono-390-0-sin-campana.png"), fullPage: true });
   });
 
   for (const viewport of [

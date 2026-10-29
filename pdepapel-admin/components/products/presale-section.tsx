@@ -372,6 +372,12 @@ export function PresaleSection({
   return (
     <SectionCard id="preventa" title="Preventa" description={description}>
       {archivedNote}
+      {!presale && (
+        <p className="rounded-md border border-dashed p-2 text-sm text-muted-foreground" data-testid="presale-open-first">
+          Abre la preventa para usar la lista de espera y registrar anticipos
+          {isArchived ? " (con el producto archivado la tienda no la muestra)" : ""}.
+        </p>
+      )}
       <PresaleFields draft={draft} onChange={setDraft} disabled={loading} />
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" className="min-h-11 w-fit" disabled={loading || !draftIsComplete(draft)} onClick={save}>
