@@ -79,7 +79,8 @@ export function PreorderPaymentDialog({
       setSaving(true);
       const common = {
         amount: isDeposit ? amount : balanceDue,
-        paidAt: `${paidAt}T12:00:00-05:00`,
+        // Hoy va con la hora actual: el mediodía de hoy es futuro antes de las 12 y el servidor lo rechaza.
+        paidAt: paidAt === bogotaToday() ? new Date().toISOString() : `${paidAt}T12:00:00-05:00`,
         method,
         note: note.trim() || null,
         notifyCustomer,
