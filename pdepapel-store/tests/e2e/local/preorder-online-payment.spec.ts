@@ -17,6 +17,11 @@ import { skipPrivacyBanner } from "../helpers/public-page";
  * La pasarela no corre aquí: el botón de Wompi lleva a una página falsa y se
  * revisa el enlace firmado (referencia `-P<n>` y valor) antes de entregar el
  * webhook que mandaría la pasarela.
+ *
+ * Con la administración en frío el build de la tienda se pasa del tiempo al
+ * prerenderizar /sitemap.xml: arranca la administración local, pide una vez
+ * sus rutas de catálogo, compila la tienda (`node scripts/e2e-store-server.mjs`
+ * con `NEXT_PUBLIC_API_URL` local), apágalas y corre con `E2E_SKIP_BUILD=1`.
  */
 
 const ADMIN_DIR = path.resolve(process.cwd(), "../pdepapel-admin");
