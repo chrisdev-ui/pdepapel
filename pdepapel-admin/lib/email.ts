@@ -40,7 +40,7 @@ import {
   type BankTransferInfo,
 } from "@/lib/bank-transfer-info";
 import { getAmountDue } from "@/lib/gift-card-amounts";
-import { getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
+import { getAmountDueNow, sumPrepaid, sumReceived } from "@/lib/order-payment-amounts";
 import { getStoreSettings } from "@/lib/store-settings";
 import { env } from "@/lib/env.mjs";
 import {
@@ -418,7 +418,7 @@ function bankTransferText(block: BankTransferEmailBlock): string {
  * es el correo de «Abono recibido».
  */
 export function depositThanksParagraph(
-  order: Pick<EmailOrder, "total" | "depositAmount"> & { payments?: EmailOrder["payments"] },
+  order: Pick<EmailOrder, "total" | "depositAmount"> & { payments?: EmailOrder["payments"]; shipping?: { cost?: number | null } | null },
   status: OrderStatus,
   installmentAmount?: number,
 ): string {
@@ -437,7 +437,8 @@ export function depositThanksParagraph(
       : `Recibimos tu pago de ${currencyFormatter(paid)}: tu preventa quedó apartada y paga. Cuando llegue el producto te escribimos para coordinar el envío.`;
   }
   if (status === OrderStatus.PAID) {
-    return "¡Gracias! Recibimos el saldo de tu preventa. Estamos alistando tu pedido y te avisamos cuando salga.";
+    const shipping = Math.round(Number(order.shipping?.cost ?? 0));
+    return `¡Gracias! Recibimos el saldo de tu preventa: pagaste ${currencyFormatter(total)} en total${shipping > 0 ? `, con el envío de ${currencyFormatter(shipping)}` : ""}. Estamos alistando tu pedido y te avisamos cuando salga.`;
   }
   return `Tu preventa queda apartada cuando pagues el anticipo de ${currencyFormatter(deposit)}. El saldo de ${currencyFormatter(balance)} más el envío lo pagas cuando llegue el producto.`;
 }
@@ -1057,6 +1058,100 @@ export function buildPaymentDeclinedEmail(order: EmailOrder): BuiltEmail {
     text: withSocialLinks(`Tu pago del pedido #${order.orderNumber} no se aprobó: puedes intentarlo de nuevo.\n\n${thanksParagraph}\n\n${orderSummary}\n\nIntentar el pago de nuevo: ${orderLink}`),
   };
 }
+
+/**
+ * «Ya llegó tu preventa: paga tu saldo». Sale cuando Paula pide el saldo
+ * (con el envío ya cotizado): el valor exacto y el enlace al pedido, donde se
+ * paga en línea o por transferencia. Solo a la clienta.
+ */
+export function buildPreorderBalanceDueEmail(order: EmailOrder): BuiltEmail {
+  const orderLink = getOrderLink(order.id);
+  const items = getOrderLineItems(order);
+  const summary = getOrderTotalsSummary(order);
+  const total = order.total ? currencyFormatter(order.total) : undefined;
+  const orderSummary = getOrderSummary(order);
+  const product = order.orderItems.find((item) => item.isPreorder)?.name ?? "tu preventa";
+  const paid = sumReceived(order.payments);
+  const balance = Math.max(0, Math.round(Number(order.total)) - paid);
+  const shipping = Math.round(Number(order.shipping?.cost ?? 0));
+  const shippingText = shipping > 0 ? `el envío de ${currencyFormatter(shipping)}` : "el retiro en la tienda, sin costo";
+  const thanksParagraph = `¡Ya llegó ${product}! Llevas ${currencyFormatter(paid)} pagado. Tu saldo es ${currencyFormatter(balance)}: lo que falta del producto más ${shippingText}. Págalo desde tu pedido, en línea o por transferencia, y lo despachamos.`;
+  return {
+    subject: `Ya llegó tu preventa: paga tu saldo del pedido #${order.orderNumber}`,
+    react: OrderNotification({
+      name: order.fullName,
+      orderNumber: order.orderNumber,
+      status: "PREORDER_BALANCE_DUE",
+      total,
+      items,
+      summary,
+      orderSummary,
+      city: order.city || undefined,
+      orderLink,
+      thanksParagraph,
+      ctaLabel: "Pagar mi saldo",
+    }) as React.ReactElement,
+    text: withSocialLinks(`Ya llegó tu preventa del pedido #${order.orderNumber}.\n\n${thanksParagraph}\n\n${orderSummary}\n\nPagar mi saldo: ${orderLink}`),
+  };
+}
+
+/**
+ * «No alcanzó tu unidad»: la preventa se liberó a medias y este pedido quedó
+ * sin unidad. Nada que pagar; la devolución la coordina Paula por WhatsApp.
+ */
+export function buildPreorderUnfulfilledEmail(order: EmailOrder): BuiltEmail {
+  const orderLink = getOrderLink(order.id);
+  const items = getOrderLineItems(order);
+  const summary = getOrderTotalsSummary(order);
+  const orderSummary = getOrderSummary(order);
+  const paid = sumReceived(order.payments);
+  const thanksParagraph = `Llegaron menos unidades de las que vendimos y la tuya no alcanzó. Lo sentimos mucho. No tienes que pagar nada más: te escribimos por WhatsApp para devolverte lo que pagaste (${currencyFormatter(paid)}) o, si lo prefieres, dejarlo como saldo a favor para otra compra.`;
+  return {
+    subject: `Tu preventa del pedido #${order.orderNumber}: no alcanzó tu unidad`,
+    react: OrderNotification({
+      name: order.fullName,
+      orderNumber: order.orderNumber,
+      status: "PREORDER_UNFULFILLED",
+      items,
+      summary,
+      orderSummary,
+      city: order.city || undefined,
+      orderLink,
+      thanksParagraph,
+      ctaLabel: "Ver mi pedido",
+    }) as React.ReactElement,
+    text: withSocialLinks(`Tu preventa del pedido #${order.orderNumber}: no alcanzó tu unidad.\n\n${thanksParagraph}\n\nVer mi pedido: ${orderLink}`),
+  };
+}
+
+async function sendPreorderCustomerEmail(orderId: string, kind: string, build: (order: EmailOrder) => BuiltEmail): Promise<DeliveryOutcomes | undefined> {
+  try {
+    if (env.NODE_ENV === "development") {
+      console.log(`[EMAIL] Skipping ${kind} email in development for order ${orderId}`);
+      return;
+    }
+    const order = await loadOrderForEmail(orderId);
+    if (!order) {
+      console.error(`[EMAIL] Order ${orderId} not found; no ${kind} email`);
+      return;
+    }
+    const to = customerRecipient(order, kind);
+    if (!to) return;
+    const built = build(order);
+    return await deliverEmails([{ role: "customer", send: () => resend.emails.send({ from: FROM, to: [to], ...built }) }], {
+      storeId: order.storeId,
+      orderId: order.id,
+      kind,
+    });
+  } catch (error) {
+    console.error(`[EMAIL] Error sending ${kind} email:`, error);
+    await recordFailedNotification({ storeId: null, channel: "EMAIL", kind, recipient: "customer", orderId, error });
+    return failedOutcomes(["customer"], error);
+  }
+}
+
+export const sendPreorderBalanceDueEmail = (orderId: string) => sendPreorderCustomerEmail(orderId, "preorder-balance-due", buildPreorderBalanceDueEmail);
+export const sendPreorderUnfulfilledEmail = (orderId: string) => sendPreorderCustomerEmail(orderId, "preorder-unfulfilled", buildPreorderUnfulfilledEmail);
 
 export const sendPaymentDeclinedEmail = async (orderId: string): Promise<DeliveryOutcomes | undefined> => {
   // Fuera de `order:*`: el barrido de reintentos reenviaría un correo de estado.

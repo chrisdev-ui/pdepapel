@@ -3,16 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PreorderBalanceRequestDialog } from "@/components/orders/preorder-balance-request-dialog";
 import { PreorderPaymentDialog } from "@/components/orders/preorder-payment-dialog";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
+import { currencyFormatter } from "@/lib/utils";
 
 /**
  * Los botones de una preventa con anticipo en la página del pedido: el
  * anticipo mientras está pendiente, los abonos mientras espera la mercancía y
  * el saldo cuando ya llegó (liberada). Pagado todo antes de que llegue, se ve
  * «Saldo pagado» y al liberar el saldo es solo el envío. El cambio de estado
- * genérico no los ofrece (`getAllowedTransitions`).
+ * genérico no los ofrece (`getAllowedTransitions`). Ya liberada, «Pedir
+ * saldo» pone el envío y deja pagar en `/pedido`; después, «Cobrar saldo»
+ * muestra lo que falta y el enlace para WhatsApp.
  */
 export function PreorderPaymentActions({
   storeId,
@@ -32,11 +36,17 @@ export function PreorderPaymentActions({
     presaleId: string | null;
     heldByPresale: boolean;
     email?: string | null;
+    fullName: string;
+    productName: string;
+    pickup: boolean;
+    unfulfilled: boolean;
+    balanceRequested: boolean;
   };
 }) {
   const canWrite = useCanWrite();
   const router = useRouter();
   const [dialog, setDialog] = useState<"deposit" | "installment" | "balance" | null>(null);
+  const [balanceView, setBalanceView] = useState<"request" | "collect" | null>(null);
   if (!canWrite || order.paymentPlan !== "DEPOSIT") return null;
 
   const pending = order.status === "PENDING" || order.status === "CREATED";
@@ -65,6 +75,16 @@ export function PreorderPaymentActions({
               Saldo pagado
             </span>
           ) : null}
+          {!order.heldByPresale && !order.unfulfilled && !order.balanceRequested ? (
+            <Button type="button" className="min-h-11" onClick={() => setBalanceView("request")} data-testid="pedir-saldo">
+              Pedir saldo
+            </Button>
+          ) : null}
+          {!order.heldByPresale && order.balanceRequested && !fullyPaid ? (
+            <Button type="button" className="min-h-11" onClick={() => setBalanceView("collect")} data-testid="cobrar-saldo">
+              Cobrar saldo · {currencyFormatter(order.balanceDue)}
+            </Button>
+          ) : null}
           {order.heldByPresale && !fullyPaid ? (
             <Button type="button" variant="outline" className="min-h-11" onClick={() => setDialog("installment")}>
               Registrar abono
@@ -72,6 +92,7 @@ export function PreorderPaymentActions({
           ) : null}
           <Button
             type="button"
+            variant={order.heldByPresale ? "default" : "outline"}
             className="min-h-11"
             disabled={order.heldByPresale}
             title={order.heldByPresale ? "Primero libera la preventa: el saldo se cobra cuando llega la mercancía." : undefined}
@@ -81,6 +102,26 @@ export function PreorderPaymentActions({
           </Button>
         </>
       )}
+      {balanceView ? (
+        <PreorderBalanceRequestDialog
+          storeId={storeId}
+          open
+          onOpenChange={(open) => !open && setBalanceView(null)}
+          initialView={balanceView}
+          order={{
+            id: order.id,
+            orderNumber: order.orderNumber,
+            fullName: order.fullName,
+            productName: order.productName,
+            email: order.email,
+            pickup: order.pickup,
+            shippingCost: Math.round(Number(order.shippingCost ?? 0)),
+            balanceDue: Math.max(0, order.balanceDue),
+            balanceRequested: order.balanceRequested,
+          }}
+          onDone={() => router.refresh()}
+        />
+      ) : null}
       {dialog ? (
         <PreorderPaymentDialog
           storeId={storeId}

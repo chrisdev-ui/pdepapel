@@ -109,8 +109,8 @@ export function OrderStatusBar({
         TONE_BG[tone],
       )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1 sm:min-w-[16rem] sm:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <TintBadge
               label={ORDER_STATUS_LABELS[status]}
@@ -130,7 +130,8 @@ export function OrderStatusBar({
             <p className="text-xs text-primary/70">{nextStep.consequence}</p>
           )}
         </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center [&_button]:w-full sm:[&_button]:w-auto">
+        {/* Sin shrink-0: con tres botones de preventa el texto quedaba de una palabra por línea; así bajan a otra fila. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center [&_button]:w-full sm:[&_button]:w-auto">
           {extraActions}
           <StatusActions {...shared} variant="card" />
           <StatusActions {...shared} variant="care" />

@@ -6,6 +6,8 @@ const post = vi.hoisted(() => vi.fn().mockResolvedValue({ data: {} }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("axios", () => ({ default: { post } }));
+const copy = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+vi.mock("@/hooks/use-clipboard", () => ({ useClipboard: () => ({ onCopy: copy, copied: false }) }));
 
 import { PreorderPaymentActions } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/components/order-form/preorder-actions";
 import { ViewerAccessProvider } from "@/components/shell/viewer-access";
@@ -27,6 +29,12 @@ const base = {
   shippingCost: 0,
   presaleId: "presale-1",
   heldByPresale: true,
+  email: "" as string | null,
+  fullName: "Clienta Prueba",
+  productName: "Calendario de adviento",
+  pickup: false,
+  unfulfilled: false,
+  balanceRequested: false,
 };
 
 function renderAs(order: Partial<typeof base>, role: "owner" | "viewer" = "owner") {
@@ -118,6 +126,51 @@ describe("anticipo y saldo en la página del pedido", () => {
     expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/\$\s?0/);
     fireEvent.change(screen.getByLabelText("Envío cobrado con el saldo"), { target: { value: "9000" } });
     expect(screen.getByText(/Saldo a recibir/).textContent).toMatch(/9\.000/);
+  });
+
+  it("liberado sin pedir saldo: «Pedir saldo» suma el envío, avisa por correo por defecto y deja el enlace para WhatsApp", async () => {
+    post.mockResolvedValueOnce({ data: { total: 172000, shipping: 12000, amountDue: 122000, completed: false } });
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: false, balanceDue: 110000, email: "clienta@example.com" });
+    expect(screen.queryByTestId("cobrar-saldo")).toBeNull();
+    fireEvent.click(screen.getByTestId("pedir-saldo"));
+    expect(screen.getByRole("dialog", { name: "Pedir saldo" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Avisar a la clienta" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Pedir saldo" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Envío cotizado"), { target: { value: "12000" } });
+    expect(screen.getByTestId("balance-request-preview").textContent).toMatch(/122\.000/);
+    fireEvent.click(screen.getByRole("button", { name: "Pedir saldo" }));
+    await vi.waitFor(() => expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/balance-request", { shippingCost: 12000, notifyCustomer: true }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog", { name: "Pedir saldo" })).toBeNull());
+  });
+
+  it("recoge en la tienda y sin correo: envío $ 0, sin casilla de aviso", async () => {
+    post.mockResolvedValueOnce({ data: { total: 160000, shipping: 0, amountDue: 110000, completed: false } });
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: false, balanceDue: 110000, pickup: true, email: null });
+    fireEvent.click(screen.getByTestId("pedir-saldo"));
+    expect(screen.queryByLabelText("Envío cotizado")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Avisar a la clienta" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Pedir saldo" }));
+    await vi.waitFor(() => expect(post).toHaveBeenCalledWith("/api/store-1/orders/order-1/balance-request", { shippingCost: 0, notifyCustomer: false }));
+  });
+
+  it("saldo pedido: «Cobrar saldo» con lo que falta; «sin unidad» no ofrece pedir saldo", () => {
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: false, balanceDue: 122000, balanceRequested: true, shippingCost: 12000 });
+    expect(screen.queryByTestId("pedir-saldo")).toBeNull();
+    expect(screen.getByTestId("cobrar-saldo").textContent).toMatch(/Cobrar saldo · \$\s?122\.000/);
+    fireEvent.click(screen.getByTestId("cobrar-saldo"));
+    expect(screen.getByRole("dialog", { name: "Cobrar saldo" })).toBeInTheDocument();
+    expect(screen.getByTestId("balance-collect-amount").textContent).toMatch(/122\.000/);
+    fireEvent.click(screen.getByRole("button", { name: /Copiar enlace/ }));
+    expect(copy).toHaveBeenCalledWith(expect.stringMatching(/\/pedido\/order-1$/), "Enlace del pedido");
+    fireEvent.click(screen.getByRole("button", { name: /Copiar mensaje/ }));
+    expect(copy).toHaveBeenLastCalledWith(expect.stringMatching(/^Hola Clienta, ¡ya llegó tu Calendario de adviento! Tu saldo es \$\s?122\.000, con el envío incluido\..*\/pedido\/order-1$/), "Mensaje para WhatsApp");
+    // «Cambiar el envío» vuelve a pedir el saldo con el envío nuevo (el anterior ya está en el saldo).
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar el envío" }));
+    fireEvent.change(screen.getByLabelText("Envío cotizado"), { target: { value: "8000" } });
+    expect(screen.getByTestId("balance-request-preview").textContent).toMatch(/118\.000/);
+    cleanup();
+    renderAs({ status: "DEPOSIT_PAID", heldByPresale: true, unfulfilled: true });
+    expect(screen.queryByTestId("pedir-saldo")).toBeNull();
   });
 
   it("ni solo lectura ni un pedido normal ven los botones", () => {

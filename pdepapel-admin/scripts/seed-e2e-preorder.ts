@@ -38,6 +38,7 @@ async function main() {
     await db.paymentDetails.deleteMany({ where: { orderId: { in: orders } } });
     await db.order.deleteMany({ where: { id: { in: orders } } });
     await db.preorderWaitlistEntry.deleteMany({ where: { productId: PRODUCT_ID } });
+    await db.inventoryMovement.deleteMany({ where: { productId: PRODUCT_ID } });
     await db.productPresale.deleteMany({ where: { productId: PRODUCT_ID } });
     await db.image.deleteMany({ where: { productId: PRODUCT_ID } });
     await db.product.deleteMany({ where: { id: PRODUCT_ID } });
@@ -135,11 +136,77 @@ async function main() {
       notifyCustomer: false,
     });
     console.log(JSON.stringify({ paid: result.paid, remaining: result.remaining }));
+  } else if (mode === "online-order" || mode === "unfulfilled-order") {
+    // Un pedido con el anticipo ya recibido (Bold, $30.000), como lo deja la caja.
+    const presale = await db.productPresale.findFirstOrThrow({ where: { productId: PRODUCT_ID, status: "ACTIVE" } });
+    const orderNumber = `ORD-E2E-LINEA-${Date.now().toString(36).toUpperCase()}`;
+    const order = await db.order.create({
+      data: {
+        storeId,
+        orderNumber,
+        status: "DEPOSIT_PAID",
+        type: "STANDARD",
+        source: "STORE",
+        paymentPlan: "DEPOSIT",
+        depositAmount: 30000,
+        depositPaidAt: new Date(),
+        fullName: "Clienta Abonos E2E",
+        phone: "+573001112233",
+        email: "",
+        address: "Calle 1 # 2-3",
+        city: "Medellín",
+        department: "Antioquia",
+        daneCode: "05001000",
+        subtotal: 160000,
+        total: 160000,
+        orderItems: {
+          create: [{
+            productId: PRODUCT_ID,
+            name: "Calendario de adviento E2E",
+            quantity: 1,
+            price: 160000,
+            isPreorder: true,
+            presaleId: presale.id,
+            preorderUnfulfilledAt: mode === "unfulfilled-order" ? new Date() : null,
+          }],
+        },
+        payment: { create: { storeId, method: "Bold" } },
+        shipping: { create: { storeId, provider: "MANUAL", status: "Preparing", cost: 0 } },
+        payments: { create: [{ storeId, kind: "DEPOSIT", status: "APPROVED", amount: 30000, method: "Bold", paidAt: new Date(), gatewayReference: `${orderNumber}-A`, createdBy: "e2e" }] },
+      },
+    });
+    console.log(JSON.stringify({ orderId: order.id, orderNumber }));
+  } else if (mode === "release") {
+    // Llegó la mercancía: el stock justo para lo que espera y «Liberar».
+    await import("./lib/allow-server-only.cjs");
+    const presale = await db.productPresale.findFirstOrThrow({ where: { productId: PRODUCT_ID, status: "ACTIVE" } });
+    const waiting = await db.orderItem.aggregate({
+      where: { presaleId: presale.id, isPreorder: true, preorderReleasedAt: null, preorderUnfulfilledAt: null, order: { status: { in: ["PAID", "DEPOSIT_PAID"] } } },
+      _sum: { quantity: true },
+    });
+    await db.product.update({ where: { id: PRODUCT_ID }, data: { stock: waiting._sum.quantity ?? 0 } });
+    const { releasePresale } = await import("../lib/presale-release");
+    const result = await releasePresale({ storeId, presaleId: presale.id, releasedBy: "e2e" });
+    console.log(JSON.stringify({ releasedUnits: result.releasedUnits }));
+  } else if (mode === "request-balance") {
+    const [orderId, shipping] = process.argv.slice(3);
+    if (!orderId) throw new Error("Falta el id del pedido");
+    await import("./lib/allow-server-only.cjs");
+    const { requestPreorderBalance } = await import("../lib/preorder-balance-request");
+    const result = await requestPreorderBalance({ storeId, orderId, shippingCost: Number(shipping ?? 0), notifyCustomer: false, createdBy: "e2e" });
+    console.log(JSON.stringify(result));
+  } else if (mode === "payments") {
+    const orderId = process.argv[3];
+    const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, select: { status: true, total: true, paidAt: true } });
+    const payments = await db.orderPayment.findMany({ where: { orderId }, orderBy: { createdAt: "asc" }, select: { kind: true, status: true, amount: true, method: true, gatewayReference: true } });
+    console.log(JSON.stringify({ status: order.status, total: order.total, paid: order.paidAt !== null, payments }));
   } else if (mode === "archive" || mode === "unarchive") {
     await db.product.update({ where: { id: PRODUCT_ID }, data: { isArchived: mode === "archive" } });
     console.log(JSON.stringify({ isArchived: mode === "archive" }));
   } else {
-    throw new Error("Modo desconocido: seed | clean | inspect | deposit <orderId> | installment <orderId> <valor> | archive | unarchive");
+    throw new Error(
+      "Modo desconocido: seed | clean | inspect | deposit <orderId> | installment <orderId> <valor> | online-order | unfulfilled-order | release | request-balance <orderId> <envío> | payments <orderId> | archive | unarchive",
+    );
   }
   await db.$disconnect();
 }

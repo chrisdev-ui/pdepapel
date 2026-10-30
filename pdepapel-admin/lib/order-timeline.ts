@@ -337,9 +337,9 @@ export function getNextStepCard(
         queue,
         title: "Siguiente paso: cobrar el saldo",
         description:
-          "La mercancía ya llegó. Cotiza el envío, escríbele a la clienta el saldo más el envío y, cuando pague, anótalo con «Marcar saldo recibido».",
+          "La mercancía ya llegó. Cotiza el envío y pulsa «Pedir saldo»; después «Cobrar saldo» te da el enlace para mandárselo por WhatsApp. Si te transfiere, anótalo con «Marcar saldo recibido».",
         primary: { label: "Ir al estado del pedido", href: "#estado-del-pedido" },
-        consequence: "Al anotar el saldo el pedido queda pagado y entra a «Por despachar».",
+        consequence: "Si paga en línea el pedido queda pagado solo; al anotar el saldo, también. Después entra a «Por despachar».",
         tone: "lavender",
       };
     case "pickup":

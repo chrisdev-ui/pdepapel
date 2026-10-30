@@ -234,6 +234,39 @@ export async function settleDepositPayment(input: DepositInput): Promise<Deposit
   return result;
 }
 
+type FinalizableOrder = Prisma.OrderGetPayload<{ include: typeof ORDER_FOR_PAYMENT }>;
+
+/**
+ * El paso a PAGADO de un pedido con anticipo, el mismo para «Marcar saldo
+ * recibido» y para el saldo pagado en línea: candado en el estado, `paidAt`,
+ * el total con el envío, financieros y el envío cobrado. Devuelve false si
+ * otro ya lo pasó (webhook repetido, doble clic).
+ */
+async function finalizeDepositOrder(
+  tx: Tx,
+  order: FinalizableOrder,
+  input: { paidAt: Date; total: number; shippingCost: number | null; method: PaymentMethod },
+): Promise<boolean> {
+  const claim = await tx.order.updateMany({
+    where: { id: order.id, status: OrderStatus.DEPOSIT_PAID },
+    data: { status: OrderStatus.PAID, paidAt: input.paidAt, total: input.total },
+  });
+  if (claim.count === 0) return false;
+  const shipping = input.shippingCost ?? Math.round(Number(order.shipping?.cost ?? 0));
+  const financials = await calculateOrderFinancials(
+    { ...order, total: input.total } as never,
+    order.payment?.method ?? input.method,
+    shipping + Number(order.shipping?.codFee ?? 0),
+    tx,
+  );
+  await tx.order.update({ where: { id: order.id }, data: financials as never });
+  // Solo el valor del envío cobrado con el saldo; el estado del envío no cambia.
+  if (order.shipping && input.shippingCost !== null) {
+    await tx.shipping.update({ where: { id: order.shipping.id }, data: { cost: input.shippingCost } });
+  }
+  return true;
+}
+
 export interface BalanceInput {
   orderId: string;
   storeId: string;
@@ -280,7 +313,8 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
       const previousShipping = Math.round(Number(order.shipping?.cost ?? 0));
       const newShipping = shippingCost ?? previousShipping;
       const total = Math.round(Number(order.total)) - previousShipping + newShipping;
-      const due = getAmountDueNow({ ...order, total }, sumPrepaid(order.payments));
+      // Un saldo pagado en línea también cuenta (sumReceived), no solo anticipo y abonos.
+      const due = getAmountDueNow({ ...order, total }, sumReceived(order.payments));
       if (amount !== due) {
         throw ErrorFactory.InvalidRequest(`El saldo que falta es ${due.toLocaleString("es-CO")} pesos: revisa el valor o el envío.`);
       }
@@ -321,39 +355,6 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
     await recordSilentPaymentNotice(input.orderId, input.storeId, OrderStatus.PAID, BALANCE_SILENT_REASON, input.createdBy);
   }
   return result;
-}
-
-type FinalizableOrder = Prisma.OrderGetPayload<{ include: typeof ORDER_FOR_PAYMENT }>;
-
-/**
- * El paso a PAGADO de un pedido con anticipo, el mismo para «Marcar saldo
- * recibido» y para el saldo pagado en línea: candado en el estado, `paidAt`,
- * el total con el envío, financieros y el envío cobrado. Devuelve false si
- * otro ya lo pasó (webhook repetido, doble clic).
- */
-async function finalizeDepositOrder(
-  tx: Tx,
-  order: FinalizableOrder,
-  input: { paidAt: Date; total: number; shippingCost: number | null; method: PaymentMethod },
-): Promise<boolean> {
-  const claim = await tx.order.updateMany({
-    where: { id: order.id, status: OrderStatus.DEPOSIT_PAID },
-    data: { status: OrderStatus.PAID, paidAt: input.paidAt, total: input.total },
-  });
-  if (claim.count === 0) return false;
-  const shipping = input.shippingCost ?? Math.round(Number(order.shipping?.cost ?? 0));
-  const financials = await calculateOrderFinancials(
-    { ...order, total: input.total } as never,
-    order.payment?.method ?? input.method,
-    shipping + Number(order.shipping?.codFee ?? 0),
-    tx,
-  );
-  await tx.order.update({ where: { id: order.id }, data: financials as never });
-  // Solo el valor del envío cobrado con el saldo; el estado del envío no cambia.
-  if (order.shipping && input.shippingCost !== null) {
-    await tx.shipping.update({ where: { id: order.shipping.id }, data: { cost: input.shippingCost } });
-  }
-  return true;
 }
 
 export type OnlineSettleOutcome =

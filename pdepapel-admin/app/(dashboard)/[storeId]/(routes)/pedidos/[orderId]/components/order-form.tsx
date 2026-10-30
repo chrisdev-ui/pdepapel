@@ -46,7 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
+import { getAmountDueNow, sumPrepaid, sumReceived } from "@/lib/order-payment-amounts";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { OpenInventoryIssue } from "@/lib/order-inventory-issues";
 import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-panel";
@@ -909,11 +909,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         paymentPlan: initialData.paymentPlan,
                         depositAmount: initialData.depositAmount,
                         total: initialData.total,
-                        balanceDue: getAmountDueNow(initialData, sumPrepaid(initialData.payments)),
+                        balanceDue: getAmountDueNow(initialData, sumReceived(initialData.payments)),
                         shippingCost: initialData.shipping?.cost ?? 0,
                         presaleId: initialData.orderItems.find((item) => item.presaleId)?.presaleId ?? null,
                         heldByPresale: isOrderHeldByPresale(initialData),
                         email: initialData.email,
+                        fullName: initialData.fullName,
+                        productName: initialData.orderItems.find((item) => item.isPreorder)?.name ?? "pedido",
+                        pickup: !initialData.shipping || initialData.shipping.provider === ShippingProvider.NONE,
+                        unfulfilled: hasUnfulfilledPresaleLine(initialData),
+                        balanceRequested: Boolean(initialData.balanceRequestedAt),
                       }}
                     />
                   }

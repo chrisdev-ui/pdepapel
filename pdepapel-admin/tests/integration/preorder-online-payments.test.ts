@@ -28,14 +28,14 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  */
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 const background = vi.hoisted(() => ({ pending: [] as Promise<unknown>[] }));
-const mocks = vi.hoisted(() => ({ sendOrderEmail: vi.fn(), purchase: vi.fn() }));
+const mocks = vi.hoisted(() => ({ sendOrderEmail: vi.fn(), purchase: vi.fn(), balanceDue: vi.fn(), unfulfilled: vi.fn() }));
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: session.userId, sessionClaims: {} }),
   currentUser: async () => null,
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
-vi.mock("@/lib/email", async (importOriginal) => ({ ...(await importOriginal<object>()), sendOrderEmail: mocks.sendOrderEmail, sendPaymentDeclinedEmail: vi.fn() }));
+vi.mock("@/lib/email", async (importOriginal) => ({ ...(await importOriginal<object>()), sendOrderEmail: mocks.sendOrderEmail, sendPaymentDeclinedEmail: vi.fn(), sendPreorderBalanceDueEmail: mocks.balanceDue, sendPreorderUnfulfilledEmail: mocks.unfulfilled }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@vercel/functions", () => ({ waitUntil: (promise: Promise<unknown>) => background.pending.push(promise) }));
 vi.mock("@/lib/google-analytics", async (importOriginal) => ({
@@ -113,6 +113,25 @@ async function boldEvent(reference: string, total: number, type = "SALE_APPROVED
   );
   await flushBackground();
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+async function requestBalance(body: Record<string, unknown>) {
+  const { POST } = await import("@/app/api/[storeId]/orders/[orderId]/balance-request/route");
+  const response = await POST(request(body), { params: { storeId: f.store.id, orderId } });
+  await flushBackground();
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+async function presaleRow() {
+  const { getPresales } = await import("@/app/(dashboard)/[storeId]/(routes)/preventas/server/get-presales");
+  const summary = await getPresales(f.store.id);
+  return { row: summary.rows.find((presale) => presale.id === presaleId)!, summary };
+}
+
+async function publicPayment() {
+  const { toCustomerOrderResponse, CUSTOMER_ORDER_SELECT } = await import("@/lib/public-orders");
+  const record = await testPrisma.order.findUniqueOrThrow({ where: { id: orderId }, select: CUSTOMER_ORDER_SELECT });
+  return toCustomerOrderResponse(record as never).preorderPayment;
 }
 
 const rows = () => testPrisma.orderPayment.findMany({ where: { orderId }, orderBy: { createdAt: "asc" } });
@@ -222,6 +241,15 @@ describe("abonar en línea mientras la preventa espera", () => {
     expect(again.body.reference).toBe(`${orderNumber}-P1`);
     const pending = (await rows()).filter((row) => row.status === OrderPaymentStatus.PENDING);
     expect(pending.map((row) => `${row.kind}:${row.amount}:${row.method}`)).toEqual(["INSTALLMENT:20000:Wompi"]);
+    // Preventas lo cuenta como pago en confirmación; /pedido lo muestra como pendiente.
+    expect((await presaleRow()).row).toMatchObject({ onlinePendingCount: 1, onlinePendingAmount: 20000 });
+    expect(await publicPayment()).toMatchObject({
+      mode: "installment",
+      amountDue: 130000,
+      minAmount: 10000,
+      released: false,
+      onlinePayments: [{ reference: `${orderNumber}-P1`, status: "PENDING", amount: 20000, kind: "INSTALLMENT" }],
+    });
   });
 
   it("el webhook aprueba la fila una sola vez; repetirlo no suma; el pedido sigue con anticipo", async () => {
@@ -276,11 +304,31 @@ describe("pagar el saldo en línea cuando llega", () => {
     expect(early.status).toBe(400);
     expect(early.body.error).toMatch(/estamos cotizando el envío/);
     expect((await pay({ mode: "installment", amount: 10000, method: "Wompi" })).status).toBe(400);
+    expect(await publicPayment()).toMatchObject({ mode: null, block: "awaiting-balance-request", released: true, balanceRequested: false });
+    expect((await presaleRow()).row).toMatchObject({ balanceToRequestOrders: 1, balanceRequestedOrders: 0 });
+  });
+
+  it("«Pedir saldo» es solo de la dueña y pone el envío en el total una vez (volver a pedirlo lo reemplaza)", async () => {
+    session.userId = "otra-persona";
+    expect((await requestBalance({ shippingCost: 12000 })).status).toBeGreaterThanOrEqual(401);
+    session.userId = f.store.userId;
+    expect((await requestBalance({ shippingCost: -1 })).status).toBe(400);
+    const first = await requestBalance({ shippingCost: 9000, notifyCustomer: false });
+    expect(first).toMatchObject({ status: 200, body: { total: PRICE + 9000, shipping: 9000, amountDue: 109000, completed: false } });
+    expect(mocks.balanceDue).not.toHaveBeenCalled();
+    expect(await testPrisma.orderNotification.count({ where: { orderId, status: "SKIPPED", reason: "Saldo pedido sin avisar" } })).toBe(1);
+    const second = await requestBalance({ shippingCost: 12000 });
+    expect(second.body).toMatchObject({ total: PRICE + 12000, shipping: 12000, amountDue: 112000 });
+    expect(mocks.balanceDue).toHaveBeenCalledWith(orderId);
+    const after = await order();
+    expect(after.balanceRequestedAt).not.toBeNull();
+    expect((await testPrisma.shipping.findUniqueOrThrow({ where: { orderId } })).cost).toBe(12000);
+    expect((await presaleRow()).row).toMatchObject({ balanceToRequestOrders: 0, balanceRequestedOrders: 1, balanceOwed: 112000 });
+    expect((await presaleRow()).summary.balanceOwed).toBe(112000);
+    expect(await publicPayment()).toMatchObject({ mode: "balance", amountDue: 112000, balanceRequested: true });
   });
 
   it("con el saldo pedido: solo el valor exacto (producto + envío − pagado) y por Bold con su firma", async () => {
-    await testPrisma.order.update({ where: { id: orderId }, data: { balanceRequestedAt: new Date(), total: PRICE + 12000 } });
-    await testPrisma.shipping.update({ where: { orderId }, data: { cost: 12000 } });
     expect((await pay({ mode: "balance", amount: 100000, method: "Bold" })).body.error).toMatch(/El saldo es \$ 112\.000/);
     const balance = await pay({ mode: "balance", amount: 112000, method: "Bold" });
     expect(balance.status).toBe(200);
@@ -313,7 +361,9 @@ describe("pagar el saldo en línea cuando llega", () => {
     expect((await rows()).find((row) => row.gatewayReference === `${orderNumber}-P3`)?.status).toBe(OrderPaymentStatus.APPROVED);
   });
 
-  it("un pedido pagado ya no recibe cobros en línea", async () => {
+  it("un pedido pagado ya no recibe cobros en línea ni se le pide saldo", async () => {
     expect((await pay({ mode: "balance", amount: 0, method: "Bold" })).status).toBe(400);
+    expect((await requestBalance({ shippingCost: 5000 })).status).toBe(400);
+    expect((await presaleRow()).row).toMatchObject({ balanceRequestedOrders: 0, balanceOwed: 0 });
   });
 });

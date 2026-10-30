@@ -8,7 +8,9 @@ import {
 } from "@/lib/presale";
 import { availableStock } from "@/lib/available-stock";
 import { planPartialRelease, type PartialReleaseOrder } from "@/lib/presale-release";
-import { sumPrepaid } from "@/lib/order-payment-amounts";
+import { getAmountDueNow, sumPrepaid, sumReceived } from "@/lib/order-payment-amounts";
+import { RECONCILE_MAX_AGE_MS } from "@/lib/payment-reconciliation";
+import { ONLINE_REFERENCE_PATTERN } from "@/lib/preorder-online-rules";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
 import { scrubPresales } from "@/lib/viewer-payloads";
@@ -58,6 +60,14 @@ export interface PresaleRow {
   depositsReceived: number;
   /** Pedidos con anticipo recibido y saldo pendiente. */
   depositOrders: number;
+  /** Ya llegó y falta «Pedir saldo» (poner el envío). */
+  balanceToRequestOrders: number;
+  /** Saldo pedido y sin pagar: cuántos pedidos y cuánto falta, con el envío. */
+  balanceRequestedOrders: number;
+  balanceOwed: number;
+  /** Abonos o saldos pagados en línea que la pasarela todavía no confirma (dentro de su ventana). */
+  onlinePendingCount: number;
+  onlinePendingAmount: number;
   /** Lo que hay en bodega para la preventa: stock menos lo apartado para otras clientas. */
   productStock: number;
   canRelease: boolean;
@@ -87,6 +97,8 @@ export interface PresalesSummary {
   overdueCount: number;
   /** Pedidos «sin unidad» por cancelar con su devolución, en todas las preventas. */
   unfulfilledOrders: number;
+  balanceOwed: number;
+  onlinePendingCount: number;
   refunded: number;
   retained: number;
   storeCredit: number;
@@ -147,6 +159,10 @@ export async function getPresales(
               paidAt: true,
               createdAt: true,
               depositAmount: true,
+              paymentPlan: true,
+              total: true,
+              giftCardAmount: true,
+              balanceRequestedAt: true,
               payments: { where: { status: OrderPaymentStatus.APPROVED }, select: { kind: true, status: true, amount: true } },
             },
           },
@@ -171,6 +187,38 @@ export async function getPresales(
         },
       })
     : [];
+  // Pagos en línea (`-P<n>`) que la pasarela aún no confirma: los mismos que revisa la conciliación.
+  const onlinePendingRows = presales.length
+    ? await prismadb.orderPayment.findMany({
+        where: {
+          storeId,
+          status: OrderPaymentStatus.PENDING,
+          kind: { in: [OrderPaymentKind.INSTALLMENT, OrderPaymentKind.BALANCE] },
+          gatewayReference: { not: null },
+          createdAt: { gte: new Date(now.getTime() - RECONCILE_MAX_AGE_MS.Wompi) },
+          order: { status: OrderStatus.DEPOSIT_PAID, orderItems: { some: { isPreorder: true, presaleId: { in: presales.map((presale) => presale.id) } } } },
+        },
+        select: {
+          amount: true,
+          method: true,
+          createdAt: true,
+          gatewayReference: true,
+          order: { select: { orderItems: { where: { isPreorder: true, presaleId: { not: null } }, select: { presaleId: true }, take: 1 } } },
+        },
+      })
+    : [];
+  const onlinePending = new Map<string, { count: number; amount: number }>();
+  for (const row of onlinePendingRows) {
+    const id = row.order?.orderItems[0]?.presaleId;
+    if (!id || !row.gatewayReference || !ONLINE_REFERENCE_PATTERN.test(row.gatewayReference)) continue;
+    const window = row.method === "Bold" ? RECONCILE_MAX_AGE_MS.Bold : RECONCILE_MAX_AGE_MS.Wompi;
+    if (now.getTime() - row.createdAt.getTime() > window) continue;
+    const bucket = onlinePending.get(id) ?? { count: 0, amount: 0 };
+    bucket.count += 1;
+    bucket.amount += row.amount;
+    onlinePending.set(id, bucket);
+  }
+
   const settlements = new Map<string, { refunded: number; retained: number; storeCredit: number }>();
   for (const row of settlementRows) {
     const id = row.order?.orderItems[0]?.presaleId;
@@ -191,6 +239,9 @@ export async function getPresales(
       deposits: number;
       orders: Set<string>;
       depositOrders: Set<string>;
+      toRequest: Set<string>;
+      requested: Set<string>;
+      owed: number;
       unfulfilled: number;
       unfulfilledOrders: Set<string>;
       pendingByOrder: Map<string, PartialReleaseOrder>;
@@ -205,6 +256,9 @@ export async function getPresales(
       deposits: 0,
       orders: new Set<string>(),
       depositOrders: new Set<string>(),
+      toRequest: new Set<string>(),
+      requested: new Set<string>(),
+      owed: 0,
       unfulfilled: 0,
       unfulfilledOrders: new Set<string>(),
       pendingByOrder: new Map<string, PartialReleaseOrder>(),
@@ -213,7 +267,15 @@ export async function getPresales(
     // una vez por pedido (la preventa con anticipo se compra sola).
     if (line.order?.status === OrderStatus.DEPOSIT_PAID) {
       // Lo que de verdad entró (anticipo + abonos), no el anticipo esperado.
-      if (!bucket.depositOrders.has(line.orderId)) bucket.deposits += sumPrepaid(line.order.payments);
+      if (!bucket.depositOrders.has(line.orderId)) {
+        bucket.deposits += sumPrepaid(line.order.payments);
+        if (line.preorderReleasedAt !== null && line.order.balanceRequestedAt) {
+          bucket.requested.add(line.orderId);
+          bucket.owed += Math.max(0, getAmountDueNow(line.order, sumReceived(line.order.payments)));
+        } else if (line.preorderReleasedAt !== null) {
+          bucket.toRequest.add(line.orderId);
+        }
+      }
       bucket.depositOrders.add(line.orderId);
     } else {
       bucket.collected += line.price * line.quantity;
@@ -247,6 +309,7 @@ export async function getPresales(
     const isActive = presale.status === ProductPresaleStatus.ACTIVE;
     const plan = planPartialRelease(Array.from(bucket?.pendingByOrder.values() ?? []), free);
     const money = settlements.get(presale.id);
+    const online = onlinePending.get(presale.id);
 
     return {
       id: presale.id,
@@ -274,6 +337,11 @@ export async function getPresales(
       collected: bucket?.collected ?? 0,
       depositsReceived: bucket?.deposits ?? 0,
       depositOrders: bucket?.depositOrders.size ?? 0,
+      balanceToRequestOrders: bucket?.toRequest.size ?? 0,
+      balanceRequestedOrders: bucket?.requested.size ?? 0,
+      balanceOwed: bucket?.owed ?? 0,
+      onlinePendingCount: online?.count ?? 0,
+      onlinePendingAmount: online?.amount ?? 0,
       productStock: free,
       canRelease: isActive && pendingUnits > 0 && free >= pendingUnits,
       canReleasePartial: isActive && pendingUnits > 0 && free < pendingUnits && plan.releaseUnits > 0,
@@ -308,6 +376,8 @@ export async function getPresales(
     customerCount: active.reduce((total, row) => total + row.customerCount, 0),
     overdueCount: active.filter((row) => row.isOverdue).length,
     unfulfilledOrders: rows.reduce((total, row) => total + row.unfulfilledOrders, 0),
+    balanceOwed: isViewer ? 0 : rows.reduce((total, row) => total + row.balanceOwed, 0),
+    onlinePendingCount: rows.reduce((total, row) => total + row.onlinePendingCount, 0),
     refunded: isViewer ? 0 : rows.reduce((total, row) => total + row.refunded, 0),
     retained: isViewer ? 0 : rows.reduce((total, row) => total + row.retained, 0),
     storeCredit: isViewer ? 0 : rows.reduce((total, row) => total + row.storeCredit, 0),

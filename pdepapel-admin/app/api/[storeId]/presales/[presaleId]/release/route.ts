@@ -3,7 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { sendPreorderUnfulfilledEmail } from "@/lib/email";
 import { readOptionalJsonBody } from "@/lib/request-body";
 import { getPresaleReleasePreview, releasePresale } from "@/lib/presale-release";
 import prismadb from "@/lib/prismadb";
@@ -81,6 +83,10 @@ export async function POST(
       partial: body.partial === true,
       expectedReleaseUnits: typeof body.expectedReleaseUnits === "number" ? body.expectedReleaseUnits : undefined,
     });
+    // «Sin unidad»: a quien no le alcanzó se le avisa por correo (Paula la contacta por WhatsApp).
+    for (const orderId of result.unfulfilledOrderIds) {
+      runInBackground("correo de preventa sin unidad", () => sendPreorderUnfulfilledEmail(orderId));
+    }
     // Liberar mueve stock y apaga la preventa: la ficha pasa a venta normal.
     const released = await prismadb.productPresale.findUnique({ where: { id: params.presaleId }, select: { productId: true } });
     if (released) await invalidateStoreProductsCache(params.storeId, { productIds: [released.productId] });

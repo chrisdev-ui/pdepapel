@@ -27,6 +27,7 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  */
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 const background = vi.hoisted(() => ({ pending: [] as Promise<unknown>[] }));
+const unfulfilledEmail = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: session.userId }),
@@ -34,6 +35,7 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
+vi.mock("@/lib/email", async (importOriginal) => ({ ...(await importOriginal<object>()), sendPreorderUnfulfilledEmail: unfulfilledEmail }));
 vi.mock("@/lib/whatsapp/send", async (importOriginal) => ({ ...(await importOriginal<object>()), sendWhatsAppTemplateMessage: vi.fn() }));
 vi.mock("@vercel/functions", () => ({ waitUntil: (promise: Promise<unknown>) => background.pending.push(promise) }));
 vi.mock("@/lib/google-analytics", async (importOriginal) => ({ ...(await importOriginal<object>()), recordPaidOrderInGoogleAnalytics: vi.fn().mockResolvedValue(undefined) }));
@@ -190,10 +192,17 @@ describe("Liberar lo que llegó", () => {
     expect((await testPrisma.product.findUniqueOrThrow({ where: { id: calendarId } })).stock).toBe(3);
   });
 
-  it("libera 3, deja 1 pedido «sin unidad» y cierra la campaña", async () => {
-    const { releasePresale } = await import("@/lib/presale-release");
-    const result = await releasePresale({ storeId: f.store.id, presaleId, releasedBy: "user-paula", partial: true, expectedReleaseUnits: 3 });
-    expect(result).toMatchObject({ releasedUnits: 3, unfulfilledOrderIds: [middle.id], unfulfilledUnits: 2 });
+  it("libera 3, deja 1 pedido «sin unidad» (con su correo) y cierra la campaña", async () => {
+    const { POST } = await import("@/app/api/[storeId]/presales/[presaleId]/release/route");
+    const response = await POST(
+      new Request("http://admin.test/api/x", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ partial: true, expectedReleaseUnits: 3 }) }),
+      { params: { storeId: f.store.id, presaleId } },
+    );
+    while (background.pending.length > 0) await Promise.all(background.pending.splice(0));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ releasedUnits: 3, unfulfilledOrderIds: [middle.id], unfulfilledUnits: 2 });
+    expect(unfulfilledEmail).toHaveBeenCalledTimes(1);
+    expect(unfulfilledEmail).toHaveBeenCalledWith(middle.id);
     expect((await testPrisma.product.findUniqueOrThrow({ where: { id: calendarId } })).stock).toBe(0);
     expect((await testPrisma.productPresale.findUniqueOrThrow({ where: { id: presaleId } })).status).toBe(ProductPresaleStatus.RELEASED);
 

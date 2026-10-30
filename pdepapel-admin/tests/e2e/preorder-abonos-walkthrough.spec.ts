@@ -133,7 +133,7 @@ async function depositPaidOrder(key: string, deposits: number[]) {
 
 const payments = (orderId: string) => db.orderPayment.findMany({ where: { orderId }, orderBy: { createdAt: "asc" } });
 
-async function openDialog(page: Page, button: string, title: string) {
+async function openDialog(page: Page, button: string | RegExp, title: string) {
   const trigger = page.getByRole("button", { name: button }).filter({ visible: true }).first();
   await expect(trigger).toBeVisible({ timeout: 90_000 });
   await settled(trigger);
@@ -277,11 +277,40 @@ test.describe("abonos libres en el panel", () => {
       .poll(() => db.productPresale.findUniqueOrThrow({ where: { id: presaleId } }).then((row) => row.status), { timeout: 60_000 })
       .toBe(ProductPresaleStatus.RELEASED);
 
-    // …393 con abono: falta $80.000; con $12.000 de envío, $92.000.
+    // …393 con abono: falta $80.000. «Pedir saldo» con $12.000 de envío → $92.000 y «Cobrar saldo».
     await page.goto(new URL(`/${storeId}/pedidos/${orders["1280"]}`, baseURL).toString(), { waitUntil: "domcontentloaded" });
-    let dialog = await openDialog(page, "Marcar saldo recibido", "Marcar saldo recibido");
-    expect(money(await dialog.getByText("Saldo a recibir:").textContent())).toMatch(/\$ 80\.000/);
-    await dialog.getByLabel("Envío cobrado con el saldo").fill("12000");
+    let dialog = await openDialog(page, "Pedir saldo", "Pedir saldo");
+    await dialog.getByLabel("Envío cotizado").fill("12000");
+    expect(money(await dialog.getByTestId("balance-request-preview").textContent())).toMatch(/\$ 92\.000/);
+    // Sin correo: no hay aviso por aquí, se manda el enlace por WhatsApp.
+    await expect(dialog.getByRole("checkbox", { name: "Avisar a la clienta" })).toBeDisabled();
+    await page.screenshot({ path: path.join(SHOTS, "1280-4a-pedir-saldo.png") });
+    await dialog.getByRole("button", { name: "Pedir saldo" }).click();
+    await expect(dialog).toBeHidden({ timeout: 60_000 });
+    const collect = await openDialog(page, /Cobrar saldo · \$\s92\.000/, "Cobrar saldo");
+    expect(money(await collect.getByTestId("balance-collect-amount").textContent())).toMatch(/\$ 92\.000/);
+    await expect(collect.getByText(new RegExp(`/pedido/${orders["1280"]}`))).toBeVisible();
+    await expect(collect.getByRole("button", { name: /Copiar mensaje/ })).toBeVisible();
+    await expect(collect.getByRole("button", { name: /Copiar enlace/ })).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: path.join(SHOTS, "1280-4b-cobrar-saldo.png") });
+    const requested = await db.order.findUniqueOrThrow({ where: { id: orders["1280"] }, include: { shipping: true } });
+    expect({ total: requested.total, requested: requested.balanceRequestedAt !== null, shipping: requested.shipping?.cost }).toEqual({ total: 172000, requested: true, shipping: 12000 });
+    await collect.getByRole("button", { name: "Cerrar" }).first().click();
+    await expect(collect).toBeHidden();
+    // Los tres botones del saldo no aplastan el texto del siguiente paso, ni en el celular ni en la tableta.
+    for (const [width, height] of [[390, 844], [768, 1024], [1280, 800]]) {
+      await page.setViewportSize({ width, height });
+      const step = page.getByRole("region", { name: "Siguiente paso: cobrar el saldo" }).filter({ visible: true }).first();
+      await expect(step).toBeVisible();
+      const description = step.getByText(/Cotiza el envío y pulsa «Pedir saldo»/);
+      expect((await description.boundingBox())!.width).toBeGreaterThan(Math.min(250, width - 120));
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: path.join(SHOTS, `${width}-4c-siguiente-paso.png`) });
+    }
+
+    // Le transfirió: «Marcar saldo recibido» ya trae el envío pedido y el saldo exacto.
+    dialog = await openDialog(page, "Marcar saldo recibido", "Marcar saldo recibido");
     expect(money(await dialog.getByText("Saldo a recibir:").textContent())).toMatch(/\$ 92\.000/);
     await page.screenshot({ path: path.join(SHOTS, "1280-4-saldo-real.png") });
     await dialog.getByRole("button", { name: "Anotar saldo" }).click();

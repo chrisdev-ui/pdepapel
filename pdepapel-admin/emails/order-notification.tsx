@@ -185,6 +185,18 @@ function getLook(status: string, digital = false): Look {
         pill: "Pago no aprobado",
         headline: () => "Tu pago no se aprobó: puedes intentarlo de nuevo.",
       };
+    case "PREORDER_BALANCE_DUE":
+      return {
+        tint: "blue",
+        pill: "Ya llegó",
+        headline: (n) => (n ? `¡Ya llegó, ${n}! Paga tu saldo y lo despachamos.` : "¡Ya llegó! Paga tu saldo y lo despachamos."),
+      };
+    case "PREORDER_UNFULFILLED":
+      return {
+        tint: "alert",
+        pill: "No alcanzó tu unidad",
+        headline: (n) => (n ? `${n}, esta vez tu unidad no alcanzó.` : "Esta vez tu unidad no alcanzó."),
+      };
     case "CANCELLED":
     case "Cancelled":
       return {

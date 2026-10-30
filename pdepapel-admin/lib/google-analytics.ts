@@ -1,4 +1,4 @@
-import { OrderPaymentKind, OrderPaymentStatus, OrderStatus } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentPlan, OrderPaymentStatus, OrderStatus } from "@prisma/client";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
@@ -133,7 +133,15 @@ export async function recordPaidOrderInGoogleAnalytics(
         },
       },
       orderNumber: true,
+      paymentPlan: true,
       payment: { select: { method: true } },
+      // El saldo de una preventa: lo que cerró la venta (en línea o anotado por Paula).
+      payments: {
+        where: { kind: OrderPaymentKind.BALANCE, status: OrderPaymentStatus.APPROVED },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { amount: true, method: true },
+      },
       shipping: { select: { cost: true } },
       status: true,
       total: true,
@@ -162,6 +170,10 @@ export async function recordPaidOrderInGoogleAnalytics(
     shippingCost: order.shipping?.cost,
     total: order.total,
   });
+  const body =
+    order.paymentPlan === OrderPaymentPlan.DEPOSIT
+      ? { ...payload, events: [...payload.events, buildPreorderBalancePaidEvent(payload.events[0].params, order.orderNumber, order.payments[0] ?? null)] }
+      : payload;
   const query = new URLSearchParams({
     api_secret: apiSecret,
     measurement_id: measurementId,
@@ -172,7 +184,7 @@ export async function recordPaidOrderInGoogleAnalytics(
       method: "POST",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(3_000),
     },
   );
@@ -195,6 +207,29 @@ export async function recordPaidOrderInGoogleAnalytics(
   });
 
   return "sent";
+}
+
+/**
+ * «preorder_balance_paid»: va en la misma llamada que `purchase` de una
+ * preventa con anticipo, así se marca una sola vez (`analyticsPurchaseTrackedAt`).
+ * `value` es el saldo que cerró la venta (0 si se pagó todo con abonos).
+ */
+export function buildPreorderBalancePaidEvent(
+  purchaseParams: Record<string, unknown>,
+  orderNumber: string,
+  balance: { amount: number; method: string } | null,
+) {
+  return {
+    name: "preorder_balance_paid",
+    params: {
+      currency: "COP",
+      engagement_time_msec: 1,
+      ...(purchaseParams.session_id ? { session_id: purchaseParams.session_id } : {}),
+      order_number: orderNumber,
+      value: Math.round(Number(balance?.amount ?? 0)),
+      payment_type: balance?.method || undefined,
+    },
+  };
 }
 
 /**

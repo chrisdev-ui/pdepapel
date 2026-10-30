@@ -210,6 +210,41 @@ describe("Google Analytics purchase tracking", () => {
     expect(body.events[0].params.session_id).toBe("1791180000");
   });
 
+  it("preventa con anticipo: purchase con el total y preorder_balance_paid con el saldo, en la misma llamada", async () => {
+    envMock.GA4_API_SECRET = "test-secret";
+    envMock.GA4_MEASUREMENT_ID = "G-TEST123";
+    findUniqueMock.mockResolvedValue({ ...paidOrder, paymentPlan: "DEPOSIT", total: 172000, payments: [{ amount: 112000, method: "Bold" }] });
+    updateManyMock.mockResolvedValue({ count: 1 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(recordPaidOrderInGoogleAnalytics("order-id")).resolves.toBe("sent");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.events.map((event: { name: string }) => event.name)).toEqual(["purchase", "preorder_balance_paid"]);
+    expect(body.events[0].params).toMatchObject({ transaction_id: "ORD-123", value: 172000 });
+    expect(body.events[1].params).toEqual({
+      currency: "COP",
+      engagement_time_msec: 1,
+      session_id: "1791180000",
+      order_number: "ORD-123",
+      value: 112000,
+      payment_type: "Bold",
+    });
+  });
+
+  it("un pedido normal manda solo purchase", async () => {
+    envMock.GA4_API_SECRET = "test-secret";
+    envMock.GA4_MEASUREMENT_ID = "G-TEST123";
+    findUniqueMock.mockResolvedValue({ ...paidOrder, paymentPlan: "FULL", payments: [] });
+    updateManyMock.mockResolvedValue({ count: 1 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await recordPaidOrderInGoogleAnalytics("order-id");
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.events.map((event: { name: string }) => event.name)).toEqual(["purchase"]);
+  });
+
   it("does not resend a purchase that is already marked as tracked", async () => {
     envMock.GA4_API_SECRET = "test-secret";
     envMock.GA4_MEASUREMENT_ID = "G-TEST123";

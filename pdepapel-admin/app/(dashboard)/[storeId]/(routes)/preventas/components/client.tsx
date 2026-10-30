@@ -211,6 +211,16 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
               <p className="text-xs font-medium text-muted-foreground">Anticipos recibidos</p>
               <p className="text-2xl font-bold tracking-tight">{currencyFormatter(data.depositsReceived)}</p>
               <p className="text-xs text-muted-foreground">plata de las clientas, no venta: falta el saldo</p>
+              {data.balanceOwed > 0 || data.onlinePendingCount > 0 ? (
+                <p className="text-xs font-medium text-amber-800" data-testid="presales-balance-owed">
+                  {[
+                    data.balanceOwed > 0 ? `Saldo por cobrar: ${currencyFormatter(data.balanceOwed)}` : null,
+                    data.onlinePendingCount > 0 ? `${data.onlinePendingCount} en confirmación` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -314,6 +324,23 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                           ? "Liberada a medias"
                           : "Todo entregado"}
                     </p>
+                    {row.balanceToRequestOrders > 0 || row.balanceRequestedOrders > 0 || row.onlinePendingCount > 0 ? (
+                      <p className="text-xs font-medium text-amber-800" data-testid="presale-balance-pending">
+                        {[
+                          row.balanceToRequestOrders > 0
+                            ? `${row.balanceToRequestOrders} por pedir saldo (pon el envío en el pedido)`
+                            : null,
+                          row.balanceRequestedOrders > 0
+                            ? `${row.balanceRequestedOrders} con saldo por cobrar${canWrite ? ` (${currencyFormatter(row.balanceOwed)})` : ""}`
+                            : null,
+                          row.onlinePendingCount > 0
+                            ? `${row.onlinePendingCount} pago${row.onlinePendingCount === 1 ? "" : "s"} en línea en confirmación${canWrite ? ` (${currencyFormatter(row.onlinePendingAmount)})` : ""}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
                     {row.unfulfilledOrders > 0 ? (
                       <p className="text-xs font-medium text-destructive">
                         {row.unfulfilledOrders} pedido{row.unfulfilledOrders === 1 ? "" : "s"} sin unidad ({row.unfulfilledUnits}{" "}
