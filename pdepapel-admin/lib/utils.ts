@@ -209,6 +209,8 @@ export async function generateWompiPayment(
   order: CheckoutOrder,
   /** Anticipo de preventa: su referencia (`-A`) y su valor, en lugar de los del pedido. */
   charge: { reference: string; amount: number } | null = null,
+  /** Abono o saldo desde `/pedido`: vuelve con `?pago=<referencia>` para saber qué cobro confirmar. */
+  options: { returnWithReference?: boolean } = {},
 ): Promise<string> {
   const expirationTime = new Date(
     new Date().setHours(new Date().getHours() + 1),
@@ -226,7 +228,7 @@ export async function generateWompiPayment(
     expirationTime,
   });
 
-  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${encodeURIComponent(reference)}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/pedido/${order.id}&expiration-time=${expirationTime}`;
+  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${encodeURIComponent(reference)}&signature:integrity=${signatureIntegrity}&redirect-url=${options.returnWithReference ? encodeURIComponent(`${env.FRONTEND_STORE_URL}/pedido/${order.id}?pago=${reference}`) : `${env.FRONTEND_STORE_URL}/pedido/${order.id}`}&expiration-time=${expirationTime}`;
 
   return url;
 }

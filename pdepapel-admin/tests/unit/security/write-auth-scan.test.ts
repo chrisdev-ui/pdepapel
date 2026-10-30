@@ -32,6 +32,7 @@ const ALLOWED_WITHOUT_OWNER_GUARD: Record<string, string> = {
   "account/wishlist/route.ts": "cuenta de la clienta en la tienda",
   "bold/checkout/[orderId]/route.ts": "pago de la clienta desde la tienda",
   "checkout/[orderId]/route.ts": "compra de la clienta desde la tienda",
+  "checkout/[orderId]/preorder-payment/route.ts": "abono o saldo de la clienta desde /pedido (el servidor decide el valor; el pago lo aprueba solo la pasarela)",
   "coupons/validate/route.ts": "validación de cupón desde la tienda",
   "gift-cards/validate/route.ts": "validación de tarjeta de regalo desde la tienda: solo lee saldo, con límite de intentos",
   "newsletter/confirm/route.ts": "confirmación del boletín con el token del correo, al pulsar el botón",

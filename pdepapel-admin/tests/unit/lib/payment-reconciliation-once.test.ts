@@ -68,6 +68,7 @@ vi.mock("@/lib/prismadb", () => {
         findMany: vi.fn(async () => (["CREATED", "PENDING"].includes(mocks.state.status) ? [currentOrder(method.current)] : [])),
       },
       paymentWebhookEvent: { create: mocks.eventCreate, update: vi.fn(), findFirst: vi.fn(async () => null) },
+      orderPayment: { findMany: vi.fn(async () => []) },
       orderInventoryIssue: { count: async () => 0 },
       capsuleOrder: { findMany: async () => [] },
       $transaction: async (callback: any) => callback(tx),

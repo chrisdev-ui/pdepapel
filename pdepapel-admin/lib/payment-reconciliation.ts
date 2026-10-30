@@ -1,4 +1,14 @@
-import { OrderPaymentKind, OrderPaymentPlan, OrderStatus, OrderType, PaymentMethod, PaymentWebhookEventStatus, type PaymentWebhookProvider } from "@prisma/client";
+import {
+  OrderPaymentKind,
+  OrderPaymentPlan,
+  OrderPaymentStatus,
+  OrderStatus,
+  OrderType,
+  PaymentMethod,
+  PaymentWebhookEventStatus,
+  type OrderPayment,
+  type PaymentWebhookProvider,
+} from "@prisma/client";
 
 import { getBoldOrderReference, getBoldPaymentVoucher, type BoldPaymentVoucher } from "@/lib/bold";
 import { KEY_PROBE_REFERENCE, type GatewayFetchOptions, type GatewayLookup } from "@/lib/payment-gateway-lookup";
@@ -15,6 +25,8 @@ import {
 import { sendPaymentAlert, type PaymentAlertDeps } from "@/lib/payment-webhook-alert";
 import { RECONCILIATION_EVENT_PREFIX } from "@/lib/payment-webhook-events";
 import { processDepositCharge } from "@/lib/deposit-charge-webhook";
+import { boldAmountMatchesDue, wompiCentsMatchDue } from "@/lib/order-payment-amounts";
+import { ONLINE_REFERENCE_PATTERN } from "@/lib/preorder-online-rules";
 import prismadb from "@/lib/prismadb";
 import { findWompiTransactionsByReference, type WompiApiConfig, type WompiTransaction } from "@/lib/wompi-api";
 
@@ -125,6 +137,31 @@ export async function selectReconciliationCandidates(now: Date): Promise<Settlem
   return rows
     .filter(isOnlineCheckoutOrder)
     .slice(0, RECONCILE_BATCH_SIZE);
+}
+
+/**
+ * Abonos y saldos pagados desde `/pedido` (`-P<n>`) que siguen PENDING entre
+ * 15 min y el tope de su pasarela. Se consultan por su propia referencia:
+ * nunca pasan por la del pedido ni por `settlePaidPayment`, así que un pedido
+ * con anticipo jamás se da por pagado completo desde aquí.
+ */
+export async function selectOnlinePreorderCandidates(now: Date): Promise<OrderPayment[]> {
+  const youngest = new Date(now.getTime() - RECONCILE_MIN_AGE_MS);
+  const rows = await prismadb.orderPayment.findMany({
+    where: {
+      status: OrderPaymentStatus.PENDING,
+      kind: { in: [OrderPaymentKind.INSTALLMENT, OrderPaymentKind.BALANCE] },
+      gatewayReference: { not: null },
+      createdAt: { lte: youngest },
+      OR: (["Wompi", "Bold"] as const).map((provider) => ({
+        method: PaymentMethod[provider],
+        createdAt: { gte: new Date(now.getTime() - RECONCILE_MAX_AGE_MS[provider]) },
+      })),
+    },
+    orderBy: { createdAt: "desc" },
+    take: RECONCILE_BATCH_SIZE,
+  });
+  return rows.filter((row) => row.gatewayReference !== null && ONLINE_REFERENCE_PATTERN.test(row.gatewayReference));
 }
 
 /**
@@ -544,6 +581,121 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
   await Promise.all(
     Array.from({ length: Math.min(RECONCILE_CONCURRENCY, rest.length) }, async () => {
       while (next < rest.length) await reconcileSafely(rest[next++]);
+    }),
+  );
+
+  const reconcileOnlineRow = async (row: OrderPayment) => {
+    const provider: Provider = row.method === PaymentMethod.Bold ? "Bold" : "Wompi";
+    if (blocked(provider)) {
+      state[provider].skipped += 1;
+      return;
+    }
+    if (clock() - startedAt > budget) {
+      partial = true;
+      state[provider].skipped += 1;
+      return;
+    }
+    const reference = row.gatewayReference!;
+    const result = await lookup(provider, reference);
+    if (result.kind !== "found" && result.kind !== "none") return;
+    counts.checked += 1;
+    if (result.kind === "none") {
+      counts.unchanged += 1;
+      return;
+    }
+    let approved: { transactionId: string | null; gateway: unknown; amount: { total?: unknown; tip?: unknown; amount_in_cents?: unknown; currency?: unknown } } | null = null;
+    let mismatch: unknown = null;
+    if (provider === "Wompi") {
+      const transactions = (result.items as WompiTransaction[]).filter((transaction) => transaction.status === "APPROVED");
+      const match = transactions.find((transaction) => wompiCentsMatchDue(row.amount, transaction));
+      if (match) approved = { transactionId: match.id, gateway: match, amount: match };
+      else if (transactions.length > 0) mismatch = transactions[0];
+    } else {
+      const voucher = result.items[0] as BoldPaymentVoucher;
+      if (voucher.payment_status === "APPROVED") {
+        const amount = { total: voucher.total, tip: voucher.tip ?? voucher.tip_amount };
+        if (boldAmountMatchesDue(row.amount, amount)) approved = { transactionId: voucher.transaction_id ?? null, gateway: voucher, amount };
+        else mismatch = voucher;
+      }
+    }
+    const order = await prismadb.order.findUnique({ where: { id: row.orderId }, select: { id: true, storeId: true, orderNumber: true } });
+    const logRow = (status: PaymentWebhookEventStatus, statusCode: number, gateway: unknown, error?: string) =>
+      prismadb.paymentWebhookEvent
+        .create({
+          data: {
+            provider: WEBHOOK_PROVIDER[provider],
+            storeId: row.storeId,
+            orderId: row.orderId,
+            orderReference: reference,
+            transactionId: approved?.transactionId ?? null,
+            eventType: `${RECONCILIATION_EVENT_PREFIX}APPROVED`,
+            rawBody: JSON.stringify(gateway),
+            payload: gateway as object,
+            signature: null,
+            status,
+            statusCode,
+            error: error ?? null,
+            completedAt: now,
+          },
+        })
+        .catch((error) => console.error("[PAYMENT_RECONCILIATION] No se pudo registrar el cobro en línea:", error));
+    if (mismatch) {
+      counts.mismatched += 1;
+      const seen = await prismadb.paymentWebhookEvent
+        .findFirst({ where: { orderReference: reference, eventType: `${RECONCILIATION_EVENT_PREFIX}APPROVED`, status: PaymentWebhookEventStatus.REJECTED }, select: { id: true } })
+        .catch(() => null);
+      if (seen) return;
+      const error = `El monto aprobado en ${provider} no coincide con el cobro ${reference}`;
+      await logRow(PaymentWebhookEventStatus.REJECTED, 400, mismatch, error);
+      await sendPaymentAlert(
+        { provider: WEBHOOK_PROVIDER[provider], kind: "reconcile-mismatch", storeId: row.storeId, orderId: row.orderId, orderNumber: order?.orderNumber ?? null, error },
+        deps.alerts,
+      );
+      return;
+    }
+    // Rechazado o en curso: la fila sigue PENDING y la clienta reintenta con otro cobro.
+    if (!approved) {
+      counts.unchanged += 1;
+      return;
+    }
+    try {
+      const settled = await processDepositCharge({
+        provider,
+        charge: row,
+        event: "approved",
+        transactionId: approved.transactionId,
+        amount: approved.amount,
+        source: "reconciliation",
+      });
+      if (settled.body.success !== true) {
+        counts.alreadyApplied += 1;
+        return;
+      }
+      await logRow(PaymentWebhookEventStatus.PROCESSED, 200, approved.gateway);
+      counts.paid += 1;
+      await sendPaymentAlert(
+        { provider: WEBHOOK_PROVIDER[provider], kind: "reconcile-applied", storeId: row.storeId, orderId: row.orderId, orderNumber: order?.orderNumber ?? null },
+        deps.alerts,
+      );
+    } catch (error) {
+      counts.failed += 1;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[PAYMENT_RECONCILIATION] No se pudo aplicar el cobro ${reference}:`, error);
+      await logRow(PaymentWebhookEventStatus.FAILED, 500, approved.gateway, message);
+    }
+  };
+
+  const onlineRows = await selectOnlinePreorderCandidates(now);
+  let nextOnline = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(RECONCILE_CONCURRENCY, onlineRows.length) }, async () => {
+      while (nextOnline < onlineRows.length) {
+        const row = onlineRows[nextOnline++];
+        await reconcileOnlineRow(row).catch((error) => {
+          counts.failed += 1;
+          console.error(`[PAYMENT_RECONCILIATION] Falló la conciliación del cobro ${row.gatewayReference}:`, error);
+        });
+      }
     }),
   );
 

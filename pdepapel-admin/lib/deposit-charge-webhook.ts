@@ -2,7 +2,7 @@ import { OrderPaymentKind, PaymentMethod, type OrderPayment } from "@prisma/clie
 
 import { runInBackground } from "@/lib/background";
 import { flagPaymentOnCancelledOrder } from "@/lib/late-payment";
-import { boldAmountMatchesDue, settleDepositPayment, wompiCentsMatchDue } from "@/lib/order-payments";
+import { boldAmountMatchesDue, settleDepositPayment, settleOnlinePreorderPayment, wompiCentsMatchDue } from "@/lib/order-payments";
 import { sendPaymentAlert } from "@/lib/payment-webhook-alert";
 import prismadb from "@/lib/prismadb";
 
@@ -45,8 +45,11 @@ export async function processDepositCharge(input: {
   if (!order) return { status: 404, body: { error: "Pedido del anticipo no encontrado" }, orderId: null, storeId: charge.storeId };
   const ids = { orderId: order.id, storeId: order.storeId };
 
+  if (charge.kind === OrderPaymentKind.INSTALLMENT || charge.kind === OrderPaymentKind.BALANCE) {
+    return processOnlinePreorderCharge({ ...input, orderNumber: order.orderNumber, ids });
+  }
   if (charge.kind !== OrderPaymentKind.DEPOSIT) {
-    return { status: 400, body: { error: `El cobro del saldo en línea todavía no está habilitado (pedido ${order.orderNumber})` }, ...ids };
+    return { status: 400, body: { error: `El cobro ${charge.gatewayReference ?? charge.id} no se paga en línea (pedido ${order.orderNumber})` }, ...ids };
   }
   if (order.payment?.method !== config.method) {
     return { status: 400, body: { error: `La orden ${order.orderNumber} no está configurada para pago en línea` }, ...ids };
@@ -101,4 +104,58 @@ export async function processDepositCharge(input: {
 
   // Rechazo o en curso: el pedido sigue pendiente y la clienta puede reintentar.
   return { status: 200, body: { message: `Anticipo de ${order.orderNumber}: ${event}` }, ...ids };
+}
+
+/**
+ * Un abono o el saldo pagado desde `/pedido` (`-P<n>`). La pasarela de la
+ * fila manda, no la del pedido: la clienta pudo pagar el anticipo con Bold y
+ * abonar con Wompi. Un rechazo deja la fila PENDING (la clienta reintenta con
+ * otro cobro); una anulación no mueve nada y avisa.
+ */
+async function processOnlinePreorderCharge(input: {
+  provider: DepositProvider;
+  charge: OrderPayment;
+  event: DepositChargeEvent;
+  transactionId: string | null;
+  amount: { total?: unknown; tip?: unknown; currency?: unknown; amount_in_cents?: unknown };
+  orderNumber: string;
+  ids: { orderId: string; storeId: string };
+}): Promise<DepositChargeResult> {
+  const { provider, charge, event, orderNumber, ids } = input;
+  const config = PROVIDER[provider];
+  if (charge.method !== config.method) {
+    return { status: 400, body: { error: `El cobro ${charge.gatewayReference} del pedido ${orderNumber} no es de ${provider}` }, ...ids };
+  }
+  if (event === "approved") {
+    const matches =
+      provider === "Bold"
+        ? boldAmountMatchesDue(charge.amount, { total: input.amount.total, tip: input.amount.tip }) &&
+          (!input.amount.currency || input.amount.currency === "COP")
+        : wompiCentsMatchDue(charge.amount, input.amount);
+    if (!matches) {
+      return { status: 400, body: { error: `El monto del cobro ${charge.gatewayReference} no coincide con el pedido ${orderNumber}` }, ...ids };
+    }
+    const settled = await settleOnlinePreorderPayment({ chargeId: charge.id, createdBy: config.createdBy, transactionId: input.transactionId });
+    if (settled.outcome === "already") {
+      return { status: 200, body: { message: `El cobro ${charge.gatewayReference} ya estaba registrado` }, ...ids };
+    }
+    if (settled.outcome === "late-on-closed") {
+      return { status: 200, body: { message: `Cobro ${charge.gatewayReference} aprobado sobre un pedido que ya no espera pagos: queda para revisión` }, ...ids };
+    }
+    return { status: 200, body: { success: true, orderId: ids.orderId, completed: settled.completed }, ...ids };
+  }
+  if (event === "voided" && charge.status === "APPROVED") {
+    runInBackground("anulación de un pago en línea de preventa", () =>
+      sendPaymentAlert({
+        provider: config.alert,
+        kind: "online-review",
+        storeId: ids.storeId,
+        orderId: ids.orderId,
+        orderNumber,
+        error: `${provider} anuló el cobro ${charge.gatewayReference} (${Math.round(charge.amount).toLocaleString("es-CO")} pesos) que ya estaba anotado como pagado. No se cambió nada: revisa el pedido.`,
+      }),
+    );
+    return { status: 200, body: { message: `Anulación del cobro ${charge.gatewayReference} anotada para revisión` }, ...ids };
+  }
+  return { status: 200, body: { message: `Cobro ${charge.gatewayReference}: ${event}` }, ...ids };
 }

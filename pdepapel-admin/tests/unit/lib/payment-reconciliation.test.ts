@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/prismadb", () => ({
   default: {
     order: { findMany: mocks.findMany },
+    orderPayment: { findMany: async () => [] },
     paymentWebhookEvent: { create: mocks.eventCreate, findFirst: mocks.eventFindFirst, count: mocks.eventCount },
   },
 }));

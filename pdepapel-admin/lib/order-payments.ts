@@ -16,12 +16,14 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withDeadlockRetry } from "@/lib/deadlock-retry";
 import { sendOrderEmail } from "@/lib/email";
 import { calculateOrderFinancials } from "@/lib/financial";
-import { BALANCE_REFERENCE_SUFFIX, DEPOSIT_REFERENCE_SUFFIX, getAmountDueNow, sumPrepaid } from "@/lib/order-payment-amounts";
+import { BALANCE_REFERENCE_SUFFIX, DEPOSIT_REFERENCE_SUFFIX, getAmountDueNow, sumPrepaid, sumReceived } from "@/lib/order-payment-amounts";
 import { recordDepositInGoogleAnalytics, recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import { isUnreleasedPreorderLine, stockLinesOnPayment } from "@/lib/presale";
+import { sendPaymentAlert } from "@/lib/payment-webhook-alert";
+import { ONLINE_REFERENCE_PATTERN } from "@/lib/preorder-online-rules";
 import prismadb from "@/lib/prismadb";
 import { saleMovementType } from "@/lib/sale-movement-type";
 import { silentChangeDedupeKey, silentChangeMilestone } from "@/lib/silent-status-change";
@@ -58,8 +60,13 @@ export const INSTALLMENT_SILENT_REASON = "Abono registrado sin avisar";
 
 /** El cobro al que apunta una referencia de pasarela, si es de un pedido con anticipo. */
 export async function findChargeByReference(reference: string | null | undefined, storeId?: string | null) {
-  // Solo las referencias de un cobro (`-A`/`-S`): las de siempre (número o id del pedido) no se buscan aquí.
-  if (!reference || !(reference.endsWith(DEPOSIT_REFERENCE_SUFFIX) || reference.endsWith(BALANCE_REFERENCE_SUFFIX))) return null;
+  // Solo las referencias de un cobro (`-A`, `-S`, `-P<n>`): las de siempre (número o id del pedido) no se buscan aquí.
+  if (
+    !reference ||
+    !(reference.endsWith(DEPOSIT_REFERENCE_SUFFIX) || reference.endsWith(BALANCE_REFERENCE_SUFFIX) || ONLINE_REFERENCE_PATTERN.test(reference))
+  ) {
+    return null;
+  }
   return prismadb.orderPayment.findFirst({
     where: { gatewayReference: reference, ...(storeId ? { storeId } : {}) },
   });
@@ -278,11 +285,13 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
         throw ErrorFactory.InvalidRequest(`El saldo que falta es ${due.toLocaleString("es-CO")} pesos: revisa el valor o el envío.`);
       }
 
-      const claim = await tx.order.updateMany({
-        where: { id: order.id, status: OrderStatus.DEPOSIT_PAID },
-        data: { status: OrderStatus.PAID, paidAt: input.paidAt, total },
+      const completed = await finalizeDepositOrder(tx, order, {
+        paidAt: input.paidAt,
+        total,
+        shippingCost,
+        method: input.method,
       });
-      if (claim.count === 0) return { outcome: "already" as const, paymentId: null };
+      if (!completed) return { outcome: "already" as const, paymentId: null };
 
       // Pagado todo con abonos antes de que llegara: sin saldo no hay cobro que anotar.
       const payment = amount === 0 ? null : await tx.orderPayment.create({
@@ -298,18 +307,6 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
           note: input.note ?? null,
         },
       });
-
-      const financials = await calculateOrderFinancials(
-        { ...order, total } as never,
-        order.payment?.method ?? input.method,
-        newShipping + Number(order.shipping?.codFee ?? 0),
-        tx,
-      );
-      await tx.order.update({ where: { id: order.id }, data: financials as never });
-      // Solo el valor del envío cobrado con el saldo; el estado del envío no cambia.
-      if (order.shipping && shippingCost !== null) {
-        await tx.shipping.update({ where: { id: order.shipping.id }, data: { cost: shippingCost } });
-      }
       return { outcome: "applied" as const, paymentId: payment?.id ?? null };
     }),
   );
@@ -324,6 +321,119 @@ export async function settleBalancePayment(input: BalanceInput): Promise<{ outco
     await recordSilentPaymentNotice(input.orderId, input.storeId, OrderStatus.PAID, BALANCE_SILENT_REASON, input.createdBy);
   }
   return result;
+}
+
+type FinalizableOrder = Prisma.OrderGetPayload<{ include: typeof ORDER_FOR_PAYMENT }>;
+
+/**
+ * El paso a PAGADO de un pedido con anticipo, el mismo para «Marcar saldo
+ * recibido» y para el saldo pagado en línea: candado en el estado, `paidAt`,
+ * el total con el envío, financieros y el envío cobrado. Devuelve false si
+ * otro ya lo pasó (webhook repetido, doble clic).
+ */
+async function finalizeDepositOrder(
+  tx: Tx,
+  order: FinalizableOrder,
+  input: { paidAt: Date; total: number; shippingCost: number | null; method: PaymentMethod },
+): Promise<boolean> {
+  const claim = await tx.order.updateMany({
+    where: { id: order.id, status: OrderStatus.DEPOSIT_PAID },
+    data: { status: OrderStatus.PAID, paidAt: input.paidAt, total: input.total },
+  });
+  if (claim.count === 0) return false;
+  const shipping = input.shippingCost ?? Math.round(Number(order.shipping?.cost ?? 0));
+  const financials = await calculateOrderFinancials(
+    { ...order, total: input.total } as never,
+    order.payment?.method ?? input.method,
+    shipping + Number(order.shipping?.codFee ?? 0),
+    tx,
+  );
+  await tx.order.update({ where: { id: order.id }, data: financials as never });
+  // Solo el valor del envío cobrado con el saldo; el estado del envío no cambia.
+  if (order.shipping && input.shippingCost !== null) {
+    await tx.shipping.update({ where: { id: order.shipping.id }, data: { cost: input.shippingCost } });
+  }
+  return true;
+}
+
+export type OnlineSettleOutcome =
+  | { outcome: "applied"; completed: boolean; overpaid: number }
+  | { outcome: "already" }
+  | { outcome: "late-on-closed"; status: OrderStatus };
+
+/**
+ * Un abono o el saldo pagado en línea (`-P<n>`). Dos candados: la fila pasa
+ * de PENDING a APPROVED una sola vez (un webhook repetido o la conciliación
+ * después del webhook ven `count = 0`), y el paso a PAGADO tiene el suyo
+ * (`finalizeDepositOrder`). La plata que llegó siempre queda anotada: si el
+ * pedido ya no espera pagos (cancelado, pagado) o se pagó de más, se avisa.
+ */
+export async function settleOnlinePreorderPayment(input: {
+  chargeId: string;
+  createdBy: string;
+  transactionId: string | null;
+  paidAt?: Date;
+}): Promise<OnlineSettleOutcome> {
+  const paidAt = input.paidAt ?? new Date();
+  const result = await withDeadlockRetry(() =>
+    prismadb.$transaction(async (tx: Tx) => {
+      const claim = await tx.orderPayment.updateMany({
+        where: { id: input.chargeId, status: OrderPaymentStatus.PENDING, kind: { in: [OrderPaymentKind.INSTALLMENT, OrderPaymentKind.BALANCE] } },
+        data: { status: OrderPaymentStatus.APPROVED, paidAt, transactionId: input.transactionId, createdBy: input.createdBy },
+      });
+      if (claim.count === 0) return { outcome: "already" as const };
+      const charge = await tx.orderPayment.findUniqueOrThrow({ where: { id: input.chargeId } });
+      const order = await tx.order.findUniqueOrThrow({ where: { id: charge.orderId }, include: { ...ORDER_FOR_PAYMENT, payments: true } });
+      if (order.status !== OrderStatus.DEPOSIT_PAID) return { outcome: "late-on-closed" as const, status: order.status, orderId: order.id, storeId: order.storeId, orderNumber: order.orderNumber, amount: charge.amount };
+
+      // El saldo aprobado cuenta: es lo que completa el pedido.
+      const paid = sumReceived(order.payments);
+      const total = Math.round(Number(order.total));
+      const overpaid = Math.max(0, paid - Math.max(0, total - Math.round(Number(order.giftCardAmount ?? 0))));
+      const released = !order.orderItems.some(isUnreleasedPreorderLine);
+      const completed =
+        released && Boolean(order.balanceRequestedAt) && getAmountDueNow(order, paid) <= 0
+          ? await finalizeDepositOrder(tx, order, { paidAt, total, shippingCost: null, method: charge.method })
+          : false;
+      return { outcome: "applied" as const, completed, overpaid, orderId: order.id, storeId: order.storeId, orderNumber: order.orderNumber, amount: charge.amount };
+    }),
+  );
+
+  if (result.outcome === "already") return result;
+  if (result.outcome === "late-on-closed") {
+    runInBackground("pago en línea sobre un pedido que ya no espera pagos", () =>
+      sendPaymentAlert({
+        provider: input.createdBy === "SYSTEM_BOLD" ? "BOLD" : "WOMPI",
+        kind: "online-review",
+        storeId: result.storeId,
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        error: `Llegó un pago en línea de ${Math.round(result.amount).toLocaleString("es-CO")} pesos sobre un pedido ${result.status === OrderStatus.CANCELLED ? "cancelado" : "ya pagado"}: quedó anotado; revisa si hay que devolverlo.`,
+      }),
+    );
+    return { outcome: "late-on-closed", status: result.status };
+  }
+
+  await invalidateStoreProductsCache(result.storeId, { orderIds: [result.orderId] });
+  if (result.overpaid > 0) {
+    runInBackground("pago en línea de más", () =>
+      sendPaymentAlert({
+        provider: input.createdBy === "SYSTEM_BOLD" ? "BOLD" : "WOMPI",
+        kind: "online-review",
+        storeId: result.storeId,
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        error: `La clienta pagó ${Math.round(result.overpaid).toLocaleString("es-CO")} pesos de más (dos pagos a la vez): devuélvelos o déjalos como saldo a favor.`,
+      }),
+    );
+  }
+  if (result.completed) {
+    runInBackground("GA4 compra al pagar el saldo en línea", () => recordPaidOrderInGoogleAnalytics(result.orderId));
+    runInBackground("correo de saldo pagado", () => sendOrderEmail(result.orderId, OrderStatus.PAID));
+  } else {
+    runInBackground("correo de abono recibido", () => sendOrderEmail(result.orderId, OrderStatus.DEPOSIT_PAID, { installmentAmount: Math.round(result.amount) }));
+  }
+  return { outcome: "applied", completed: result.completed, overpaid: result.overpaid };
 }
 
 export interface InstallmentInput {

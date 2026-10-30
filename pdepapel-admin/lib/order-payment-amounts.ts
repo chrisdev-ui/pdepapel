@@ -28,6 +28,13 @@ export function sumPrepaid(payments: ReadonlyArray<{ kind: OrderPaymentKind; sta
     .reduce((sum, payment) => sum + Math.round(Number(payment.amount)), 0);
 }
 
+/** Todo lo que entró por el pedido: anticipo, abonos y saldo aprobados. Nunca lo anotado al cancelar. */
+export function sumReceived(payments: ReadonlyArray<{ kind: OrderPaymentKind; status: OrderPaymentStatus; amount: number }> | null | undefined): number {
+  return (payments ?? [])
+    .filter((payment) => (PREPAYMENT_KINDS.includes(payment.kind) || payment.kind === OrderPaymentKind.BALANCE) && payment.status === OrderPaymentStatus.APPROVED)
+    .reduce((sum, payment) => sum + Math.round(Number(payment.amount)), 0);
+}
+
 export interface AmountDueOrder {
   total: number;
   giftCardAmount?: number | null;

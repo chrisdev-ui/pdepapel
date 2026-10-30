@@ -23,7 +23,14 @@ const KEY_VARIABLES: Record<PaymentWebhookProvider, { webhook: string; api: stri
   WOMPI: { webhook: "WOMPI_EVENTS_KEY", api: "WOMPI_API_SECRET" },
 };
 
-export type PaymentAlertKind = PaymentWebhookAlertKind | "reconcile-mismatch" | "reconcile-applied" | "reconcile-voided" | "void-held" | "key-rejected";
+export type PaymentAlertKind =
+  | PaymentWebhookAlertKind
+  | "reconcile-mismatch"
+  | "reconcile-applied"
+  | "reconcile-voided"
+  | "void-held"
+  | "online-review"
+  | "key-rejected";
 
 /** Un pedido anulado para revisar sigue anulado cada hora de la ventana: se avisa una vez por pedido. */
 const VOID_HELD_COOLDOWN_SECONDS = 7 * 24 * 3600;
@@ -114,6 +121,13 @@ function describe(alert: PaymentAlert): { subject: string; title: string; summar
         summary: `${label} reporta anulado el pago${order}, que ${alert.holdReason === "pickup" ? "es para recoger en la tienda (pudo entregarse sin marcarlo)" : "ya tiene guía o salió de la papelería"}. No se cambió nada: el pedido sigue pagado, el inventario y el cupón quedaron igual y a la clienta no se le escribió.`,
         action: "Revisa el pedido: si la clienta no recibió nada, cancélalo desde el panel; si ya lo tiene, coordina el cobro con ella.",
       };
+    case "online-review":
+      return {
+        subject: `⚠️ Revisar un pago en línea del pedido #${alert.orderNumber ?? "sin número"}`,
+        title: "Un pago en línea de preventa necesita revisión",
+        summary: alert.error ?? `Llegó por ${label} un pago en línea${order} que no se pudo aplicar solo.`,
+        action: "Abre el pedido y revisa sus pagos: la plata quedó anotada; decide con la clienta si se devuelve o queda como saldo a favor.",
+      };
     case "key-rejected":
       return {
         subject: `⚠️ Llave de ${label} rechazada`,
@@ -147,7 +161,7 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
   if (!isEnabled(deps)) return "skipped";
   const now = deps.now ?? new Date();
   try {
-    const perOrder = alert.kind === "void-held";
+    const perOrder = alert.kind === "void-held" || alert.kind === "online-review";
     const key = `monitor:payment-webhook:${alert.provider}:${alert.kind}${perOrder ? `:${alert.orderId ?? "sin-pedido"}` : ""}`;
     const claimed = await (deps.redis ?? Redis.fromEnv()).set(key, "1", { nx: true, ex: perOrder ? VOID_HELD_COOLDOWN_SECONDS : ALERT_COOLDOWN_SECONDS });
     if (claimed !== "OK") return "cooldown";
@@ -161,7 +175,7 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
     return "failed";
   }
   const { subject, title, summary, action } = describe(alert);
-  const recent = alert.kind.startsWith("reconcile") || alert.kind === "key-rejected" || alert.kind === "void-held" ? null : await countLastHour(alert.provider, now);
+  const recent = alert.kind.startsWith("reconcile") || alert.kind === "key-rejected" || alert.kind === "void-held" || alert.kind === "online-review" ? null : await countLastHour(alert.provider, now);
   const lines = [
     `Pasarela: ${PROVIDER_LABEL[alert.provider]}`,
     ...(alert.orderNumber ? [`Pedido: #${alert.orderNumber}`] : []),
@@ -170,7 +184,7 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
     ...(recent !== null ? [`Avisos rechazados o fallidos de ${PROVIDER_LABEL[alert.provider]} en la última hora: ${recent}`] : []),
   ];
   const link = alert.orderId && alert.storeId ? `${PANEL_URL}/${alert.storeId}/pedidos/${alert.orderId}` : PANEL_URL;
-  const note = alert.kind === "void-held" ? "Este aviso sale una sola vez por pedido." : "Este aviso sale como mucho una vez por hora.";
+  const note = alert.kind === "void-held" || alert.kind === "online-review" ? "Este aviso sale una sola vez por pedido." : "Este aviso sale como mucho una vez por hora.";
   const send: Send =
     deps.send ??
     (async (email) => {
