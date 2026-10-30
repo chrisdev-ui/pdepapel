@@ -11,6 +11,8 @@ import {
 import { NextResponse } from "next/server";
 
 import { CAPSULES_NOT_ON_MERCADOLIBRE } from "@/lib/mercadolibre/capsule-exclusion";
+import { isBlockedByPresaleForMercadoLibre } from "@/lib/mercadolibre/available-quantity";
+import { PRESALE_BLOCKS_MARKETPLACE_MESSAGE } from "@/lib/presale";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
@@ -306,6 +308,7 @@ export async function POST(
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
     if (product.capsuleEdition) throw ErrorFactory.Conflict(CAPSULES_NOT_ON_MERCADOLIBRE);
+    if (await isBlockedByPresaleForMercadoLibre(product.id)) throw ErrorFactory.Conflict(PRESALE_BLOCKS_MARKETPLACE_MESSAGE);
 
     // Piso de precio: por debajo del costo solo con motivo escrito.
     const marketplacePrice = parseOptionalPrice(body.marketplacePrice);

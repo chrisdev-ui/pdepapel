@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { parsePresaleInput } from "@/lib/presale";
+import { queueMercadoLibreSyncAfterPresaleChange } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
@@ -72,6 +73,8 @@ export async function POST(
     });
     // La ficha y el catálogo de la tienda muestran la preventa: sin esto quedaban viejos hasta el próximo cambio del producto.
     await invalidateStoreProductsCache(params.storeId, { productIds: [product.id] });
+    // Las preventas quedan fuera de Mercado Libre: una publicación existente baja a 0 ya.
+    await queueMercadoLibreSyncAfterPresaleChange(product.id);
 
     return NextResponse.json(presale, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

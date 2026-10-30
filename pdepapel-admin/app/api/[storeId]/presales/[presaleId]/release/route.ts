@@ -8,6 +8,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { sendPreorderUnfulfilledEmail } from "@/lib/email";
 import { readOptionalJsonBody } from "@/lib/request-body";
 import { getPresaleReleasePreview, releasePresale } from "@/lib/presale-release";
+import { queueMercadoLibreSyncAfterPresaleChange } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
@@ -89,7 +90,11 @@ export async function POST(
     }
     // Liberar mueve stock y apaga la preventa: la ficha pasa a venta normal.
     const released = await prismadb.productPresale.findUnique({ where: { id: params.presaleId }, select: { productId: true } });
-    if (released) await invalidateStoreProductsCache(params.storeId, { productIds: [released.productId] });
+    if (released) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: [released.productId] });
+      // Mercado Libre recupera las unidades solo si ya no queda ninguna línea de preventa sin liberar.
+      await queueMercadoLibreSyncAfterPresaleChange(released.productId);
+    }
 
     return NextResponse.json(result, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

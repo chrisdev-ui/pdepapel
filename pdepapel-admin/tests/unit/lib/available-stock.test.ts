@@ -67,9 +67,11 @@ describe("Mercado Libre: la sincronización de stock", () => {
   it("encola la cantidad disponible menos el colchón de cada publicación", async () => {
     const upsert = vi.fn().mockResolvedValue({});
     const transaction = {
-      product: { findMany: vi.fn().mockResolvedValue([{ id: "p", stock: 6, reservedUnits: 2 }]) },
+      product: { findMany: vi.fn(async ({ where }: { where: { isKit?: boolean } }) => (where.isKit ? [] : [{ id: "p", stock: 6, reservedUnits: 2 }])) },
       marketplaceListing: { findMany: vi.fn().mockResolvedValue([{ id: "l", connectionId: "c", productId: "p", stockSafetyBuffer: 1 }]) },
       marketplaceOutboxEvent: { upsert },
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
+      orderItem: { findMany: vi.fn().mockResolvedValue([]) },
     };
     await queueMarketplaceStockSyncEvents(transaction as never, ["p"]);
     expect(transaction.product.findMany).toHaveBeenCalledWith({ where: { id: { in: ["p"] } }, select: { id: true, stock: true, reservedUnits: true } });

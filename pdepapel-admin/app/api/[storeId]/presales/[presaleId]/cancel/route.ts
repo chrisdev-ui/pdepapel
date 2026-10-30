@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { queueMercadoLibreSyncAfterPresaleChange } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -54,6 +55,7 @@ export async function POST(
     });
     if (claim.count === 0) throw ErrorFactory.Conflict("La preventa cambió mientras tanto. Recarga la página.");
     await invalidateStoreProductsCache(params.storeId, { productIds: [presale.productId] });
+    await queueMercadoLibreSyncAfterPresaleChange(presale.productId);
 
     return NextResponse.json({ ok: true }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

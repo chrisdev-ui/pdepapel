@@ -24,6 +24,7 @@ vi.mock("@/lib/mercadolibre/publish-attempt", async (importOriginal) => ({
 }));
 
 import { GET, POST } from "@/app/api/[storeId]/marketplaces/mercadolibre/listings/group/route";
+import { PRESALE_BLOCKS_MARKETPLACE_MESSAGE } from "@/lib/presale";
 
 describe("Publicar grupo en Mercado Libre (MySQL)", () => {
   let fixture: InventoryFixture | undefined;
@@ -35,6 +36,7 @@ describe("Publicar grupo en Mercado Libre (MySQL)", () => {
   });
   afterEach(async () => {
     if (fixture) {
+      await testPrisma.productPresale.deleteMany({ where: { storeId: fixture.store.id } });
       await testPrisma.marketplaceListing.deleteMany({ where: { connection: { storeId: fixture.store.id } } });
       await testPrisma.image.deleteMany({ where: { productId: { in: [...extraProductIds, fixture.component.id] } } });
       await testPrisma.product.deleteMany({ where: { id: { in: extraProductIds } } });
@@ -181,6 +183,17 @@ describe("Publicar grupo en Mercado Libre (MySQL)", () => {
     expect(again.created).toEqual([]);
     expect(again.skipped[0].reason).toContain("borrador");
     expect(again.familyBatchId).toBe(result.familyBatchId);
+  });
+
+  it("una variante con preventa activa se omite: las preventas no van a Mercado Libre", async () => {
+    const { master, lista } = await seed();
+    await testPrisma.productPresale.create({ data: { storeId: fixture!.store.id, productId: lista.id, status: "ACTIVE", createdBy: "test" } });
+    const response = await post({ listingId: master.id, variants: [{ productId: lista.id, marketplacePrice: 55000, attributes: [] }] });
+    expect(response.status).toBe(201);
+    const result = await response.json();
+    expect(result.created).toEqual([]);
+    expect(result.skipped[0]).toMatchObject({ productId: lista.id, reason: PRESALE_BLOCKS_MARKETPLACE_MESSAGE });
+    expect(await testPrisma.marketplaceListing.count({ where: { productId: lista.id } })).toBe(0);
   });
 
   it("solo la dueña de la tienda puede extender un grupo", async () => {

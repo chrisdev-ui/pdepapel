@@ -1,4 +1,6 @@
 import { availableStock } from "@/lib/available-stock";
+import { loadMercadoLibrePresaleBlocked } from "@/lib/mercadolibre/available-quantity";
+import { PRESALE_BLOCKS_MARKETPLACE_MESSAGE } from "@/lib/presale";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -308,6 +310,7 @@ export async function createGroupPublicationDrafts(
     select: { productId: true, externalItemId: true, externalUserProductId: true },
   });
   const listingByProduct = new Map(listings.map((listing) => [listing.productId, listing]));
+  const blockedByPresale = await loadMercadoLibrePresaleBlocked(prismadb, products.map((product) => product.id));
 
   const created: GroupDraftResult["created"] = [];
   const skipped: GroupDraftResult["skipped"] = [];
@@ -315,6 +318,10 @@ export async function createGroupPublicationDrafts(
     const product = productById.get(request.productId);
     if (!product) {
       skipped.push({ productId: request.productId, reason: "No pertenece a este grupo." });
+      continue;
+    }
+    if (blockedByPresale.has(product.id)) {
+      skipped.push({ productId: product.id, reason: PRESALE_BLOCKS_MARKETPLACE_MESSAGE });
       continue;
     }
     const state = getGroupVariantState(

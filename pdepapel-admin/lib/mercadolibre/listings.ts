@@ -3,7 +3,6 @@ import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
 import {
   PRESALE_BLOCKS_MARKETPLACE_MESSAGE,
-  hasActivePresale,
 } from "@/lib/presale";
 import { toGoogleMerchantImageUrl } from "@/lib/google-merchant";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
@@ -13,6 +12,7 @@ import {
   MERCADOLIBRE_CATEGORY_REAUTH_REQUIRED,
   MERCADOLIBRE_CATEGORY_SERVICE_UNAVAILABLE,
 } from "./categories";
+import { isBlockedByPresaleForMercadoLibre } from "./available-quantity";
 import { inspectMercadoLibreCategory } from "./category-validation";
 import { isPriceBelowCost } from "./listing-price-guard";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES, shouldUseEmptyGtinReason } from "./listing-wizard";
@@ -418,7 +418,7 @@ function getApiError(status: number, payload: unknown) {
  * podría vender unidades ya cobradas a una clienta de la tienda.
  */
 async function assertNotInPresale(productId: string) {
-  if (await hasActivePresale(productId)) {
+  if (await isBlockedByPresaleForMercadoLibre(productId)) {
     throw new MercadoLibrePublicationError(PRESALE_BLOCKS_MARKETPLACE_MESSAGE, {
       requiresDraftReview: true,
     });

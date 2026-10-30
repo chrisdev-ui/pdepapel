@@ -26,7 +26,14 @@ const mocks = vi.hoisted(() => ({
 // El candado de preventa consulta la base: sin preventa activa, publicar se
 // comporta igual que siempre. La prueba de que SÍ bloquea está más abajo.
 vi.mock("@/lib/prismadb", () => ({
-  default: { productPresale: { count: mocks.presaleCount } },
+  default: {
+    product: { findMany: vi.fn().mockResolvedValue([]) },
+    productPresale: {
+      findMany: async ({ where }: { where: { productId: { in: string[] } } }) =>
+        (await mocks.presaleCount()) > 0 ? where.productId.in.map((productId) => ({ productId })) : [],
+    },
+    orderItem: { findMany: vi.fn().mockResolvedValue([]) },
+  },
 }));
 
 

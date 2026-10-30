@@ -42,6 +42,8 @@ vi.mock("@/lib/prismadb", () => ({
       findMany: mocks.listingFindMany,
     },
     product: { findMany: mocks.productFindMany },
+    productPresale: { findMany: vi.fn().mockResolvedValue([]) },
+    orderItem: { findMany: vi.fn().mockResolvedValue([]) },
     marketplaceConnection: { update: mocks.flagConnection },
     $transaction: mocks.transaction,
   },
@@ -76,6 +78,8 @@ const tx = {
   marketplaceListing: { update: mocks.txUpdateListing, updateMany: mocks.txUpdateManyListing },
   marketplaceConnection: { update: mocks.updateConnection },
   product: { findUnique: vi.fn() },
+  productPresale: { findMany: vi.fn().mockResolvedValue([]) },
+  orderItem: { findMany: vi.fn().mockResolvedValue([]) },
 };
 
 function publishEvent(overrides: Record<string, unknown> = {}) {
@@ -128,7 +132,7 @@ describe("PUBLISH_LISTING outbox event", () => {
     mocks.txUpdateManyListing.mockResolvedValue({ count: 1 });
     mocks.updateConnection.mockResolvedValue({});
     mocks.flagConnection.mockResolvedValue({});
-    mocks.productFindMany.mockResolvedValue([{ id: "product-1", stock: 5 }]);
+    mocks.productFindMany.mockImplementation(async ({ where }: { where: { isKit?: boolean } }) => (where.isKit ? [] : [{ id: "product-1", stock: 5 }]));
     mocks.listingFindMany.mockResolvedValue([
       { id: "listing-1", connectionId: "conn-1", productId: "product-1", stockSafetyBuffer: 1 },
     ]);

@@ -37,9 +37,22 @@ vi.mock("@/lib/prismadb", () => ({
       update: mocks.updateOutboxEvent,
     },
     marketplaceOrder: { findMany: mocks.findMarketplaceOrders },
-    product: { findUnique: mocks.liveProduct },
+    product: {
+      findUnique: mocks.liveProduct,
+      // La cantidad para Mercado Libre se lee con el mismo producto vivo.
+      findMany: async ({ where }: { where: { id: { in: string[] }; isKit?: boolean } }) => {
+        if (where.isKit) return [];
+        const live = await mocks.liveProduct();
+        return live ? [{ id: where.id.in[0], reservedUnits: 0, isKit: false, kitComponents: [], ...live }] : [];
+      },
+    },
     // Sin preventa activa: estas pruebas cubren la carrera normal del stock.
-    productPresale: { count: mocks.presaleCount },
+    productPresale: {
+      count: mocks.presaleCount,
+      findMany: async ({ where }: { where: { productId: { in: string[] } } }) =>
+        (await mocks.presaleCount()) > 0 ? where.productId.in.map((productId) => ({ productId })) : [],
+    },
+    orderItem: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: async (
       callback: (transaction: unknown) => Promise<unknown>,
     ) =>

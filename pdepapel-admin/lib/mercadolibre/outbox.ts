@@ -1,4 +1,5 @@
 import { availableStock, marketplaceAvailableStock } from "@/lib/available-stock";
+import { loadMercadoLibreSellable, mercadoLibreQuantity } from "@/lib/mercadolibre/available-quantity";
 import {
   MarketplaceConnectionStatus,
   MarketplaceListingStatus,
@@ -9,7 +10,6 @@ import {
 } from "@prisma/client";
 
 import { claimQueueRow } from "@/lib/atomic-claim";
-import { hasActivePresale } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
 import {
@@ -56,7 +56,7 @@ const REAUTH_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
 type StockSyncTransaction = Pick<
   Prisma.TransactionClient,
-  "product" | "marketplaceListing" | "marketplaceOutboxEvent"
+  "product" | "marketplaceListing" | "marketplaceOutboxEvent" | "productPresale" | "orderItem"
 >;
 
 type MarketplaceNotificationTransaction = Pick<
@@ -153,11 +153,6 @@ export async function queueMarketplaceStockSyncEvents(
   const uniqueProductIds = Array.from(new Set(productIds));
   if (uniqueProductIds.length === 0) return;
 
-  const products = await transaction.product.findMany({
-    where: { id: { in: uniqueProductIds } },
-    select: { id: true, stock: true, reservedUnits: true },
-  });
-  const productById = new Map(products.map((product) => [product.id, product]));
   const listings = await transaction.marketplaceListing.findMany({
     where: {
       productId: { in: uniqueProductIds },
@@ -171,11 +166,13 @@ export async function queueMarketplaceStockSyncEvents(
       stockSafetyBuffer: true,
     },
   });
+  // Cada movimiento de inventario pasa por aquí: la cuenta solo se hace si hay publicaciones.
+  if (listings.length === 0) return;
+  const sellable = await loadMercadoLibreSellable(transaction, listings.map((listing) => listing.productId));
 
   await Promise.all(
     listings.map((listing) => {
-      const product = productById.get(listing.productId);
-      const targetQuantity = product ? marketplaceAvailableStock(product, listing.stockSafetyBuffer) : 0;
+      const targetQuantity = mercadoLibreQuantity(sellable.get(listing.productId), listing.stockSafetyBuffer);
       const deduplicationKey = `${listing.connectionId}:stock:${listing.id}`;
 
       return transaction.marketplaceOutboxEvent.upsert({
@@ -797,13 +794,14 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       // vuelve a bajar mientras los pedidos consumen sus unidades. Un
       // SYNC_STOCK que caiga en esa ventana le publicaría a Mercado Libre
       // unidades que ya están vendidas y cobradas. Mientras la preventa esté
-      // activa, la cantidad allá es cero, pase lo que pase con el stock.
-      const inPresale = await hasActivePresale(event.listing!.product.id);
-      const targetQuantity = inPresale
-        ? 0
-        : liveProduct === null
+      // activa (o la de una pieza del kit), la cantidad allá es cero.
+      const targetQuantity =
+        liveProduct === null
           ? getTargetQuantity(event.payload)
-          : marketplaceAvailableStock(liveProduct, event.listing!.stockSafetyBuffer);
+          : mercadoLibreQuantity(
+              (await loadMercadoLibreSellable(prismadb, [event.listing!.product.id])).get(event.listing!.product.id),
+              event.listing!.stockSafetyBuffer,
+            );
       stockSnapshot = liveProduct ? availableStock(liveProduct) : null;
       await updateMercadoLibreStock(
         event.connectionId,
@@ -1177,5 +1175,22 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       lastError: errorMessage,
     });
     return { processed: false, reason: "retry_scheduled" as const };
+  }
+}
+
+/**
+ * Abrir, liberar o cancelar una preventa cambia lo que Mercado Libre puede
+ * ofrecer (0 mientras esté abierta) sin mover el stock: se encola la
+ * sincronización del producto y de los kits que lo llevan. Si falla, la
+ * conciliación lo corrige después; la preventa no se frena por esto.
+ */
+export async function queueMercadoLibreSyncAfterPresaleChange(productId: string) {
+  try {
+    await prismadb.$transaction(async (tx) => {
+      const kits = await tx.productKit.findMany({ where: { componentId: productId }, select: { kitId: true } });
+      await queueMarketplaceStockSyncEvents(tx, [productId, ...kits.map((kit) => kit.kitId)]);
+    });
+  } catch (error) {
+    console.error("[MERCADOLIBRE] No se encoló la sincronización tras cambiar la preventa:", { productId, error });
   }
 }

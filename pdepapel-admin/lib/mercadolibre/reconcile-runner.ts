@@ -1,5 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
-import { ProductPresaleStatus } from "@prisma/client";
+import { loadMercadoLibrePresaleBlocked, loadMercadoLibreSellable } from "@/lib/mercadolibre/available-quantity";
 
 import { mapWithConcurrency } from "@/lib/concurrency";
 import prismadb from "@/lib/prismadb";
@@ -245,11 +245,10 @@ async function runReconcileOnce(
         product: { select: { name: true, stock: true, reservedUnits: true, acqPrice: true, transportationCost: true } },
       },
     });
-    const presales = await prismadb.productPresale.findMany({
-      where: { productId: { in: rows.map((row) => row.productId) }, status: ProductPresaleStatus.ACTIVE },
-      select: { productId: true },
-    });
-    const inPresale = new Set(presales.map((presale) => presale.productId));
+    // La misma cuenta que la sincronización: sin ella, la conciliación volvería a subir lo que la otra bajó.
+    const productIds = rows.map((row) => row.productId);
+    const inPresale = await loadMercadoLibrePresaleBlocked(prismadb, productIds);
+    const sellable = await loadMercadoLibreSellable(prismadb, productIds, inPresale);
     const listings: ReconcileListing[] = rows.map((row) => ({
       id: row.id,
       productId: row.productId,
@@ -262,7 +261,7 @@ async function runReconcileOnce(
       stockSafetyBuffer: row.stockSafetyBuffer,
       syncStock: row.syncStock,
       syncPrice: row.syncPrice,
-      productStock: availableStock(row.product),
+      productStock: sellable.get(row.productId) ?? availableStock(row.product),
       inPresale: inPresale.has(row.productId),
     }));
 

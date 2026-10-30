@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("@/lib/prismadb", () => ({ default: { productPresale: { count: vi.fn().mockResolvedValue(0) } } }));
+vi.mock("@/lib/prismadb", () => ({ default: { product: { findMany: vi.fn().mockResolvedValue([]) }, productPresale: { findMany: vi.fn().mockResolvedValue([]) }, orderItem: { findMany: vi.fn().mockResolvedValue([]) } } }));
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.getMercadoLibreAccessToken,
   requestMercadoLibreJson: mocks.requestMercadoLibreJson,
