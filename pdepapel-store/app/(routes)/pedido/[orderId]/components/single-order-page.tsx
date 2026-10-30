@@ -48,6 +48,14 @@ import {
   isGiftCardPurchase,
 } from "@/lib/order-status";
 import { isDepositOrder } from "@/lib/presale-checkout";
+import {
+  onlinePaymentResult,
+  onlinePaymentReturn,
+  preorderMoneyChanged,
+  returnedPayment,
+  shouldPollPreorderPayment,
+} from "@/lib/preorder-online-payment";
+import { PREORDER_PAY_COPY } from "@/lib/preorder-payment-copy";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order, ShippingTrackingEvent } from "@/types";
 import { OrderHelpCard } from "./order-help-card";
@@ -84,9 +92,14 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   getTokenRef.current = getToken;
 
   const returnedFromGateway = useMemo(() => isPaymentReturn(searchParams), [searchParams]);
+  // Un abono o el saldo pagado desde esta página vuelve con `?pago=<referencia>`:
+  // el estado sigue «Anticipo recibido», así que se juzga por ese cobro.
+  const onlineReturn = useMemo(() => onlinePaymentReturn(searchParams), [searchParams]);
+  const onlineResult = onlineReturn ? onlinePaymentResult(activeOrder, onlineReturn) : null;
+  const onlinePayment = onlineReturn ? returnedPayment(activeOrder, onlineReturn) : null;
   const paymentResult = resolvePaymentResult(activeOrder);
-  const paymentReturn = returnedFromGateway && !isCashOnDelivery(activeOrder);
-  const confirmingReturn = paymentReturn && paymentResult === "pending";
+  const paymentReturn = returnedFromGateway && !onlineReturn && !isCashOnDelivery(activeOrder);
+  const confirmingReturn = (paymentReturn && paymentResult === "pending") || onlineResult === "pending";
   const [returnWindowOver, setReturnWindowOver] = useState(false);
   const fastPolling = confirmingReturn && !returnWindowOver;
   // Volver de la pasarela con el anticipo de una preventa: otro aviso, no «gracias por tu compra».
@@ -97,6 +110,23 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     const timeoutId = window.setTimeout(() => setReturnWindowOver(true), PAYMENT_RETURN_WINDOW_MS);
     return () => window.clearTimeout(timeoutId);
   }, [confirmingReturn]);
+
+  // Abono o saldo aprobado: un aviso por cobro en la pestaña.
+  useEffect(() => {
+    if (!onlineReturn || onlineResult !== "approved") return;
+    const key = `${order.id}:${onlineReturn}`;
+    if (wasPaymentNoticeShown(key, "approved")) return;
+    rememberPaymentNotice(key, "approved");
+    const balancePaid = activeOrder.status === OrderStatus.PAID;
+    toast({
+      title: balancePaid ? PREORDER_PAY_COPY.balancePaidTitle : PREORDER_PAY_COPY.installmentReceivedTitle,
+      variant: "success",
+      icon: <ShieldCheck className="h-8 w-8" />,
+      description: balancePaid ? PREORDER_PAY_COPY.balancePaid : PREORDER_PAY_COPY.installmentReceived(onlinePayment?.amount ?? 0),
+      duration: 10000,
+    });
+    fireConfetti();
+  }, [onlineReturn, onlineResult, onlinePayment?.amount, activeOrder.status, order.id, toast, fireConfetti]);
 
   // Un aviso por resultado y por pedido en la pestaña: ni el sondeo ni una
   // recarga lo repiten. Una visita sin marca de la pasarela no avisa nada.
@@ -183,8 +213,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     setPendingOrder,
   ]);
 
+  const pollsPreorder = shouldPollPreorderPayment(currentOrder, onlineReturn, true);
   useEffect(() => {
-    if (!shouldPollOrderStatus(currentOrder.status, true)) {
+    if (!shouldPollOrderStatus(currentOrder.status, true) && !pollsPreorder) {
       return;
     }
 
@@ -195,10 +226,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       if (
         isDisposed ||
         isRequestInFlight ||
-        !shouldPollOrderStatus(
-          currentOrder.status,
-          document.visibilityState === "visible",
-        )
+        (!shouldPollOrderStatus(currentOrder.status, document.visibilityState === "visible") &&
+          !(pollsPreorder && document.visibilityState === "visible"))
       ) {
         return;
       }
@@ -218,7 +247,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         if (
           !isDisposed &&
           fetchedOrder &&
-          fetchedOrder.status !== currentOrder.status
+          (fetchedOrder.status !== currentOrder.status || preorderMoneyChanged(currentOrder, fetchedOrder))
         ) {
           setCurrentOrder((previous) => mergePolledOrder(previous, fetchedOrder));
         }
@@ -250,7 +279,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentOrder.status, order.id, fastPolling]);
+  }, [currentOrder, order.id, fastPolling, pollsPreorder]);
 
   const { mutate, status } = useCheckoutOrder({
     orderId: order.id,
@@ -313,11 +342,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     .join(" · ");
 
   const heading =
-    paymentReturn && paymentResult === "approved"
-      ? depositReturn
-        ? "¡Listo! Recibimos tu anticipo"
-        : "¡Gracias por tu compra!"
-      : `Pedido #${orderNumber}`;
+    onlineResult === "approved"
+      ? activeOrder.status === OrderStatus.PAID
+        ? PREORDER_PAY_COPY.balancePaidTitle
+        : PREORDER_PAY_COPY.installmentReceivedTitle
+      : paymentReturn && paymentResult === "approved"
+        ? depositReturn
+          ? "¡Listo! Recibimos tu anticipo"
+          : "¡Gracias por tu compra!"
+        : `Pedido #${orderNumber}`;
 
   return (
     <div className="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 pb-16 pt-6 sm:px-6 lg:px-8">

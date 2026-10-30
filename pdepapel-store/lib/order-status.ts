@@ -52,7 +52,16 @@ type StageSource = Pick<Order, "status"> & {
   paymentResult?: Order["paymentResult"];
   payment?: Pick<Order["payment"], "method"> | null;
   shipping?: Pick<Shipping, "status" | "provider"> | null;
+  preorderPayment?: Pick<NonNullable<Order["preorderPayment"]>, "mode" | "block" | "released" | "unfulfilled"> | null;
 };
+
+/** Lo que dice una preventa con anticipo según dónde va: esperando, ya llegó o no alcanzó. */
+function depositPaidDescription(preorder: StageSource["preorderPayment"]): string {
+  if (preorder?.unfulfilled) return "Esta vez no alcanzó tu unidad. No tienes que pagar nada más: te escribimos para la devolución.";
+  if (preorder?.mode === "balance") return "¡Ya llegó tu producto! Paga tu saldo y lo despachamos.";
+  if (preorder?.released) return "¡Ya llegó tu producto! Estamos cotizando tu envío y te escribimos con el saldo.";
+  return "Tu preventa quedó apartada. Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.";
+}
 
 /** Compra de una tarjeta de regalo: se entrega por correo, nunca se envía. */
 export const isGiftCardPurchase = (order: { type?: string | null }) =>
@@ -82,13 +91,11 @@ export function getOrderStage(order: StageSource): OrderStageInfo {
     };
   }
 
-  // El saldo se cobra a mano cuando llega (Lote 2): aquí no hay nada que pagar en línea.
   if (order.status === OrderStatus.DEPOSIT_PAID) {
     return {
       stage: "deposit_paid",
       label: "Anticipo recibido",
-      description:
-        "Tu preventa quedó apartada. Cuando llegue te escribimos para coordinar el pago del saldo y el envío; ahí lo despachamos.",
+      description: depositPaidDescription(order.preorderPayment),
       tone: "success",
     };
   }
@@ -336,7 +343,11 @@ export function getOrderTimeline(order: TimelineSource): TimelineStep[] {
             : stage === "paid" && !pickup
               ? "Sale en 1 día hábil"
               : stage === "deposit_paid"
-                ? "Sale cuando llegue la preventa"
+                ? order.preorderPayment?.unfulfilled
+                  ? "No alcanzó tu unidad"
+                  : order.preorderPayment?.released
+                    ? "Sale cuando pagues el saldo"
+                    : "Sale cuando llegue la preventa"
                 : undefined,
     },
     {

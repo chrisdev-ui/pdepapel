@@ -13,6 +13,8 @@ import { currencyFormatter } from "@/lib/utils";
 import { getPaymentMethodLabel, type OrderStageInfo } from "@/lib/order-status";
 import type { Order } from "@/types";
 import { OrderSection } from "./order-section";
+import { PreorderPaymentCard } from "./preorder-payment-card";
+import { PREORDER_PAY_COPY } from "@/lib/preorder-payment-copy";
 
 interface OrderSummaryCardProps {
   order: Order;
@@ -64,6 +66,8 @@ export function OrderSummaryCard({
   const deposit = isDepositOrder(order) ? Number(order.depositAmount ?? 0) : 0;
   const depositReceived = deposit > 0 && order.status === OrderStatus.DEPOSIT_PAID;
   const paidSoFar = depositPaidSoFar(order);
+  const preorderPayment = order.preorderPayment ?? null;
+  const pendingOnline = preorderPayment?.onlinePayments.filter((payment) => payment.status === "PENDING") ?? [];
   const totalLabel =
     stage.stage === "paid" ||
     stage.stage === "shipped" ||
@@ -95,7 +99,7 @@ export function OrderSummaryCard({
         </div>
       )}
 
-      {depositReceived && (
+      {depositReceived && !preorderPayment?.unfulfilled && (
         <div
           role="status"
           data-testid="deposit-paid-card"
@@ -106,11 +110,18 @@ export function OrderSummaryCard({
             Preventa apartada
           </p>
           <p className="font-semibold" data-testid="deposit-progress">
-            {depositProgressText(paidSoFar, depositBalance(order))}
+            {depositProgressText(paidSoFar, depositBalance(order), Boolean(preorderPayment?.balanceRequested))}
           </p>
-          <p>Te escribimos cuando llegue el producto para coordinar el pago y el envío.</p>
+          {pendingOnline.map((payment) => (
+            <p key={payment.reference} data-testid="preorder-pending-payment">
+              {PREORDER_PAY_COPY.pendingRow(payment.amount)}
+            </p>
+          ))}
+          {!preorderPayment?.released && <p>Te escribimos cuando llegue el producto para coordinar el pago y el envío.</p>}
         </div>
       )}
+
+      {depositReceived && preorderPayment && <PreorderPaymentCard order={order} info={preorderPayment} />}
 
       <dl className="flex flex-col gap-2">
         <Row label="Subtotal">
@@ -128,7 +139,9 @@ export function OrderSummaryCard({
         )}
         {!digital && (
           <Row label={order.shipping?.provider === "NONE" ? "Retiro en tienda" : "Envío"}>
-            {deposit > 0 && shippingCost === 0 ? (
+            {preorderPayment?.unfulfilled ? (
+              <span className="text-sm font-semibold text-muted-foreground">No aplica</span>
+            ) : deposit > 0 && shippingCost === 0 && !preorderPayment?.balanceRequested ? (
               <span className="text-sm font-semibold text-muted-foreground">Se cotiza cuando llegue</span>
             ) : shippingCost > 0 ? (
               <Currency value={shippingCost} className="text-sm font-semibold" />
@@ -144,7 +157,7 @@ export function OrderSummaryCard({
         )}
         <div className="border-t border-dashed border-border pt-2">
           {deposit > 0 ? (
-            <Row label="Total del producto">
+            <Row label={preorderPayment?.balanceRequested ? "Total con el envío" : "Total del producto"}>
               <Currency value={order.total} className="text-sm font-semibold" />
             </Row>
           ) : (
@@ -169,9 +182,12 @@ export function OrderSummaryCard({
             >
               <Currency value={depositReceived ? paidSoFar : deposit} className="text-2xl font-bold text-pink-froly" />
             </Row>
-            {order.status !== OrderStatus.PAID && stage.stage !== "cancelled" && (
-              <Row label="Saldo al llegar">
-                <span className="text-sm font-semibold">{currencyFormatter.format(depositBalance(order))} + envío</span>
+            {order.status !== OrderStatus.PAID && stage.stage !== "cancelled" && !preorderPayment?.unfulfilled && (
+              <Row label={preorderPayment?.balanceRequested ? "Saldo con el envío" : "Saldo al llegar"}>
+                <span className="text-sm font-semibold">
+                  {currencyFormatter.format(depositBalance(order))}
+                  {preorderPayment?.balanceRequested ? "" : " + envío"}
+                </span>
               </Row>
             )}
           </>

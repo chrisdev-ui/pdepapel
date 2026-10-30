@@ -1,8 +1,9 @@
-import { OrderPaymentPlan, OrderPaymentStatus, OrderStatus, Prisma } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentPlan, OrderPaymentStatus, OrderStatus, Prisma } from "@prisma/client";
 
 import type { CapsuleReceipt } from "@/lib/capsule-receipt";
 import { PREPAYMENT_KINDS, sumPrepaid } from "@/lib/order-payment-amounts";
 import { isPaidLike } from "@/lib/order-transitions";
+import { ONLINE_REFERENCE_PATTERN, onlinePaymentState } from "@/lib/preorder-online-rules";
 
 import {
   PUBLIC_CATALOG_OPTION_VALUE_SELECT,
@@ -119,10 +120,13 @@ export const CUSTOMER_ORDER_SELECT = {
   paymentPlan: true,
   depositAmount: true,
   depositPaidAt: true,
-  // Solo para sumar `paidSoFar`; las filas nunca salen (ni medio ni notas).
+  balanceRequestedAt: true,
+  // Para `paidSoFar`, lo que se puede pagar en línea y el estado de sus cobros
+  // `-P<n>`; las filas nunca salen (ni medio, ni transacción, ni notas).
   payments: {
-    where: { status: OrderPaymentStatus.APPROVED, kind: { in: PREPAYMENT_KINDS } },
-    select: { kind: true, status: true, amount: true },
+    where: { status: { in: [OrderPaymentStatus.APPROVED, OrderPaymentStatus.PENDING] }, kind: { in: [...PREPAYMENT_KINDS, OrderPaymentKind.BALANCE] } },
+    orderBy: { createdAt: "asc" },
+    select: { kind: true, status: true, amount: true, gatewayReference: true },
   },
   giftCardPurchase: {
     select: { recipientName: true, initialAmount: true, codeLast4: true, deliveredAt: true },
@@ -161,6 +165,9 @@ export const CUSTOMER_ORDER_SELECT = {
       price: true,
       imageUrl: true,
       isCustom: true,
+      isPreorder: true,
+      preorderReleasedAt: true,
+      preorderUnfulfilledAt: true,
       product: { select: CUSTOMER_ORDER_ITEM_PRODUCT_SELECT },
     },
   },
@@ -176,13 +183,40 @@ export type CustomerOrderRecord = Prisma.OrderGetPayload<{
  */
 export function toCustomerOrderResponse(order: CustomerOrderRecord, capsule: CapsuleReceipt | null = null, declinedAttempt = false) {
   const { createdBy, payments, ...customerOrder } = order;
+  const deposit = order.paymentPlan === OrderPaymentPlan.DEPOSIT;
+  const approved = payments.filter((payment) => payment.status === OrderPaymentStatus.APPROVED);
   return {
     ...customerOrder,
     // Preventa con anticipo: lo que ya pagó (anticipo + abonos), para «Llevas $X pagado».
-    paidSoFar: order.paymentPlan === OrderPaymentPlan.DEPOSIT ? sumPrepaid(payments) : null,
+    paidSoFar: deposit ? sumPrepaid(approved) : null,
+    preorderPayment: deposit ? customerPreorderPayment(order) : null,
     createdByAdmin: Boolean(createdBy),
     capsule,
     ...receiptMeta(order.status, declinedAttempt),
+  };
+}
+
+/**
+ * Lo que `/pedido` necesita para «Abonar» y «Pagar saldo»: qué se puede pagar
+ * hoy (decidido aquí, el servidor lo vuelve a decidir al cobrar), si la
+ * preventa ya llegó o no le alcanzó, y el estado de sus cobros en línea por
+ * referencia (para el aviso al volver de la pasarela). Nada más de las filas.
+ */
+function customerPreorderPayment(order: CustomerOrderRecord) {
+  const state = onlinePaymentState(order);
+  const lines = order.orderItems.filter((item) => item.isPreorder);
+  return {
+    mode: state.mode,
+    amountDue: state.amountDue,
+    minAmount: state.minAmount,
+    block: state.block,
+    released: lines.length > 0 && lines.every((item) => item.preorderReleasedAt !== null),
+    unfulfilled: lines.some((item) => item.preorderReleasedAt === null && item.preorderUnfulfilledAt !== null),
+    balanceRequested: order.balanceRequestedAt !== null,
+    onlinePayments: order.payments
+      .filter((payment) => payment.gatewayReference !== null && ONLINE_REFERENCE_PATTERN.test(payment.gatewayReference))
+      .slice(-10)
+      .map((payment) => ({ reference: payment.gatewayReference!, status: payment.status, amount: Math.round(payment.amount), kind: payment.kind })),
   };
 }
 

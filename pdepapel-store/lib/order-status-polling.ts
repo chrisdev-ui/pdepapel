@@ -29,6 +29,10 @@ export function mergePolledOrder(current: Order, fetched: Order): Order {
     paymentResult: fetched.paymentResult,
     paidAt: fetched.paidAt,
     depositPaidAt: fetched.depositPaidAt ?? current.depositPaidAt,
+    // Abonos y saldo en línea: lo pagado y el estado de cada cobro, sin datos personales.
+    paidSoFar: fetched.paidSoFar ?? current.paidSoFar,
+    preorderPayment: fetched.preorderPayment ?? current.preorderPayment,
+    total: fetched.total,
     shipping:
       current.shipping && fetched.shipping
         ? {

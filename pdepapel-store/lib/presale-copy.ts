@@ -62,7 +62,9 @@ export function depositPendingText(depositAmount: number): string {
 
 /** Pedido con el anticipo recibido. */
 /** La línea de avance de una preventa con abonos en /pedido. */
-export function depositProgressText(paid: number, balance: number): string {
+export function depositProgressText(paid: number, balance: number, shippingIncluded = false): string {
+  // Con el saldo pedido, el total ya trae el envío: lo que falta es el saldo completo.
+  if (shippingIncluded) return balance > 0 ? `Llevas ${money(paid)} pagado · tu saldo es ${money(balance)} con el envío` : `Llevas ${money(paid)} pagado`;
   return balance > 0 ? `Llevas ${money(paid)} pagado · faltan ${money(balance)} + envío` : `Llevas ${money(paid)} pagado · solo falta el envío`;
 }
 

@@ -70,6 +70,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         identityKey: bold.identityKey,
         integritySignature: generateBoldIntegritySignature(charge.reference, charge.amount, "COP", bold.secretKey),
         redirectionUrl: `${storeUrl}/pedido/${params.orderId}?pago=${encodeURIComponent(charge.reference)}`,
+        description: `${mode === "balance" ? "Saldo" : "Abono"} de la preventa del pedido #${charge.orderNumber}`,
       },
       { headers: corsHeaders },
     );

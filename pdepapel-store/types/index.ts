@@ -309,6 +309,19 @@ export interface Coupon {
   isWelcomeBenefit?: boolean;
 }
 
+export interface PreorderPaymentInfo {
+  /** «installment»: abonar mientras espera; «balance»: el saldo ya pedido; null: nada que pagar ahora. */
+  mode: "installment" | "balance" | null;
+  amountDue: number;
+  minAmount: number;
+  block: "not-deposit" | "not-deposit-paid" | "unfulfilled" | "awaiting-balance-request" | "nothing-due" | null;
+  released: boolean;
+  unfulfilled: boolean;
+  balanceRequested: boolean;
+  /** Los cobros en línea de la clienta por referencia, para el aviso al volver de la pasarela. */
+  onlinePayments: { reference: string; status: "PENDING" | "APPROVED" | "VOIDED" | "REFUNDED"; amount: number; kind: "INSTALLMENT" | "BALANCE" }[];
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -357,6 +370,8 @@ export interface Order {
   depositPaidAt?: string | null;
   /** Lo que ya pagó (anticipo + abonos); el saldo es `total − paidSoFar`. */
   paidSoFar?: number | null;
+  /** Preventa con anticipo: qué se puede pagar hoy en línea (lo decide la administración). */
+  preorderPayment?: PreorderPaymentInfo | null;
   /** La tarjeta que este pedido compró (solo pedidos de tipo GIFT_CARD). */
   giftCardPurchase?: {
     recipientName: string | null;
