@@ -18,6 +18,7 @@ import { MercadoLibreHistoricalSales } from "./historical-sales";
 import { MercadoLibreListingManager } from "./listing-manager";
 import { MercadoLibreOperationsCenter } from "./operations-center";
 import { MercadoLibreProductAdsOverview } from "./product-ads-overview";
+import { MercadoLibreWritesPausedBanner, MercadoLibreWritesSwitchCard, type MercadoLibreWritesState } from "./writes-switch";
 
 type MarketplaceConnection = {
   sellerId: string | null;
@@ -35,6 +36,7 @@ type MercadoLibreClientProps = {
   configuration: { configured: boolean; missing: readonly string[] };
   queueConfiguration: { configured: boolean; missing: readonly string[] };
   connection: MarketplaceConnection;
+  writes?: MercadoLibreWritesState;
 };
 
 type QueueFeedback = { message: string; type: "error" | "success" };
@@ -64,7 +66,13 @@ const CONNECTION_BADGE: Record<NonNullable<MarketplaceConnection>["status"], { l
 
 const DATE_TIME = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
 
-export default function MercadoLibreClient({ configuration, queueConfiguration, connection, pricingTargets = null }: MercadoLibreClientProps) {
+export default function MercadoLibreClient({
+  configuration,
+  queueConfiguration,
+  connection,
+  pricingTargets = null,
+  writes = { paused: false, pausedAt: null },
+}: MercadoLibreClientProps) {
   const { storeId } = useParams<{ storeId: string }>();
   const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
@@ -195,6 +203,8 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
           );
         })}
       </div>
+
+      <MercadoLibreWritesPausedBanner state={writes} />
 
       {resultMessage ? (
         <div
@@ -340,6 +350,7 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
                 </CardContent>
               </Card>
             ) : null}
+            {connection ? <MercadoLibreWritesSwitchCard storeId={storeId} state={writes} /> : null}
           </div>
           {connected ? <MercadoLibreOperationsCenter storeId={storeId} sections={["resumen"]} /> : null}
           {connected ? <MercadoLibreCashflowSummary storeId={storeId} /> : null}

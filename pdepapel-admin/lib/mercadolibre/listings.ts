@@ -13,6 +13,9 @@ import {
   MERCADOLIBRE_CATEGORY_SERVICE_UNAVAILABLE,
 } from "./categories";
 import { isBlockedByPresaleForMercadoLibre } from "./available-quantity";
+import { assertMercadoLibreWritesAllowed } from "./writes-switch";
+import { DESCRIPTION_ISSUE_LABEL, inspectMercadoLibreDescription } from "./description-rules";
+import { inspectRemotePictures } from "./picture-fetch";
 import { inspectMercadoLibreCategory } from "./category-validation";
 import { isPriceBelowCost } from "./listing-price-guard";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES, shouldUseEmptyGtinReason } from "./listing-wizard";
@@ -496,6 +499,42 @@ export async function validateMercadoLibreListingForPublication(
       { kind: "review", step: "ficha", field: missingAttributes[0] },
     );
   }
+  await assertPicturesMeetMercadoLibreRules(payload.pictures.map((picture) => picture.source));
+}
+
+/** JPG o PNG, hasta 10 MB y al menos 500 px por lado (reglas duras de Mercado Libre). */
+async function assertPicturesMeetMercadoLibreRules(urls: string[]) {
+  const results = await inspectRemotePictures(urls);
+  const unreachable = results.find((result) => "unreachable" in result);
+  if (unreachable && "unreachable" in unreachable) {
+    throw MercadoLibrePublicationError.fromFailure(
+      transientPublicationFailure(
+        `No se pudo revisar la foto ${results.indexOf(unreachable) + 1} (${unreachable.unreachable}). Se reintentará automáticamente.`,
+      ),
+    );
+  }
+  const index = results.findIndex((result) => "check" in result && !result.check.ok);
+  const failed = results[index];
+  if (failed && "check" in failed) {
+    throw new MercadoLibrePublicationError(`Foto ${index + 1}: ${failed.check.problems.map((problem) => problem.message).join(" ")}`, {
+      kind: "review",
+      step: "producto",
+      field: "pictures",
+      code: failed.check.problems[0]?.code ?? null,
+    });
+  }
+}
+
+/** Lo que se le manda a Mercado Libre: texto plano sin enlaces, contacto, HTML ni emojis. */
+function mercadoLibreDescriptionText(description: string) {
+  return inspectMercadoLibreDescription(richTextToPlainText(description)).clean.trim();
+}
+
+export function describeMercadoLibreDescriptionIssues(description: string): string | null {
+  const { issues } = inspectMercadoLibreDescription(richTextToPlainText(description));
+  if (issues.length === 0) return null;
+  const kinds = Array.from(new Set(issues.map((issue) => DESCRIPTION_ISSUE_LABEL[issue.kind])));
+  return `La descripción se envía sin ${kinds.join(", ")}: Mercado Libre no los permite.`;
 }
 
 async function createItemDescription(
@@ -504,7 +543,7 @@ async function createItemDescription(
   description: string,
   request: typeof fetch,
 ) {
-  const plainText = richTextToPlainText(description).trim();
+  const plainText = mercadoLibreDescriptionText(description);
   if (!plainText) return null;
 
   const response = await request(
@@ -530,7 +569,7 @@ async function updateItemDescription(
   description: string,
   request: typeof fetch,
 ) {
-  const plainText = richTextToPlainText(description).trim();
+  const plainText = mercadoLibreDescriptionText(description);
   if (!plainText) return;
 
   const currentDescription = await request(
@@ -600,6 +639,7 @@ export async function syncMercadoLibreListingContent(
   listing: ListingForContentSync,
   request: typeof fetch = mercadoLibreFetch,
 ) {
+  await assertMercadoLibreWritesAllowed(listing.connectionId);
   if (listing.product.isArchived) {
     throw new MercadoLibrePublicationError(
       "No puedes sincronizar el contenido de un producto archivado",
@@ -614,6 +654,7 @@ export async function syncMercadoLibreListingContent(
       "El producto necesita al menos una imagen para sincronizarse",
     );
   }
+  await assertPicturesMeetMercadoLibreRules(imageUrls.map((source) => toGoogleMerchantImageUrl(source)));
 
   const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
   const itemUrl = `https://api.mercadolibre.com/items/${encodeURIComponent(listing.externalItemId)}`;
@@ -695,7 +736,11 @@ export async function validateMercadoLibreItemDraft(
     };
   }
   const payload = response.status === 204 ? null : await readJson(response);
-  return readMercadoLibreValidation(response.status, payload);
+  const result = readMercadoLibreValidation(response.status, payload);
+  const descriptionNote = describeMercadoLibreDescriptionIssues(listing.product.description);
+  return descriptionNote
+    ? { ...result, warnings: [...result.warnings, { field: "description", code: "description_cleaned", message: descriptionNote }] }
+    : result;
 }
 
 async function assertMercadoLibreValidates(
@@ -727,6 +772,7 @@ export async function createMercadoLibreItem(
   listing: ListingForPublication,
   request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibreCreatedItem> {
+  await assertMercadoLibreWritesAllowed(listing.connectionId);
   await validateMercadoLibreListingForPublication(listing, request);
 
   await assertNotInPresale(listing.product.id);
@@ -794,6 +840,7 @@ export async function createMercadoLibreItemDescription(
   request: typeof fetch = mercadoLibreFetch,
 ): Promise<string | null> {
   try {
+    await assertMercadoLibreWritesAllowed(connectionId);
     const accessToken = await getMercadoLibreAccessToken(connectionId);
     return await createItemDescription(accessToken, itemId, description, request);
   } catch (error) {

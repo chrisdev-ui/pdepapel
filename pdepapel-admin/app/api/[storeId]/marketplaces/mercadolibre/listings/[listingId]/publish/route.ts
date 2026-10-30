@@ -10,6 +10,7 @@ import {
   queueMarketplaceListingPublicationEvent,
 } from "@/lib/mercadolibre/outbox";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
+import { MercadoLibreWritesPausedError, areMercadoLibreWritesPausedForStore } from "@/lib/mercadolibre/writes-switch";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
@@ -29,6 +30,8 @@ export async function POST(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
+    // No se encola: una publicación pedida en pausa no debe salir sola al reanudar.
+    if (await areMercadoLibreWritesPausedForStore(params.storeId)) throw new MercadoLibreWritesPausedError();
 
     const listing = await prismadb.marketplaceListing.findFirst({
       where: {
@@ -105,6 +108,8 @@ export async function POST(
         throw ErrorFactory.Conflict(
           "Esta publicación ya se está enviando a Mercado Libre. Espera un momento y actualiza la lista.",
         );
+      case "writes_paused":
+        throw new MercadoLibreWritesPausedError();
       case "listing_requires_review":
       case "failed":
         throw ErrorFactory.InvalidRequest(

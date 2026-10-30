@@ -17,6 +17,7 @@ import {
   queueMarketplaceStockSyncEvents,
 } from "@/lib/mercadolibre/outbox";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
+import { MercadoLibreWritesPausedError, areMercadoLibreWritesPausedForStore } from "@/lib/mercadolibre/writes-switch";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
@@ -71,6 +72,8 @@ export async function POST(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
+    // Toda acción masiva escribe en Mercado Libre: en pausa no se encola nada que salga solo al reanudar.
+    if (await areMercadoLibreWritesPausedForStore(params.storeId)) throw new MercadoLibreWritesPausedError();
 
     const { action, listingIds } = parseBody(await request.json());
     const connection = await prismadb.marketplaceConnection.findUnique({

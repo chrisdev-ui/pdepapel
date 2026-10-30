@@ -4,6 +4,13 @@ const mocks = vi.hoisted(() => ({
   getMercadoLibreAccessToken: vi.fn().mockResolvedValue("access-token"),
 }));
 
+const pictureChecks = vi.hoisted(() => ({
+  inspect: vi.fn(async (urls: readonly string[]) =>
+    urls.map((url) => ({ url, check: { ok: true, problems: [] as { code: string; message: string }[], belowRecommended: false } })),
+  ),
+}));
+// Las reglas de fotos (JPG/PNG, ≤10 MB, ≥500 px) tienen su propia prueba; aquí todas pasan salvo que el caso diga otra cosa.
+vi.mock("@/lib/mercadolibre/picture-fetch", () => ({ inspectRemotePictures: pictureChecks.inspect }));
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.getMercadoLibreAccessToken,
 }));

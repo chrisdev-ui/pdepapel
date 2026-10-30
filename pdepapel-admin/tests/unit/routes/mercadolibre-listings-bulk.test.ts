@@ -15,6 +15,13 @@ const mocks = vi.hoisted(() => ({
   inProgress: vi.fn(),
 }));
 
+// El interruptor de escrituras tiene su propia prueba; aquí está apagado.
+vi.mock("@/lib/mercadolibre/writes-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/writes-switch")>()),
+  areMercadoLibreWritesPaused: vi.fn().mockResolvedValue(false),
+  areMercadoLibreWritesPausedForStore: vi.fn().mockResolvedValue(false),
+  assertMercadoLibreWritesAllowed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: {} },

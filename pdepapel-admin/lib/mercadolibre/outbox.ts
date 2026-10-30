@@ -35,6 +35,7 @@ import {
   type MercadoLibreCreatedItem,
 } from "./listings";
 import { learnFromPublishedListing } from "./category-learning";
+import { MERCADOLIBRE_WRITE_ACTIONS, MERCADOLIBRE_WRITES_PAUSED_MESSAGE, areMercadoLibreWritesPaused } from "./writes-switch";
 import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
@@ -53,6 +54,8 @@ const STALE_PROCESSING_EVENT_MS = 15 * 60 * 1000;
 export const MAX_OUTBOX_EVENT_ATTEMPTS = 12;
 /** Con la cuenta por reconectar, un evento vuelve a mirarse cada 6 h. */
 const REAUTH_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
+/** Con las escrituras pausadas el evento espera sin gastar intentos; al reanudar se encola de inmediato. */
+const WRITES_PAUSED_RETRY_DELAY_MS = 15 * 60 * 1000;
 
 type StockSyncTransaction = Pick<
   Prisma.TransactionClient,
@@ -632,6 +635,18 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   });
   if (!claimed) {
     return { processed: false, reason: "claimed_elsewhere" as const };
+  }
+  if (MERCADOLIBRE_WRITE_ACTIONS.has(event.action) && (await areMercadoLibreWritesPaused(event.connectionId))) {
+    await prismadb.marketplaceOutboxEvent.update({
+      where: { id: event.id },
+      data: {
+        status: MarketplaceOutboxStatus.RETRY,
+        attempts: event.attempts,
+        availableAt: new Date(Date.now() + WRITES_PAUSED_RETRY_DELAY_MS),
+        lastError: MERCADOLIBRE_WRITES_PAUSED_MESSAGE,
+      },
+    });
+    return { processed: false, reason: "writes_paused" as const };
   }
   const attempts = event.attempts + 1;
 

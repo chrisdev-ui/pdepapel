@@ -10,6 +10,20 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
+// El interruptor de escrituras tiene su propia prueba; aquí está apagado.
+const pictureChecks = vi.hoisted(() => ({
+  inspect: vi.fn(async (urls: readonly string[]) =>
+    urls.map((url) => ({ url, check: { ok: true, problems: [] as { code: string; message: string }[], belowRecommended: false } })),
+  ),
+}));
+// Las reglas de fotos (JPG/PNG, ≤10 MB, ≥500 px) tienen su propia prueba; aquí todas pasan salvo que el caso diga otra cosa.
+vi.mock("@/lib/mercadolibre/picture-fetch", () => ({ inspectRemotePictures: pictureChecks.inspect }));
+vi.mock("@/lib/mercadolibre/writes-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/writes-switch")>()),
+  areMercadoLibreWritesPaused: vi.fn().mockResolvedValue(false),
+  areMercadoLibreWritesPausedForStore: vi.fn().mockResolvedValue(false),
+  assertMercadoLibreWritesAllowed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/prismadb", () => ({ default: { product: { findMany: vi.fn().mockResolvedValue([]) }, productPresale: { findMany: vi.fn().mockResolvedValue([]) }, orderItem: { findMany: vi.fn().mockResolvedValue([]) } } }));
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.getMercadoLibreAccessToken,
@@ -68,6 +82,33 @@ describe("validateMercadoLibreItemDraft", () => {
     expect(body).toMatchObject({ family_name: "Bitácora-Agenda William Morris", category_id: "MCO441243" });
     expect(body).not.toHaveProperty("title");
     expect(request).not.toHaveBeenCalledWith("https://api.mercadolibre.com/items", expect.anything());
+  });
+
+  it("una foto que no cumple las reglas duras detiene la validación antes de preguntarle a Mercado Libre", async () => {
+    pictureChecks.inspect.mockResolvedValueOnce([
+      {
+        url: "https://res.cloudinary.com/demo/image/upload/a.jpg",
+        check: { ok: false, problems: [{ code: "too-small", message: "La foto mide 225 × 225 px; Mercado Libre pide al menos 500 px por lado." }], belowRecommended: true },
+      },
+    ]);
+    const request = vi.fn().mockResolvedValueOnce(category()).mockResolvedValueOnce(attributes());
+
+    const result = await validateMercadoLibreItemDraft(draft([{ id: "MANUFACTURER", value_name: "Genérica" }, { id: "MODEL", value_name: "Flores" }]), request);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({ kind: "review", field: "pictures", code: "too-small", message: expect.stringContaining("Foto 1: La foto mide 225 × 225 px") });
+    expect(request).not.toHaveBeenCalledWith("https://api.mercadolibre.com/items/validate", expect.anything());
+  });
+
+  it("avisa que la descripción se envía sin enlaces ni datos de contacto", async () => {
+    const request = vi.fn().mockResolvedValueOnce(category()).mockResolvedValueOnce(attributes()).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const withContact = { ...(draft([{ id: "MANUFACTURER", value_name: "Genérica" }, { id: "MODEL", value_name: "Flores" }]) as object) } as { product: Record<string, unknown> };
+    withContact.product = { ...withContact.product, description: "<p>Agenda floral.</p><p>Escríbenos al 3001112233 o visita papeleriapdepapel.com 💖</p>" };
+
+    const result = await validateMercadoLibreItemDraft(withContact as never, request);
+
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([expect.objectContaining({ field: "description", code: "description_cleaned" })]);
   });
 
   it("names the empty required fields before asking Mercado Libre", async () => {

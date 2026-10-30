@@ -25,6 +25,20 @@ const mocks = vi.hoisted(() => ({
 
 // El candado de preventa consulta la base: sin preventa activa, publicar se
 // comporta igual que siempre. La prueba de que SÍ bloquea está más abajo.
+// El interruptor de escrituras tiene su propia prueba; aquí está apagado.
+const pictureChecks = vi.hoisted(() => ({
+  inspect: vi.fn(async (urls: readonly string[]) =>
+    urls.map((url) => ({ url, check: { ok: true, problems: [] as { code: string; message: string }[], belowRecommended: false } })),
+  ),
+}));
+// Las reglas de fotos (JPG/PNG, ≤10 MB, ≥500 px) tienen su propia prueba; aquí todas pasan salvo que el caso diga otra cosa.
+vi.mock("@/lib/mercadolibre/picture-fetch", () => ({ inspectRemotePictures: pictureChecks.inspect }));
+vi.mock("@/lib/mercadolibre/writes-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/writes-switch")>()),
+  areMercadoLibreWritesPaused: vi.fn().mockResolvedValue(false),
+  areMercadoLibreWritesPausedForStore: vi.fn().mockResolvedValue(false),
+  assertMercadoLibreWritesAllowed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: vi.fn().mockResolvedValue([]) },
@@ -533,5 +547,24 @@ describe("Mercado Libre listing publication", () => {
       ),
     ).rejects.toMatchObject({ step: "categoria" });
     expect(request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("descripción para Mercado Libre", () => {
+  it("se envía en texto plano, sin enlaces, contacto ni emojis", async () => {
+    const { createMercadoLibreItemDescription } = await import("@/lib/mercadolibre/listings");
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+
+    const warning = await createMercadoLibreItemDescription(
+      "connection-id",
+      "MCO1",
+      "<p>Agenda floral de 120 hojas.</p><p>Escríbenos al WhatsApp 3001112233 o visita papeleriapdepapel.com 💖</p>",
+      request,
+    );
+
+    expect(warning).toBeNull();
+    const body = JSON.parse(request.mock.calls[0][1].body) as { plain_text: string };
+    expect(body.plain_text).toContain("Agenda floral de 120 hojas.");
+    expect(body.plain_text).not.toMatch(/3001112233|papeleriapdepapel|WhatsApp|💖|<p>/);
   });
 });

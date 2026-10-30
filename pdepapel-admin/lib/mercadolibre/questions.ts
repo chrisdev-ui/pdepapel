@@ -158,6 +158,7 @@ export async function answerMercadoLibreQuestion({
   await mutateMercadoLibreJson(connectionId, "/answers", {
     method: "POST",
     body: { question_id: questionId, text: answer },
+    allowWhileWritesPaused: true,
   });
   const payload = await getMercadoLibreResource(
     connectionId,

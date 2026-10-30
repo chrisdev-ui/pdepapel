@@ -28,6 +28,13 @@ const mocks = vi.hoisted(() => ({
   learn: vi.fn(),
 }));
 
+// El interruptor de escrituras tiene su propia prueba; aquí está apagado.
+vi.mock("@/lib/mercadolibre/writes-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/writes-switch")>()),
+  areMercadoLibreWritesPaused: vi.fn().mockResolvedValue(false),
+  areMercadoLibreWritesPausedForStore: vi.fn().mockResolvedValue(false),
+  assertMercadoLibreWritesAllowed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/atomic-claim", () => ({ claimQueueRow: mocks.claimRow }));
 vi.mock("@/lib/prismadb", () => ({
   default: {

@@ -7,6 +7,7 @@ import { decryptMercadoLibreToken, encryptMercadoLibreToken } from "./crypto";
 import { MercadoLibreApiError, refreshMercadoLibreAccessToken } from "./oauth";
 import { notifyMercadoLibreReauthRequired } from "./reauth-notice";
 import prismadb from "@/lib/prismadb";
+import { assertMercadoLibreWritesAllowed } from "@/lib/mercadolibre/writes-switch";
 
 const ACCESS_TOKEN_REFRESH_MARGIN_MS = 60_000;
 const API_BASE_URL = "https://api.mercadolibre.com";
@@ -344,13 +345,17 @@ export async function mutateMercadoLibreJson(
     method,
     body,
     headers = {},
+    allowWhileWritesPaused = false,
   }: {
     method: "POST" | "PUT" | "DELETE";
     body?: Record<string, unknown>;
     headers?: Record<string, string>;
+    /** Solo responder preguntas: es atención a compradoras, no catálogo. */
+    allowWhileWritesPaused?: boolean;
   },
   request: typeof fetch = mercadoLibreFetch,
 ) {
+  if (!allowWhileWritesPaused) await assertMercadoLibreWritesAllowed(connectionId);
   const response = await withTokenRetry(connectionId, (accessToken) =>
     request(normalizeMercadoLibreResource(resource), {
       method,
