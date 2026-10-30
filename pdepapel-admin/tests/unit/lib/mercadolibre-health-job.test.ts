@@ -22,4 +22,12 @@ describe("línea de Sistemas de la revisión diaria de Mercado Libre", () => {
     });
     expect(result).toEqual({ incomplete: 1, detail: "2 conexiones revisadas, 1 sin revisar contra Mercado Libre, 3 publicaciones con tipo o categoría al día, 1 conexión sin sitio: se usó MCO" });
   });
+
+  it("dice cuando una alerta no salió por correo por falta de destinatario, sin marcar la corrida como fallida", () => {
+    const result = healthJobDetail({
+      processed: [{ connectionId: "c", issues: 2, notified: 0, reconcile: "ok", applied: applied(), noRecipients: true }],
+      failed: 0,
+    });
+    expect(result).toEqual({ incomplete: 0, detail: "1 conexión revisada, sin destinatario de alertas de Mercado Libre" });
+  });
 });

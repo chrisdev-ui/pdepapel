@@ -1,5 +1,5 @@
 import { deliverEmails } from "@/lib/email-delivery";
-import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
+import { getMercadoLibreAlertRecipients } from "@/lib/store-email-settings";
 import prismadb from "@/lib/prismadb";
 import { PanelNotice } from "@/emails/panel-notice";
 
@@ -10,9 +10,9 @@ export async function notifyMercadoLibreReauthRequired(connectionId: string) {
   try {
     const connection = await prismadb.marketplaceConnection.findUnique({ where: { id: connectionId }, select: { storeId: true } });
     if (!connection) return;
-    const to = await getAdminNotificationRecipients(connection.storeId);
+    const to = await getMercadoLibreAlertRecipients(connection.storeId);
     if (to.length === 0) {
-      console.warn("[MERCADOLIBRE] Sin correos para avisos en Configuración ni correo de la tienda; no se avisa la reconexión.");
+      console.warn("[MERCADOLIBRE] Sin destinatario de alertas de Mercado Libre en Configuración; la reconexión solo se ve en el panel.");
       return;
     }
     const link = `${PANEL_ORIGIN}/${connection.storeId}/mercadolibre`;

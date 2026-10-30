@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Las dos listas de correos de Configuración: se leen de la base, nunca del
+ * Las tres listas de correos de Configuración: se leen de la base, nunca del
  * código, y no salen por ninguna ruta pública.
  */
 const mocks = vi.hoisted(() => ({
   session: { userId: null as string | null, metadata: null as unknown },
-  settings: new Map<string, { excludedCustomerEmails: string | null; adminNotificationEmails: string | null }>(),
+  settings: new Map<
+    string,
+    { excludedCustomerEmails: string | null; adminNotificationEmails: string | null; mercadoLibreAlertEmails?: string | null }
+  >(),
   stores: new Map<string, { email: string | null; userId: string }>(),
   upsert: vi.fn(),
   orders: [] as unknown[],
@@ -47,6 +50,7 @@ import {
   EMAIL_LIST_MAX_ENTRIES,
   getAdminNotificationRecipients,
   getExcludedCustomerEmails,
+  getMercadoLibreAlertRecipients,
   parseEmailList,
 } from "@/lib/store-email-settings";
 
@@ -138,6 +142,24 @@ describe("quién recibe los avisos", () => {
   });
 });
 
+describe("quién recibe las alertas de Mercado Libre", () => {
+  it("solo su lista, aunque haya avisos del panel", async () => {
+    mocks.settings.set("store-1", {
+      excludedCustomerEmails: null,
+      adminNotificationEmails: "avisos@ejemplo.test",
+      mercadoLibreAlertEmails: "Ml@Ejemplo.test\nml@ejemplo.test",
+    });
+    expect(await getMercadoLibreAlertRecipients("store-1")).toEqual(["ml@ejemplo.test"]);
+  });
+
+  it("vacía, nadie: ni la lista de avisos ni el correo de la tienda", async () => {
+    mocks.settings.set("store-1", { excludedCustomerEmails: null, adminNotificationEmails: "avisos@ejemplo.test", mercadoLibreAlertEmails: null });
+    expect(await getMercadoLibreAlertRecipients("store-1")).toEqual([]);
+    mocks.settings.clear();
+    expect(await getMercadoLibreAlertRecipients("store-1")).toEqual([]);
+  });
+});
+
 const ctx = { params: { storeId: "store-1" } };
 const patch = (body: unknown) =>
   patchEmails(new Request("https://admin.test/x", { method: "PATCH", body: JSON.stringify(body) }), ctx);
@@ -150,24 +172,43 @@ describe("Configuración › correos (solo la dueña)", () => {
     mocks.session.userId = "user_viewer";
     mocks.session.metadata = { role: "viewer", allowedStoreIds: ["store-1"] };
     expect((await getEmails(new Request("https://admin.test/x"), ctx)).status).toBe(403);
-    expect((await patch({ excludedCustomerEmails: "", adminNotificationEmails: "" })).status).toBe(403);
+    expect((await patch({ excludedCustomerEmails: "", adminNotificationEmails: "", mercadoLibreAlertEmails: "" })).status).toBe(403);
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
-  it("la dueña guarda solo las dos listas, ya limpias", async () => {
+  it("la dueña guarda solo las tres listas, ya limpias", async () => {
     mocks.session.userId = "user_owner";
-    const response = await patch({ excludedCustomerEmails: "Equipo@Ejemplo.test\n", adminNotificationEmails: "" });
-    expect(response.status).toBe(200);
-    expect(mocks.upsert).toHaveBeenCalledWith({
-      where: { storeId: "store-1" },
-      create: { storeId: "store-1", excludedCustomerEmails: "equipo@ejemplo.test", adminNotificationEmails: null },
-      update: { excludedCustomerEmails: "equipo@ejemplo.test", adminNotificationEmails: null },
+    const response = await patch({
+      excludedCustomerEmails: "Equipo@Ejemplo.test\n",
+      adminNotificationEmails: "",
+      mercadoLibreAlertEmails: " ML@Ejemplo.test, otro@ejemplo.test",
     });
+    expect(response.status).toBe(200);
+    const data = {
+      excludedCustomerEmails: "equipo@ejemplo.test",
+      adminNotificationEmails: null,
+      mercadoLibreAlertEmails: "ml@ejemplo.test\notro@ejemplo.test",
+    };
+    expect(mocks.upsert).toHaveBeenCalledWith({ where: { storeId: "store-1" }, create: { storeId: "store-1", ...data }, update: data });
+  });
+
+  it("sin la lista de Mercado Libre en el cuerpo no guarda nada (no la borra a ciegas)", async () => {
+    mocks.session.userId = "user_owner";
+    expect((await patch({ excludedCustomerEmails: "", adminNotificationEmails: "" })).status).toBe(400);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("una línea inválida en la lista de Mercado Libre dice de qué lista es", async () => {
+    mocks.session.userId = "user_owner";
+    const response = await patch({ excludedCustomerEmails: "", adminNotificationEmails: "", mercadoLibreAlertEmails: "no-es-correo" });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("Correos para alertas de Mercado Libre");
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
   it("una línea inválida no guarda nada", async () => {
     mocks.session.userId = "user_owner";
-    expect((await patch({ excludedCustomerEmails: "no-es-correo", adminNotificationEmails: "" })).status).toBe(400);
+    expect((await patch({ excludedCustomerEmails: "no-es-correo", adminNotificationEmails: "", mercadoLibreAlertEmails: "" })).status).toBe(400);
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 });

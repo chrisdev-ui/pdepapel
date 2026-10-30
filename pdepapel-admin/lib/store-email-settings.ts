@@ -7,7 +7,7 @@ import prismadb from "@/lib/prismadb";
 import { shortMemo } from "@/lib/short-memo";
 
 /**
- * Dos listas de correos que la dueña edita en Configuración, para que ninguna
+ * Tres listas de correos que la dueña edita en Configuración, para que ninguna
  * dirección personal viva en el código (el repositorio es público):
  *
  * - `excludedCustomerEmails`: el equipo que compra o registra pedidos con su
@@ -15,6 +15,9 @@ import { shortMemo } from "@/lib/short-memo";
  *   fuera de clientas, segmentos y reactivación.
  * - `adminNotificationEmails`: quién recibe los avisos del panel (pedidos,
  *   alertas, formulario de contacto). Vacía, se usa el correo de la tienda.
+ * - `mercadoLibreAlertEmails`: quién recibe solo las alertas de Mercado Libre
+ *   (salud de publicaciones, reconexión). Vacía, no sale ningún correo: sin
+ *   respaldo, para que no le lleguen a quien atiende los avisos del panel.
  *
  * Nunca salen por una ruta pública.
  */
@@ -54,12 +57,14 @@ function readStoredList(raw: string | null | undefined): string[] {
 export const storeEmailSettingsInputSchema = z.object({
   excludedCustomerEmails: z.string().max(4000),
   adminNotificationEmails: z.string().max(4000),
+  mercadoLibreAlertEmails: z.string().max(4000),
 });
 export type StoreEmailSettingsInput = z.infer<typeof storeEmailSettingsInputSchema>;
 
 export interface StoreEmailSettings {
   excludedCustomerEmails: string[];
   adminNotificationEmails: string[];
+  mercadoLibreAlertEmails: string[];
   /** El correo de la tienda (`Store.email`): siempre excluido y respaldo de los avisos. */
   storeEmail: string | null;
 }
@@ -68,7 +73,7 @@ export async function getStoreEmailSettings(storeId: string): Promise<StoreEmail
   const [settings, store] = await Promise.all([
     prismadb.storeSettings.findUnique({
       where: { storeId },
-      select: { excludedCustomerEmails: true, adminNotificationEmails: true },
+      select: { excludedCustomerEmails: true, adminNotificationEmails: true, mercadoLibreAlertEmails: true },
     }),
     prismadb.store.findUnique({ where: { id: storeId }, select: { email: true } }),
   ]);
@@ -76,17 +81,20 @@ export async function getStoreEmailSettings(storeId: string): Promise<StoreEmail
   return {
     excludedCustomerEmails: readStoredList(settings?.excludedCustomerEmails),
     adminNotificationEmails: readStoredList(settings?.adminNotificationEmails),
+    mercadoLibreAlertEmails: readStoredList(settings?.mercadoLibreAlertEmails),
     storeEmail: storeEmail && emailSchema.safeParse(storeEmail).success ? storeEmail : null,
   };
 }
 
-/** Solo estas dos columnas: guardar aquí no toca los datos del negocio ni el bot. */
+/** Solo estas tres columnas: guardar aquí no toca los datos del negocio ni el bot. */
 export async function saveStoreEmailSettings(storeId: string, input: StoreEmailSettingsInput) {
   const excluded = parseEmailList(input.excludedCustomerEmails, "Correos del equipo");
   const recipients = parseEmailList(input.adminNotificationEmails, "Correos para avisos");
+  const mercadoLibre = parseEmailList(input.mercadoLibreAlertEmails, "Correos para alertas de Mercado Libre");
   const data = {
     excludedCustomerEmails: excluded.length ? excluded.join("\n") : null,
     adminNotificationEmails: recipients.length ? recipients.join("\n") : null,
+    mercadoLibreAlertEmails: mercadoLibre.length ? mercadoLibre.join("\n") : null,
   };
   await prismadb.storeSettings.upsert({
     where: { storeId },
@@ -131,4 +139,9 @@ export async function getAdminNotificationRecipients(storeId?: string): Promise<
       return Array.from(all);
     },
   });
+}
+
+/** Solo la lista de alertas de Mercado Libre; vacía, nadie (sin respaldo a los avisos del panel). */
+export async function getMercadoLibreAlertRecipients(storeId: string): Promise<string[]> {
+  return (await getStoreEmailSettings(storeId)).mercadoLibreAlertEmails;
 }

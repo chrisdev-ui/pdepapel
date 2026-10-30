@@ -105,6 +105,12 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
 
   async function seed() {
     fixture = await createInventoryFixture();
+    // Las alertas de Mercado Libre van solo a su propia lista (Ajustes › Alertas de Mercado Libre).
+    await testPrisma.storeSettings.upsert({
+      where: { storeId: fixture.store.id },
+      create: { storeId: fixture.store.id, mercadoLibreAlertEmails: "avisos@prueba.test" },
+      update: { mercadoLibreAlertEmails: "avisos@prueba.test" },
+    });
     await testPrisma.product.update({
       where: { id: fixture.component.id },
       data: { stock: 4, images: { create: [{ url: "https://res.cloudinary.com/demo/image/upload/cartuchera.jpg" }] } },

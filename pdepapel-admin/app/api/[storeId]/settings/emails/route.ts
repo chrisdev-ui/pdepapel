@@ -10,7 +10,7 @@ import {
 import { CACHE_HEADERS } from "@/lib/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
-/** Correos del equipo y de avisos (Configuración › Tienda). Solo la dueña. */
+/** Correos del equipo, de avisos y de alertas de Mercado Libre (Configuración › Tienda). Solo la dueña. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {
   try {
     await requireStoreOwner(params.storeId);

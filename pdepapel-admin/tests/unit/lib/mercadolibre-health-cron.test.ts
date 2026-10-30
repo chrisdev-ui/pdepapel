@@ -148,6 +148,18 @@ describe("Mercado Libre health cron", () => {
     expect(mocks.release).toHaveBeenCalledTimes(1);
   });
 
+  it("sin destinatario de alertas de Mercado Libre devuelve las alertas y lo marca para Sistemas", async () => {
+    mocks.findConnections.mockResolvedValue([{ id: "connection-1", storeId: "store-1", sellerId: "s1", status: "CONNECTED" }]);
+    mocks.getHealthSummary.mockResolvedValue({ ...healthSummary, issues: [stockIssue] });
+    mocks.claim.mockResolvedValue([{ issue: stockIssue, previousFingerprint: null, previousNotifiedAt: null }]);
+    mocks.sendNotification.mockResolvedValue("no-recipients");
+
+    const result = await processMercadoLibreHealthChecks();
+
+    expect(result.processed).toEqual([expect.objectContaining({ connectionId: "connection-1", issues: 1, notified: 0, noRecipients: true })]);
+    expect(mocks.release).toHaveBeenCalledTimes(1);
+  });
+
   it("a run that finds another one in progress for the connection sends nothing", async () => {
     mocks.findConnections.mockResolvedValue([{ id: "connection-1", storeId: "store-1", sellerId: "s1", status: "CONNECTED" }]);
     mocks.getHealthSummary.mockResolvedValue({ ...healthSummary, issues: [stockIssue] });

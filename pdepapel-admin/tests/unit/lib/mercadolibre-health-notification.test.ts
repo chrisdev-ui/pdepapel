@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
-vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: async () => mocks.recipients }));
+vi.mock("@/lib/store-email-settings", () => ({
+  getMercadoLibreAlertRecipients: async () => mocks.recipients,
+  getAdminNotificationRecipients: async () => ["panel@prueba.test"],
+}));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 
 import type { MercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
@@ -176,12 +179,12 @@ describe("sendMercadoLibreHealthNotification", () => {
     mocks.recipients = ["avisos@prueba.test"];
   });
 
-  it("without anyone to tell it skips, so the alerts stay pending for the next run", async () => {
+  it("sin lista de alertas de Mercado Libre no manda nada (ni a los avisos del panel) y lo dice", async () => {
     mocks.recipients = [];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await expect(
       sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: summary.issues }),
-    ).resolves.toBe("skipped");
+    ).resolves.toBe("no-recipients");
     expect(mocks.send).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -194,6 +197,7 @@ describe("sendMercadoLibreHealthNotification", () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     const payload = mocks.send.mock.calls[0][0];
     expect(payload.to).toEqual(["avisos@prueba.test"]);
+    expect(payload.to).not.toContain("panel@prueba.test");
     expect(payload.subject).toBe("Mercado Libre: 4 cosas para revisar");
     // El falso «Idempotency-Key» del SDK 2.1.0 ya no va: no deduplicaba (#8).
     expect(payload.headers).toBeUndefined();

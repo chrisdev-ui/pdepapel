@@ -79,6 +79,12 @@ describe("Mercado Libre health alerts: dedupe and review (MySQL)", () => {
   /** Una publicación activa con 2 unidades escondidas por un colchón de 2: «stock en riesgo». */
   async function seed() {
     fixture = await createInventoryFixture();
+    // Las alertas de Mercado Libre van solo a su propia lista (Ajustes › Alertas de Mercado Libre).
+    await testPrisma.storeSettings.upsert({
+      where: { storeId: fixture.store.id },
+      create: { storeId: fixture.store.id, mercadoLibreAlertEmails: "avisos@prueba.test" },
+      update: { mercadoLibreAlertEmails: "avisos@prueba.test" },
+    });
     await testPrisma.product.update({
       where: { id: fixture.component.id },
       data: { stock: 2, images: { create: [{ url: "https://res.cloudinary.com/demo/image/upload/agenda.jpg" }] } },

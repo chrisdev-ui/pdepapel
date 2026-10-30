@@ -66,6 +66,7 @@ const SENSITIVE_FIELDS = [
   "internalNotes",
   "excludedCustomerEmails",
   "adminNotificationEmails",
+  "mercadoLibreAlertEmails",
 ];
 
 /**

@@ -9,6 +9,7 @@ export function healthJobDetail(result: MercadoLibreHealthCheckRun) {
   const incomplete = result.processed.filter((run) => run.reconcile === "failed" || run.reconcile === "reauth").length;
   const refreshed = result.processed.reduce((sum, run) => sum + (run.applied?.typeRefreshed ?? 0), 0);
   const siteFallback = result.processed.reduce((sum, run) => sum + (run.applied?.siteFallback ?? 0), 0);
+  const noRecipients = result.processed.some((run) => run.noRecipients);
   return {
     incomplete,
     detail: [
@@ -17,6 +18,7 @@ export function healthJobDetail(result: MercadoLibreHealthCheckRun) {
       incomplete ? `${incomplete} sin revisar contra Mercado Libre` : null,
       refreshed ? `${plural(refreshed, "publicación", "publicaciones")} con tipo o categoría al día` : null,
       siteFallback ? `${plural(siteFallback, "conexión", "conexiones")} sin sitio: se usó MCO` : null,
+      noRecipients ? "sin destinatario de alertas de Mercado Libre" : null,
     ]
       .filter(Boolean)
       .join(", "),

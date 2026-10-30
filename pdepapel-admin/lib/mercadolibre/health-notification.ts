@@ -7,7 +7,7 @@ import type {
   MercadoLibreHealthSummaryItem,
 } from "@/emails/mercadolibre-health-summary";
 import { sendWithRetry } from "@/lib/email-delivery";
-import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
+import { getMercadoLibreAlertRecipients } from "@/lib/store-email-settings";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
 
@@ -382,7 +382,8 @@ export function renderMercadoLibreHealthDigestText(
  * Manda el aviso con las alertas nuevas o que cambiaron. Quien decide cuáles
  * son es health-cron.ts (con health-alerts.ts): aquí no se deduplica nada.
  *
- * Devuelve "skipped" en desarrollo (no se manda nada) y lanza si Resend no lo
+ * Devuelve "skipped" en desarrollo (no se manda nada), "no-recipients" si la
+ * lista de alertas de Mercado Libre está vacía, y lanza si Resend no lo
  * aceptó tras los reintentos, para que quien llama devuelva las alertas
  * tomadas y la próxima corrida lo intente de nuevo.
  *
@@ -400,15 +401,15 @@ export async function sendMercadoLibreHealthNotification({
   summary: HealthSummary;
   issues: MercadoLibreHealthIssue[];
   knownIssues?: number;
-}): Promise<"sent" | "skipped"> {
+}): Promise<"sent" | "skipped" | "no-recipients"> {
   if (env.NODE_ENV === "development" || issues.length === 0) return "skipped";
 
   // Sin destinatarios no se tumba la revisión: las alertas vuelven a quedar
   // pendientes y salen en la primera corrida con a quién mandarlas.
-  const to = await getAdminNotificationRecipients(storeId);
+  const to = await getMercadoLibreAlertRecipients(storeId);
   if (to.length === 0) {
-    console.warn("[MERCADOLIBRE] Sin correos para avisos en Configuración ni correo de la tienda; las alertas quedan pendientes.");
-    return "skipped";
+    console.warn("[MERCADOLIBRE] Sin destinatario de alertas de Mercado Libre en Configuración; las alertas quedan pendientes en el panel.");
+    return "no-recipients";
   }
   const digest = buildMercadoLibreHealthDigest({ storeId, summary, issues, knownIssues });
   const { subject, ...emailProps } = digest;

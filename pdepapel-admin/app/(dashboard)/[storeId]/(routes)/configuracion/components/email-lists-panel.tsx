@@ -13,18 +13,25 @@ import { toast } from "@/hooks/use-toast";
 interface EmailListsPanelProps {
   excludedCustomerEmails: string[];
   adminNotificationEmails: string[];
+  mercadoLibreAlertEmails: string[];
   /** Solo para decir en la ayuda que ese correo ya cuenta; nunca se edita aquí. */
   hasStoreEmail: boolean;
 }
 
 /**
- * Dos listas que antes vivían escritas en el código. Se guardan aparte de los
+ * Listas que antes vivían escritas en el código. Se guardan aparte de los
  * datos del negocio: ese formulario reescribe sus campos completos.
  */
-export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmails, hasStoreEmail }: EmailListsPanelProps) {
+export function EmailListsPanel({
+  excludedCustomerEmails,
+  adminNotificationEmails,
+  mercadoLibreAlertEmails,
+  hasStoreEmail,
+}: EmailListsPanelProps) {
   const params = useParams<{ storeId: string }>();
   const [excluded, setExcluded] = useState(excludedCustomerEmails.join("\n"));
   const [recipients, setRecipients] = useState(adminNotificationEmails.join("\n"));
+  const [mercadoLibre, setMercadoLibre] = useState(mercadoLibreAlertEmails.join("\n"));
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -33,9 +40,11 @@ export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmail
       const { data } = await axios.patch(`/api/${params.storeId}/settings/emails`, {
         excludedCustomerEmails: excluded,
         adminNotificationEmails: recipients,
+        mercadoLibreAlertEmails: mercadoLibre,
       });
       setExcluded((data.excludedCustomerEmails as string[]).join("\n"));
       setRecipients((data.adminNotificationEmails as string[]).join("\n"));
+      setMercadoLibre((data.mercadoLibreAlertEmails as string[]).join("\n"));
       toast({ description: "Correos guardados", variant: "success" });
     } catch (error) {
       const message = axios.isAxiosError(error) ? (error.response?.data?.error ?? "No se pudo guardar") : "No se pudo guardar";
@@ -51,7 +60,7 @@ export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmail
         title="Correos del equipo y de avisos"
         description="Una dirección por línea. Solo la dueña ve y edita estas listas; nunca se publican en la tienda."
       />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-2">
           <Label htmlFor="excluded-customer-emails">Correos del equipo (no son clientas)</Label>
           <Textarea
@@ -82,8 +91,25 @@ export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmail
             spellCheck={false}
           />
           <p className="text-sm text-muted-foreground">
-            Pedidos nuevos, pagos raros, alertas de Mercado Libre y de la base de datos, y el formulario de contacto de la
-            tienda. {hasStoreEmail ? "Vacía, los avisos van al correo de la tienda." : "Vacía y sin correo de la tienda, no sale ningún aviso."}
+            Pedidos nuevos, pagos raros, ventas de Mercado Libre, alertas de la base de datos y el formulario de contacto
+            de la tienda. {hasStoreEmail ? "Vacía, los avisos van al correo de la tienda." : "Vacía y sin correo de la tienda, no sale ningún aviso."}
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          <Label htmlFor="mercadolibre-alert-emails">Alertas de Mercado Libre</Label>
+          <Textarea
+            id="mercadolibre-alert-emails"
+            value={mercadoLibre}
+            onChange={(event) => setMercadoLibre(event.target.value)}
+            rows={4}
+            disabled={saving}
+            placeholder="nombre@ejemplo.com"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-sm text-muted-foreground">
+            Solo para las alertas de Mercado Libre (salud de publicaciones, reconexión). Vacía: no se envían por correo;
+            siguen en el panel.
           </p>
         </div>
       </div>

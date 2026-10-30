@@ -104,6 +104,7 @@ export default async function SettingsPage({
             {...await getStoreEmailSettings(params.storeId).then((emails) => ({
               excludedCustomerEmails: emails.excludedCustomerEmails,
               adminNotificationEmails: emails.adminNotificationEmails,
+              mercadoLibreAlertEmails: emails.mercadoLibreAlertEmails,
               hasStoreEmail: Boolean(emails.storeEmail),
             }))}
           />

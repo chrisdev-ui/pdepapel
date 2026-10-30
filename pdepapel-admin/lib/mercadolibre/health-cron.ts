@@ -25,6 +25,8 @@ type MercadoLibreHealthCheckResult = {
   /** Resultado de la revisión contra Mercado Libre. */
   reconcile?: "ok" | "reauth" | "failed" | "skipped";
   applied?: ReconcileApplied;
+  /** Había alertas que avisar y la lista de alertas de Mercado Libre está vacía. */
+  noRecipients?: boolean;
 };
 
 export type MercadoLibreHealthCheckRun = {
@@ -82,7 +84,7 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
             now,
           });
           if (claims.length > 0) {
-            let result: "sent" | "skipped";
+            let result: Awaited<ReturnType<typeof sendMercadoLibreHealthNotification>>;
             try {
               result = await sendMercadoLibreHealthNotification({
                 storeId: connection.storeId,
@@ -94,13 +96,14 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
               await releaseAlertClaims(connection.id, claims, { now });
               throw error;
             }
-            if (result === "skipped") {
+            if (result !== "sent") {
               await releaseAlertClaims(connection.id, claims, { now });
               return {
                 connectionId: connection.id,
                 issues: issues.length,
                 notified: 0,
                 ...outcome,
+                ...(result === "no-recipients" ? { noRecipients: true } : {}),
               };
             }
           }
