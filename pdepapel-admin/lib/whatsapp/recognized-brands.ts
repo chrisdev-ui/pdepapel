@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { brandPhrase } from "@/lib/brand-phrase";
 
 /**
  * Las marcas que el bot de WhatsApp trata como «reconocidas» cuando la clienta
@@ -38,14 +39,7 @@ export const RECOGNIZED_BRANDS: readonly string[] = [
   "Gipao",
 ];
 
-/** Minúsculas, sin tildes y con todo lo que no es letra o número como espacio. */
-export const brandPhrase = (name: string) =>
-  name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+export { brandPhrase };
 
 const RECONOCIDAS = new Set(RECOGNIZED_BRANDS.map(brandPhrase));
 
