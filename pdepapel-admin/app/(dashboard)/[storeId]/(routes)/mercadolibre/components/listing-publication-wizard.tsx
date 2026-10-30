@@ -2332,7 +2332,7 @@ export function ListingPublicationWizard({
                   <dd className="font-semibold">−{currencyFormatter.format(marginBreakdown.shipping)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Retenciones (estimado 1,5 %)</dt>
+                  <dt className="text-xs text-muted-foreground">Retenciones (estimado 1,7 %)</dt>
                   <dd className="font-semibold">−{currencyFormatter.format(marginBreakdown.withholding)}</dd>
                 </div>
                 <div>
@@ -2382,7 +2382,7 @@ export function ListingPublicationWizard({
                 </p>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                Las retenciones no las informa Mercado Libre antes de vender: 1,5 % es lo que descontó en las ventas reales de la cuenta.
+                Las retenciones no las informa Mercado Libre antes de vender: 1,7 % (1,5 % + 0,2 %) es lo más que descontó en las ventas reales de la cuenta.
               </p>
             </div>
           ) : null}

@@ -8,7 +8,7 @@ import {
   suggestMercadoLibrePrice,
 } from "@/lib/mercadolibre/listing-margin";
 
-// Cifras reales de la auditoría #18 (2026-10-08): Clásica 16 %, envío obligatorio 8.100, retenciones ~1,5 %.
+// Cifras reales de la auditoría #18 (2026-10-08): Clásica 16 %, envío obligatorio 8.100, retenciones ~1,7 %.
 describe("Mercado Libre margin", () => {
   it("rounds up to a friendly price ending in 900", () => {
     expect(roundToFriendlyPrice(25_412)).toBe(25_900);
@@ -18,7 +18,7 @@ describe("Mercado Libre margin", () => {
 
   it("breaks the price down into fee, shipping, withholding estimate, net and margin", () => {
     const breakdown = getMercadoLibreMarginBreakdown({ price: 45_000, feeAmount: 7_200, shippingCost: 8_100, unitCost: 26_000 });
-    expect(breakdown).toEqual({ price: 45_000, fee: 7_200, shipping: 8_100, withholding: 675, net: 3_025, marginRate: 3_025 / 45_000 });
+    expect(breakdown).toEqual({ price: 45_000, fee: 7_200, shipping: 8_100, withholding: 765, net: 2_935, marginRate: 2_935 / 45_000 });
   });
 
   it("without a unit cost there is no net to report", () => {
@@ -42,12 +42,12 @@ describe("Mercado Libre margin", () => {
   it("warns in plain Spanish below break-even, and below the target margin only when there is one", () => {
     const losing = getMercadoLibreMarginBreakdown({ price: 25_000, feeAmount: 4_000, shippingCost: 8_100, unitCost: 13_000 });
     expect(getMercadoLibreMarginWarning(losing, { breakevenPrice: 25_900 })).toBe(
-      "Con este precio pierdes $ 475 por unidad después de la comisión, el envío y las retenciones estimadas. El mínimo para no perder es $ 25.900.",
+      "Con este precio pierdes $ 525 por unidad después de la comisión, el envío y las retenciones estimadas. El mínimo para no perder es $ 25.900.",
     );
     const thin = getMercadoLibreMarginBreakdown({ price: 30_000, feeAmount: 4_800, shippingCost: 8_100, unitCost: 13_000 });
     expect(getMercadoLibreMarginWarning(thin, { breakevenPrice: 25_900 })).toBeNull();
     expect(getMercadoLibreMarginWarning(thin, { breakevenPrice: 25_900, targetMarginRate: 0.2, minNetPerUnit: 10_000 })).toBe(
-      "Te quedan $ 3.650 por unidad (12.2 %), por debajo del objetivo de la tienda: al menos 20 % o $ 10.000 por unidad.",
+      "Te quedan $ 3.590 por unidad (12.0 %), por debajo del objetivo de la tienda: al menos 20 % o $ 10.000 por unidad.",
     );
   });
 

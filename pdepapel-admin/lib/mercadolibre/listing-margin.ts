@@ -2,10 +2,11 @@
 
 /**
  * Retenciones (retefuente, reteIVA, reteICA) que Mercado Libre descuenta al
- * liquidar. La API de precios no las entrega: 1,5 % es lo que descontó en las
- * ventas reales de la cuenta (1,35 %–1,70 %, auditoría #18). Es un estimado.
+ * liquidar. La API de precios no las entrega. Se usa el tope que se vio en las
+ * ventas reales de la cuenta, 1,7 % (1,5 % + 0,2 %; las demás 1,35 %–1,5 % o
+ * aún sin liquidar, 2026-10-30): un estimado conservador.
  */
-export const MERCADOLIBRE_WITHHOLDING_ESTIMATE_RATE = 0.015;
+export const MERCADOLIBRE_WITHHOLDING_ESTIMATE_RATE = 0.017;
 
 /** Comisión de Clásica en las categorías de papelería, mientras no se consulta la real. */
 export const MERCADOLIBRE_FEE_RATE_ESTIMATE = 0.16;

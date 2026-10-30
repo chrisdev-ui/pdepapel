@@ -6,12 +6,12 @@ const NO_RULE = { lowPriceFixedFee: null, freeShippingMin: null };
 const quote16 = async (price: number) => ({ saleFeeAmount: Math.round(price * 0.16), percentageFee: 16, fixedFee: 0, listingTypeId: "gold_special" });
 
 describe("recommendMercadoLibreListingPrice (misma regla que el Copiloto y el asistente)", () => {
-  it("el menor precio terminado en 900 que deja la ganancia después de comisión, envío y la retención del 1,5 %", async () => {
+  it("el menor precio terminado en 900 que deja la ganancia después de comisión, envío y la retención del 1,7 %", async () => {
     const getFeeQuote = vi.fn(quote16);
     const recommendation = await recommendMercadoLibreListingPrice({ unitCost: 10_000, targetProfit: 6_000, initialPrice: 18_000, listingType: "gold_special", rule: NO_RULE, getFeeQuote });
 
-    // 29.900 − 4.784 − 8.100 − 449 − 10.000 = 6.567; a 28.900 quedarían 5.742.
-    expect(recommendation).toEqual({ price: 29_900, saleFeeAmount: 4_784, expectedProfit: 6_567 });
+    // 29.900 − 4.784 − 8.100 − 508 − 10.000 = 6.508; a 28.900 quedarían 5.685.
+    expect(recommendation).toEqual({ price: 29_900, saleFeeAmount: 4_784, expectedProfit: 6_508 });
     // La comisión se vuelve a pedir al precio sugerido.
     expect(getFeeQuote).toHaveBeenLastCalledWith(29_900);
   });
@@ -25,9 +25,9 @@ describe("recommendMercadoLibreListingPrice (misma regla que el Copiloto y el as
 
   it("hasta el precio límite cobra el cargo fijo en vez del envío", async () => {
     const base = { unitCost: 3_000, targetProfit: 2_000, initialPrice: 5_000, listingType: "gold_special", getFeeQuote: quote16 };
-    // Sin los ajustes paga el envío: 15.900. Con ellos: 9.900 − 1.584 − 2.700 − 149 − 3.000 = 2.467.
-    expect((await recommendMercadoLibreListingPrice({ ...base, rule: NO_RULE }))?.price).toBe(15_900);
-    expect(await recommendMercadoLibreListingPrice({ ...base, rule: { lowPriceFixedFee: 2_700, freeShippingMin: 10_000 } })).toEqual({ price: 9_900, saleFeeAmount: 1_584, expectedProfit: 2_467 });
+    // Sin los ajustes paga el envío: 16.900 (a 15.900 quedan 1.986). Con ellos: 9.900 − 1.584 − 2.700 − 168 − 3.000 = 2.448.
+    expect((await recommendMercadoLibreListingPrice({ ...base, rule: NO_RULE }))?.price).toBe(16_900);
+    expect(await recommendMercadoLibreListingPrice({ ...base, rule: { lowPriceFixedFee: 2_700, freeShippingMin: 10_000 } })).toEqual({ price: 9_900, saleFeeAmount: 1_584, expectedProfit: 2_448 });
   });
 
   it("el envío que paga la tienda reemplaza al estimado; si lo paga el comprador, no se descuenta", async () => {

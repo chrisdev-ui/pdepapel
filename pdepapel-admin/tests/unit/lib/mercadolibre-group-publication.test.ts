@@ -133,7 +133,7 @@ describe("getGroupVariantEconomics", () => {
       shippingCost: 9_000,
       pricingTargets: targets,
     });
-    expect(ok.breakdown.net).toBe(60_000 - 9_000 - 9_000 - 900 - 20_000);
+    expect(ok.breakdown.net).toBe(60_000 - 9_000 - 9_000 - 1_020 - 20_000);
     expect(ok.warning).toBeNull();
 
     const short = getGroupVariantEconomics({

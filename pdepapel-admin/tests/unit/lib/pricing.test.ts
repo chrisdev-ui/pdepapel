@@ -59,9 +59,9 @@ describe("Mercado Libre, siempre estimado", () => {
       listingType: "gold_special",
       fixedFee: 0,
       shipping: 8100,
-      withholding: 120,
-      net: -3000,
-      marginPct: -37.5,
+      withholding: 136,
+      net: -3016,
+      marginPct: -37.7,
       withoutFixedFee: true,
     });
   });
@@ -77,9 +77,9 @@ describe("Mercado Libre, siempre estimado", () => {
       listingType: "gold_special",
       fixedFee: 2000,
       shipping: 0,
-      withholding: 135,
-      net: 9000 - 1440 - 2000 - 135 - 1000,
-      marginPct: 49.2,
+      withholding: 153,
+      net: 9000 - 1440 - 2000 - 153 - 1000,
+      marginPct: 49,
       withoutFixedFee: false,
     });
     // En precios muy bajos el cargo fijo no pasa de la mitad del precio.

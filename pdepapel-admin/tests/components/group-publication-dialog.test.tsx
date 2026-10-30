@@ -98,7 +98,7 @@ describe("GroupPublicationDialog", () => {
     expect(await screen.findByText("Publicar grupo: Tote kawaii")).toBeInTheDocument();
     expect(screen.getByText(/Comparte stock y SKU con MCO2/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/después de comisión/)).toHaveLength(2));
-    expect(screen.getAllByText(/después de comisión/)[0].textContent).toMatch(/Te quedan \$\s?21\.100 por unidad \(35\.2 %\)/);
+    expect(screen.getAllByText(/después de comisión/)[0].textContent).toMatch(/Te quedan \$\s?20\.980 por unidad \(35\.0 %\)/);
     expect(screen.getByText(/por debajo del objetivo/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crear 2 borradores" })).toBeEnabled();
   });

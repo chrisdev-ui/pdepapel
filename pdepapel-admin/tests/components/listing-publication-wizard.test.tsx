@@ -756,22 +756,22 @@ describe("ListingPublicationWizard", () => {
     });
   });
 
-  // Comisión real del harness (4.560), envío obligatorio estimado (8.100), retenciones 1,5 %, costo 7.000.
+  // Comisión real del harness (4.560), envío obligatorio estimado (8.100), retenciones 1,7 %, costo 7.000.
   describe("margin on Mercado Libre", () => {
     it("shows the breakdown and the suggested price for the target profit", () => {
       render(<WizardHarness onPublish={async () => undefined} initialStep={4} />);
       const margin = document.getElementById("mercadolibre-margin")!;
       expect(margin).toHaveTextContent("Precio sugerido: $ 34.900");
       expect(margin).toHaveTextContent("Deja la ganancia objetivo de $ 12.000 por unidad.");
-      expect(margin).toHaveTextContent("Retenciones (estimado 1,5 %)");
+      expect(margin).toHaveTextContent("Retenciones (estimado 1,7 %)");
       expect(margin).toHaveTextContent("Envío que pagas (estimado)");
-      expect(margin).toHaveTextContent("Te queda por unidad$ 3.980");
+      expect(margin).toHaveTextContent("Te queda por unidad$ 3.932");
     });
 
     it("warns in plain Spanish below break-even and offers the suggested price", () => {
       render(<WizardHarness onPublish={async () => undefined} initialStep={4} initialPrice="15000" />);
       // La comisión cotizada a $ 24.000 (19 %) se aplica con su porcentaje a $ 15.000: $ 2.850, no 4.560 ÷ 15.000.
-      expect(screen.getByText(/Con este precio pierdes \$ 3\.175 por unidad/)).toBeVisible();
+      expect(screen.getByText(/Con este precio pierdes \$ 3\.205 por unidad/)).toBeVisible();
       const use = screen.getByRole("button", { name: /^Usar \$/ });
       const suggested = use.textContent!.replace("Usar ", "").replace(/\s/g, " ");
       fireEvent.click(use);
@@ -811,7 +811,7 @@ describe("ListingPublicationWizard", () => {
 
     it("warns below the store target and hints at packs for a low-price product", () => {
       render(<WizardHarness onPublish={async () => undefined} initialStep={4} pricingTargets={targets} listingTargetProfit="" />);
-      expect(screen.getByText(/Te quedan \$ 3\.980 por unidad \(16\.6 %\), por debajo del objetivo de la tienda: al menos 20 % o \$ 10\.000 por unidad\./)).toBeVisible();
+      expect(screen.getByText(/Te quedan \$ 3\.932 por unidad \(16\.4 %\), por debajo del objetivo de la tienda: al menos 20 % o \$ 10\.000 por unidad\./)).toBeVisible();
       expect(screen.getByText("Este producto es de bajo precio; en Mercado Libre conviene venderlo en pack o kit.")).toBeVisible();
     });
   });

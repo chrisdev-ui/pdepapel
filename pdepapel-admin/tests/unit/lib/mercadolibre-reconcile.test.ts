@@ -185,14 +185,14 @@ describe("decidePriceMirror", () => {
 
   it("sin cotización usa la comisión del tipo de publicación: Premium deja menos que Clásica", () => {
     const loose = { targetMarginPercent: 20, minNetPerUnit: 5_000 };
-    // 30.000 − 16 % − 8.200 − 1,5 % − 10.000 = 6.550 ≥ 6.000; con 19 % queda 5.650.
+    // 30.000 − 16 % − 8.200 − 1,7 % − 10.000 = 6.490 ≥ 6.000; con 19 % queda 5.590.
     expect(decidePriceMirror({ price: 30_000, unitCost: 10_000, fee: { kind: "tipo", listingType: "gold_special" }, shippingCost: 8_200, targets: loose })).toBe("mirror");
     expect(decidePriceMirror({ price: 30_000, unitCost: 10_000, fee: { kind: "tipo", listingType: "gold_pro" }, shippingCost: 8_200, targets: loose })).toBe("below_margin");
   });
 
   it("hasta el precio límite cobra el cargo fijo en vez del envío, como el Copiloto y el asistente", () => {
     const base = { targetMarginPercent: 20, minNetPerUnit: 5_000 };
-    // Sin los ajustes: 25.000 − 4.000 − 8.200 − 375 − 10.000 = 2.425. Con ellos: 25.000 − 4.000 − 2.700 − 375 − 10.000 = 7.925.
+    // Sin los ajustes: 25.000 − 4.000 − 8.200 − 425 − 10.000 = 2.375. Con ellos: 25.000 − 4.000 − 2.700 − 425 − 10.000 = 7.875.
     expect(decidePriceMirror({ price: 25_000, unitCost: 10_000, fee: real16, shippingCost: 8_200, targets: base })).toBe("below_margin");
     expect(decidePriceMirror({ price: 25_000, unitCost: 10_000, fee: real16, shippingCost: 8_200, targets: { ...base, lowPriceFixedFee: 2_700, freeShippingMin: 30_000 } })).toBe("mirror");
   });
