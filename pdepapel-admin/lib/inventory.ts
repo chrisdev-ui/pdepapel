@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
 import { availableStock, kitAvailableFromComponents, kitPhysicalFromComponents } from "./available-stock";
+import { owedPresaleUnits } from "./presale-owed";
 import {
   MANUAL_ADJUSTMENT_OPTIONS,
   MOVEMENT_TYPE_LABELS,
@@ -355,12 +356,17 @@ export async function validateStockAvailability(
   tx: PrismaTx,
   items: { productId: string; quantity: number }[],
   forOrderIds: string[] = [],
+  options: { countPresaleOwed?: boolean } = {},
 ) {
   if (items.length === 0) return;
 
   const physical = await resolvePhysicalRequirements(tx, items);
   if (physical.size === 0) return;
   const ownHolds = await piecesHeldForOrders(tx, forOrderIds);
+  // Una corrección de recepción o un traslado entre variantes no es una venta:
+  // lo que se debe a la preventa solo frena lo que sale a una clienta nueva.
+  const owed =
+    options.countPresaleOwed === false ? new Map<string, number>() : await owedPresaleUnits(tx, Array.from(physical.keys()));
 
   const products = await tx.product.findMany({
     where: { id: { in: Array.from(physical.keys()) } },
@@ -381,7 +387,10 @@ export async function validateStockAvailability(
       throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
     }
     const ownHeld = ownHolds.get(productId) ?? 0;
-    const available = availableStock(product) + (ownHeld > 0 ? Math.min(ownHeld, product.reservedUnits ?? 0) : 0);
+    const available = Math.max(
+      0,
+      availableStock(product) + (ownHeld > 0 ? Math.min(ownHeld, product.reservedUnits ?? 0) : 0) - (owed.get(productId) ?? 0),
+    );
     if (available < requested) {
       missing.push({
         productId: product.id,
@@ -416,7 +425,7 @@ export async function createInventoryMovementBatch(
         quantity: Math.abs(m.quantity),
       }));
 
-    await validateStockAvailability(tx, decrements);
+    await validateStockAvailability(tx, decrements, [], { countPresaleOwed: false });
   }
 
   // 2. Pre-fetch all product details in one go to avoid N+1 reads in loop

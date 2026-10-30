@@ -17,6 +17,7 @@ import {
   ORDER_STATUS_TONE,
 } from "@/lib/order-transitions";
 import { cn } from "@/lib/utils";
+import type { CancelSettlementInfo } from "./cancel-settlement-fields";
 import { StatusActions, type TransitionPayload } from "./status-actions";
 
 const TONE_BG: Record<NextStepCard["tone"], string> = {
@@ -50,6 +51,8 @@ interface OrderStatusBarProps {
   paymentPlan?: "FULL" | "DEPOSIT" | null;
   /** Trae una línea de preventa sin liberar: cancelar no mueve inventario. */
   heldByPresale?: boolean;
+  /** Con anticipo o abonos: cancelar pide anotar qué pasa con la plata. */
+  cancelSettlement?: CancelSettlementInfo | null;
   extraActions?: ReactNode;
 }
 
@@ -75,6 +78,7 @@ export function OrderStatusBar({
   onTransition,
   paymentPlan = null,
   heldByPresale = false,
+  cancelSettlement = null,
   extraActions = null,
 }: OrderStatusBarProps) {
   const tone = nextStep?.tone ?? "slate";
@@ -91,6 +95,7 @@ export function OrderStatusBar({
     guideOnFile,
     paymentPlan,
     heldByPresale,
+    cancelSettlement,
     loading,
     onTransition,
   };

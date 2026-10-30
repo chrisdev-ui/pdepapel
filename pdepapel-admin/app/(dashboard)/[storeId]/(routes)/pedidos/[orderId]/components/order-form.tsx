@@ -84,10 +84,12 @@ import {
   type ShippingQuote,
 } from "./order-form/schema";
 import { PaymentsHistoryCard } from "./order-form/payments-history-card";
+import { UnfulfilledPresaleNotice } from "./order-form/unfulfilled-presale-notice";
+import { settlementContext } from "@/lib/presale-cancel-settlement";
 import { SectionCard } from "./order-form/section-card";
 import { OrderStatusBar } from "./order-form/status-bar";
 import { PreorderPaymentActions } from "./order-form/preorder-actions";
-import { isOrderHeldByPresale } from "@/lib/presale-hold";
+import { hasUnfulfilledPresaleLine, isOrderHeldByPresale } from "@/lib/presale-hold";
 import { ShippingSection } from "./order-form/shipping-section";
 import { type TransitionPayload } from "./order-form/status-actions";
 import { SummaryCard } from "./order-form/summary-card";
@@ -138,6 +140,7 @@ interface SubmitOptions {
   transactionId?: string;
   trackingCode?: string;
   skipAutoGuide?: boolean;
+  settlement?: TransitionPayload["settlement"];
   /**
    * false: no refrescar la página después de guardar. «Crear guía» guarda la
    * tarifa y sigue con la guía en su diálogo; refrescar en medio remontaba el
@@ -366,6 +369,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         // Crear una guía cobra dinero: solo se crea desde la confirmación de
         // pago o desde el botón «Crear guía ahora», nunca al guardar datos.
         skipAutoGuide: options.skipAutoGuide ?? true,
+        ...(options.settlement ? { settlement: options.settlement } : {}),
       };
 
       setLoading(true);
@@ -452,12 +456,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const onSubmit = (data: OrderFormValues) => (canWrite ? submitOrder(data) : undefined);
 
+  const cancelSettlementInfo = useMemo(() => {
+    if (!initialData) return null;
+    const context = settlementContext(initialData);
+    return context.required ? { prepaid: context.prepaid, maxRetained: context.maxRetained, unfulfilled: context.unfulfilled } : null;
+  }, [initialData]);
+
   const onTransition = useCallback(
     async ({
       to,
       transactionId,
       trackingCode,
       createGuide,
+      settlement,
     }: TransitionPayload) => {
       form.setValue("status", to, { shouldDirty: true });
       if (transactionId)
@@ -492,6 +503,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         transactionId,
         trackingCode,
         skipAutoGuide: createGuide === undefined ? undefined : !createGuide,
+        settlement,
       };
       await submitOrder(data, options);
     },
@@ -886,6 +898,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   onTransition={onTransition}
                   paymentPlan={initialData.paymentPlan}
                   heldByPresale={isOrderHeldByPresale(initialData)}
+                  cancelSettlement={cancelSettlementInfo}
                   extraActions={
                     <PreorderPaymentActions
                       storeId={storeId}
@@ -905,6 +918,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     />
                   }
                 />
+                {initialData.status !== OrderStatus.CANCELLED && hasUnfulfilledPresaleLine(initialData) ? (
+                  <UnfulfilledPresaleNotice />
+                ) : null}
                 <NotifyCustomerCheckbox
                   className="mt-2 rounded-xl border bg-white px-4 py-2 shadow-sm"
                   checked={notifyCustomer}

@@ -10,6 +10,17 @@ export const UNRELEASED_PRESALE_LINE = {
   preorderReleasedAt: null,
 } satisfies Prisma.OrderItemWhereInput;
 
+/** «Sin unidad»: la preventa se liberó a medias y esta línea no alcanzó (sigue frenada; es una devolución). */
+export const UNFULFILLED_PRESALE_LINE = {
+  isPreorder: true,
+  preorderReleasedAt: null,
+  preorderUnfulfilledAt: { not: null },
+} satisfies Prisma.OrderItemWhereInput;
+
+export function hasUnfulfilledPresaleLine(order: { orderItems: { isPreorder: boolean; preorderReleasedAt: Date | null; preorderUnfulfilledAt?: Date | null }[] }): boolean {
+  return order.orderItems.some((item) => item.isPreorder && item.preorderReleasedAt === null && Boolean(item.preorderUnfulfilledAt));
+}
+
 /** Pedidos con al menos una línea de preventa sin liberar. Basta UNA para frenar el pedido completo. */
 export const ORDER_HAS_UNRELEASED_PRESALE: Prisma.OrderWhereInput = {
   orderItems: { some: UNRELEASED_PRESALE_LINE },

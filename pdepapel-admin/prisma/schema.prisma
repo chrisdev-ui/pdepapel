@@ -1581,12 +1581,15 @@ model OrderItem {
   brandName String? @db.VarChar(120)
 
   /// Esta línea se vendió por adelantado: al pagarse NO descontó inventario.
-  isPreorder         Boolean   @default(false)
+  isPreorder            Boolean   @default(false)
   /// Cuándo se liberó (llegó la mercancía y se escribió su movimiento). Con
   /// `isPreorder` en true y esto en null, el PEDIDO ENTERO está frenado.
-  preorderReleasedAt DateTime?
+  preorderReleasedAt    DateTime?
+  /// «Sin unidad»: la preventa se liberó a medias y esta línea no alcanzó.
+  /// Sigue sin liberar (el pedido no sale) y es un caso de devolución.
+  preorderUnfulfilledAt DateTime?
   /// Campaña de la que salió; sin relación declarada para no cargar el modelo.
-  presaleId          String?
+  presaleId             String?
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product?     @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
@@ -3355,6 +3358,12 @@ enum OrderPaymentKind {
   BALANCE
   /// Abono: un pago entre el anticipo y el saldo (abonos libres).
   INSTALLMENT
+  /// Al cancelar: lo que se le devolvió a la clienta (valor, fecha y medio).
+  REFUND
+  /// Al cancelar: lo que se queda la tienda; nunca más que el anticipo por unidad.
+  RETAINED
+  /// Al cancelar: lo que queda como saldo a favor de la clienta.
+  STORE_CREDIT
 }
 
 enum OrderPaymentStatus {

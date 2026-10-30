@@ -53,6 +53,13 @@ let db: PrismaClient;
 const ids = { deposit: "", open: "", late: "", presale: "", latePresale: "" };
 const entries: Record<string, string> = {};
 
+/** La página monta el cliente después de pintar: si el nodo se reemplaza a mitad del scroll, se vuelve a intentar. */
+async function scrollIntoView(locator: Locator) {
+  await expect(async () => {
+    await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+  }).toPass({ timeout: 60_000 });
+}
+
 async function settled(locator: Locator) {
   await expect
     .poll(
@@ -134,7 +141,7 @@ async function depositFromWaitlist(page: Page, width: number, height: number, na
   await signIn(page, `/${storeId}/productos/${ids.deposit}`);
   const row = waitlistRow(page, name);
   await expect(row).toBeVisible({ timeout: 90_000 });
-  await row.scrollIntoViewIfNeeded();
+  await scrollIntoView(row);
   await settled(row);
   const before = await db.product.findUniqueOrThrow({ where: { id: ids.deposit }, select: { updatedAt: true, stock: true } });
 
@@ -282,7 +289,7 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
     const name = "Clienta Estados";
     const row = waitlistRow(page, name);
     await expect(row).toBeVisible({ timeout: 90_000 });
-    await row.scrollIntoViewIfNeeded();
+    await scrollIntoView(row);
     await settled(row);
     const before = await db.product.findUniqueOrThrow({ where: { id: ids.deposit }, select: { updatedAt: true } });
     const status = () => db.preorderWaitlistEntry.findUniqueOrThrow({ where: { id: entries[name] } }).then((entry) => entry.status);
@@ -317,7 +324,7 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
     await signIn(page, `/${storeId}/productos/${ids.open}`);
     const line = page.getByTestId("presale-open-first");
     await expect(line).toBeVisible({ timeout: 90_000 });
-    await line.scrollIntoViewIfNeeded();
+    await scrollIntoView(line);
     await settled(line);
     const before = await db.product.findUniqueOrThrow({ where: { id: ids.open }, select: { updatedAt: true, isArchived: true, stock: true } });
 
@@ -358,7 +365,7 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
     await signIn(page, `/${storeId}/preventas`);
     const late = presaleCard(page, LATE_PRODUCT);
     await expect(late).toBeVisible({ timeout: 90_000 });
-    await late.scrollIntoViewIfNeeded();
+    await scrollIntoView(late);
     await settled(late);
     const delayNotified = () => db.productPresale.findUniqueOrThrow({ where: { id: ids.latePresale } }).then((row) => row.delayNotifiedAt !== null);
 
@@ -403,7 +410,7 @@ test.describe("recorrido de la preventa con anticipo en el panel", () => {
 
     // Cancelar: la preventa abierta en el paso 4, sin pedidos esperando.
     const open = presaleCard(page, OPEN_PRODUCT);
-    await open.scrollIntoViewIfNeeded();
+    await scrollIntoView(open);
     await settled(open);
     await open.getByRole("button", { name: "Cancelar preventa" }).click();
     await confirmAction(page, "Cancelar preventa");

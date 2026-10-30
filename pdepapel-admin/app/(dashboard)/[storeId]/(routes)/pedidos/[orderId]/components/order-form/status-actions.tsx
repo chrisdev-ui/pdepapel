@@ -21,8 +21,9 @@ import {
   ShippingProvider,
   ShippingStatus,
 } from "@prisma/client";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
+import { CancelSettlementFields, type CancelSettlementBody, type CancelSettlementInfo } from "./cancel-settlement-fields";
 import { ConfirmDialog } from "./confirm-dialog";
 
 export interface TransitionPayload {
@@ -31,6 +32,8 @@ export interface TransitionPayload {
   trackingCode?: string;
   /** Solo al marcar pagado con una tarifa de EnvioClick guardada. */
   createGuide?: boolean;
+  /** Cancelar con anticipo o abonos: qué pasó con la plata. */
+  settlement?: CancelSettlementBody;
 }
 
 interface StatusActionsProps {
@@ -53,6 +56,8 @@ interface StatusActionsProps {
   paymentPlan?: "FULL" | "DEPOSIT" | null;
   /** Trae una línea de preventa sin liberar: cancelar devuelve el cupo, no inventario. */
   heldByPresale?: boolean;
+  /** Con anticipo o abonos: cancelar pide anotar devuelto / retenido / saldo a favor. */
+  cancelSettlement?: CancelSettlementInfo | null;
   onTransition: (payload: TransitionPayload) => Promise<void> | void;
 }
 
@@ -86,6 +91,7 @@ export function StatusActions({
   onTransition,
   paymentPlan = null,
   heldByPresale = false,
+  cancelSettlement = null,
 }: StatusActionsProps) {
   // Solo lectura: las transiciones se ven pero no se pueden pulsar.
   const canWrite = useCanWrite();
@@ -94,6 +100,8 @@ export function StatusActions({
   const [guide, setGuide] = useState("");
   const [guideChoice, setGuideChoice] = useState<"now" | "later">("now");
   const [submitting, setSubmitting] = useState(false);
+  const [settlement, setSettlement] = useState<CancelSettlementBody | null>(null);
+  const onSettlementChange = useCallback((body: CancelSettlementBody | null) => setSettlement(body), []);
 
   const pickup = shippingProvider === ShippingProvider.NONE;
   const actions = getStatusActions(status, { type, paymentMethod, shippingStatus, pickup, paymentPlan }).filter(
@@ -117,6 +125,7 @@ export function StatusActions({
     !guideOnFile;
   const needsGuide =
     asksGuideNumber && shippingProvider === ShippingProvider.ENVIOCLICK;
+  const asksSettlement = pending?.confirm === "cancel" && pending.to === OrderStatus.CANCELLED && cancelSettlement !== null;
   // La guía se decide aquí mismo, en el diálogo de pago, en lugar de un
   // segundo modal después de confirmar.
   const asksGuide = pending?.confirm === "pay" && guideRate !== null;
@@ -143,6 +152,7 @@ export function StatusActions({
     if (!pending) return;
     if (needsReference && reference.trim().length < 4) return;
     if (needsGuide && guide.trim().length === 0) return;
+    if (asksSettlement && !settlement) return;
     setSubmitting(true);
     try {
       await onTransition({
@@ -152,6 +162,7 @@ export function StatusActions({
         trackingCode:
           pending.confirm === "ship" ? guide.trim() || undefined : undefined,
         createGuide: asksGuide ? guideChoice === "now" : undefined,
+        settlement: asksSettlement && settlement ? settlement : undefined,
       });
       setPending(null);
     } finally {
@@ -222,7 +233,9 @@ export function StatusActions({
           : "No se toca el inventario: nunca se descontó.",
       ...(paid
         ? [
-            heldByPresale && paymentPlan === "DEPOSIT"
+            cancelSettlement
+              ? "Lo que anotes abajo queda en el historial de pagos y en Preventas. La devolución en sí se hace a mano, con Bold o por transferencia."
+              : heldByPresale && paymentPlan === "DEPOSIT"
               ? "El anticipo y los abonos no se devuelven solos: si corresponde, devuélvelos aparte, con Bold o por transferencia."
               : "El cobro no se devuelve solo: el reembolso se gestiona aparte, con Bold o por transferencia.",
           ]
@@ -292,18 +305,22 @@ export function StatusActions({
         consequences={consequences}
         footnote={
           pending?.confirm === "cancel"
-            ? "Se puede reactivar después como pendiente."
+            ? paymentPlan === "DEPOSIT"
+              ? "Un pedido con anticipo cancelado no se reactiva."
+              : "Se puede reactivar después como pendiente."
             : undefined
         }
         confirmLabel={pending ? `Sí, ${pending.label.toLowerCase()}` : ""}
         destructive={Boolean(pending?.destructive)}
         disabled={
           (needsReference && reference.trim().length < 4) ||
-          (needsGuide && guide.trim().length === 0)
+          (needsGuide && guide.trim().length === 0) ||
+          (asksSettlement && !settlement)
         }
         loading={submitting}
         onConfirm={confirm}
       >
+        {asksSettlement && cancelSettlement ? <CancelSettlementFields info={cancelSettlement} onChange={onSettlementChange} /> : null}
         {pending?.confirm === "pay" && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pago-referencia">

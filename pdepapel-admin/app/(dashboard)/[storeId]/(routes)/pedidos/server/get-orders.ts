@@ -1,7 +1,7 @@
 "use server";
 
 import { requireStoreRead } from "@/lib/store-access";
-import { UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
+import { hasUnfulfilledPresaleLine, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 
 import { listOrderPage, type OrderListQuery } from "@/lib/order-list";
 import prismadb from "@/lib/prismadb";
@@ -35,6 +35,9 @@ const ORDER_ROW_SELECT = {
   orderItems: {
     select: {
       quantity: true,
+      isPreorder: true,
+      preorderReleasedAt: true,
+      preorderUnfulfilledAt: true,
       name: true,
       sku: true,
       imageUrl: true,
@@ -74,6 +77,7 @@ export async function getOrders(storeId: string, query: OrderListQuery) {
         ...(access.role === "viewer" ? scrubOrder(order) : order),
         openInventoryIssues: _count.inventoryIssues,
         heldByPresale: _count.orderItems > 0,
+        unfulfilledPresale: hasUnfulfilledPresaleLine(order),
       },
     ];
   });

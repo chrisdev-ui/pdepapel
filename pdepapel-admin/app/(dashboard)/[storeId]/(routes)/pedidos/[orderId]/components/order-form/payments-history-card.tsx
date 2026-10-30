@@ -12,7 +12,13 @@ const KIND_LABELS: Record<OrderPaymentKind, string> = {
   DEPOSIT: "Anticipo",
   INSTALLMENT: "Abono",
   BALANCE: "Saldo",
+  REFUND: "Devuelto",
+  RETAINED: "Retenido",
+  STORE_CREDIT: "Saldo a favor",
 };
+
+/** Lo anotado al cancelar: no es plata que entró, así que no suma en «Llevas». */
+const SETTLEMENT_KINDS: OrderPaymentKind[] = ["REFUND", "RETAINED", "STORE_CREDIT"];
 
 const METHOD_LABELS: Partial<Record<PaymentMethod, string>> = {
   BankTransfer: "Transferencia o Bre-B",
@@ -32,10 +38,13 @@ export function PaymentsHistoryCard({ order }: { order: Order }) {
   if (order.paymentPlan !== "DEPOSIT" || order.payments.length === 0) return null;
 
   let running = 0;
-  const rows = order.payments.map((payment) => {
-    running += Math.round(payment.amount);
-    return { ...payment, running };
-  });
+  const rows = order.payments
+    .filter((payment) => !SETTLEMENT_KINDS.includes(payment.kind))
+    .map((payment) => {
+      running += Math.round(payment.amount);
+      return { ...payment, running };
+    });
+  const settled = order.payments.filter((payment) => SETTLEMENT_KINDS.includes(payment.kind));
   const paid = order.status === OrderStatus.PAID || order.status === OrderStatus.SENT ? running : sumPrepaid(order.payments);
   const remaining = order.status === OrderStatus.DEPOSIT_PAID ? getAmountDueNow(order, paid) : 0;
 
@@ -60,6 +69,26 @@ export function PaymentsHistoryCard({ order }: { order: Order }) {
           </li>
         ))}
       </ol>
+      {settled.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-medium">Al cancelar</p>
+          <ol className="divide-y rounded-lg border" aria-label="Qué pasó con el dinero al cancelar">
+            {settled.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium">{KIND_LABELS[row.kind]}</span>
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {row.paidAt ? dateFormatter.format(new Date(row.paidAt)) : "sin fecha"}
+                    {row.kind === "REFUND" ? ` · ${METHOD_LABELS[row.method] ?? row.method}` : ""}
+                  </span>
+                </span>
+                <strong className="tabular-nums">{currencyFormatter(row.amount)}</strong>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       <p className="text-sm" data-testid="payments-summary">
         Pagado <strong>{currencyFormatter(paid)}</strong> de {currencyFormatter(order.total)}
         {order.status === OrderStatus.DEPOSIT_PAID

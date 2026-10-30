@@ -3,6 +3,7 @@
 import axios from "axios";
 import { ProductPresaleStatus } from "@prisma/client";
 import { AlertTriangle, BellRing, PackageCheck, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -33,9 +34,10 @@ const STATUS_VARIANT: Record<
 /**
  * Preventas: lo que ya se cobró y todavía no se ha despachado.
  *
- * Dos acciones, y solo dos. «Liberar» cuando llega la mercancía, y «Notificar
- * retraso» cuando la fecha se cae. Las devoluciones de dinero se hacen a mano
- * en Bold o Wompi: el panel no mueve plata.
+ * Dos acciones, y solo dos. «Liberar» cuando llega la mercancía (o «Liberar
+ * lo que llegó» si llegó menos), y «Notificar retraso» cuando la fecha se cae.
+ * Las devoluciones de dinero se hacen a mano en Bold o Wompi y se anotan al
+ * cancelar cada pedido: el panel no mueve plata.
  */
 const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
   // El servidor ya manda las filas sin el dinero recibido; aquí se quitan la
@@ -48,28 +50,45 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
   const [loading, setLoading] = useState<string | null>(null);
   const storeId = String(params.storeId);
 
-  const onRelease = async (row: PresaleRow) => {
-    const confirmed = await requestConfirmation({
-      title: `¿Liberar «${row.productName}»?`,
-      description:
-        `Se van a descontar ${row.pendingUnits} unidades del inventario y ${row.customerCount} pedido(s) quedarán listos para despachar. ` +
-        "Esto no se puede deshacer solo.",
-      confirmLabel: "Liberar",
-    });
+  const onRelease = async (row: PresaleRow, partial = false) => {
+    const confirmed = await requestConfirmation(
+      partial
+        ? {
+            title: `¿Liberar lo que llegó de «${row.productName}»?`,
+            description:
+              `Hay ${row.productStock} libres en bodega y se vendieron ${row.pendingUnits}. ` +
+              `Salen completos los pedidos más antiguos que caben: ${row.partialReleaseOrders} pedido(s), ${row.partialReleaseUnits} unidades. ` +
+              `Los otros ${row.partialUnfulfilledOrders} pedido(s) (${row.partialUnfulfilledUnits} unidades) quedan «sin unidad»: no salen y hay que cancelarlos desde cada pedido, anotando la devolución o el saldo a favor. ` +
+              "La preventa se cierra: si después llega más, se vende normal. Esto no se puede deshacer solo.",
+            confirmLabel: `Liberar ${row.partialReleaseUnits}`,
+          }
+        : {
+            title: `¿Liberar «${row.productName}»?`,
+            description:
+              `Se van a descontar ${row.pendingUnits} unidades del inventario y ${row.customerCount} pedido(s) quedarán listos para despachar. ` +
+              "Esto no se puede deshacer solo.",
+            confirmLabel: "Liberar",
+          },
+    );
     if (!confirmed) return;
 
     try {
       setLoading(row.id);
       const { data: result } = await axios.post(
         `/api/${storeId}/presales/${row.id}/release`,
+        partial ? { partial: true, expectedReleaseUnits: row.partialReleaseUnits } : {},
       );
       router.refresh();
+      const ready =
+        result.stillHeldOrderIds?.length > 0
+          ? `${result.releasedOrderIds.length} pedido(s) listos. ${result.stillHeldOrderIds.length} siguen esperando otra preventa.`
+          : `${result.releasedOrderIds.length} pedido(s) ya se pueden despachar.`;
       toast({
         title: "Preventa liberada",
         description:
-          result.stillHeldOrderIds?.length > 0
-            ? `${result.releasedOrderIds.length} pedido(s) listos. ${result.stillHeldOrderIds.length} siguen esperando otra preventa.`
-            : `${result.releasedOrderIds.length} pedido(s) ya se pueden despachar.`,
+          result.unfulfilledOrderIds?.length > 0
+            ? `${ready} ${result.unfulfilledOrderIds.length} quedaron sin unidad: están en Pedidos → «Preventa sin unidad».`
+            : ready,
         variant: "success",
       });
     } catch (error) {
@@ -210,6 +229,23 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
         </Card>
       </div>
 
+      {canWrite && (data.refunded > 0 || data.retained > 0 || data.storeCredit > 0) ? (
+        <p className="text-sm text-muted-foreground">
+          Al cancelar pedidos de preventa: <strong className="text-foreground">{currencyFormatter(data.refunded)}</strong> devuelto ·{" "}
+          <strong className="text-foreground">{currencyFormatter(data.retained)}</strong> retenido (anticipo no reembolsable) ·{" "}
+          <strong className="text-foreground">{currencyFormatter(data.storeCredit)}</strong> como saldo a favor
+        </p>
+      ) : null}
+      {data.unfulfilledOrders > 0 ? (
+        <p className="text-sm font-medium text-destructive">
+          {data.unfulfilledOrders === 1 ? "1 pedido quedó" : `${data.unfulfilledOrders} pedidos quedaron`} sin unidad:{" "}
+          <Link className="underline underline-offset-2" href={`/${storeId}/pedidos?vista=sin-unidad`}>
+            cancélalos y anota la devolución
+          </Link>
+          .
+        </p>
+      ) : null}
+
       {data.rows.length === 0 ? (
         <Card>
           <CardContent className="space-y-2 p-6 text-sm text-muted-foreground">
@@ -274,8 +310,22 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                         ? `${row.pendingUnits === 1 ? "Falta 1 unidad" : `Faltan ${row.pendingUnits} unidades`} por entregar · hay ${row.productStock} en bodega${
                             row.pendingUnits > row.productStock ? ` · pide ${row.pendingUnits - row.productStock} al proveedor` : ""
                           }`
-                        : "Todo entregado"}
+                        : row.unfulfilledUnits > 0
+                          ? "Liberada a medias"
+                          : "Todo entregado"}
                     </p>
+                    {row.unfulfilledOrders > 0 ? (
+                      <p className="text-xs font-medium text-destructive">
+                        {row.unfulfilledOrders} pedido{row.unfulfilledOrders === 1 ? "" : "s"} sin unidad ({row.unfulfilledUnits}{" "}
+                        {row.unfulfilledUnits === 1 ? "unidad" : "unidades"}) por cancelar con su devolución
+                      </p>
+                    ) : null}
+                    {canWrite && (row.refunded > 0 || row.retained > 0 || row.storeCredit > 0) ? (
+                      <p className="text-xs text-muted-foreground">
+                        Cancelados: {currencyFormatter(row.refunded)} devuelto · {currencyFormatter(row.retained)} retenido ·{" "}
+                        {currencyFormatter(row.storeCredit)} saldo a favor
+                      </p>
+                    ) : null}
                     {/* El contador se suma al confirmarse el pago y, si ese
                         apunte falla, el pago sigue igual: la plata ya entró.
                         Aquí se nota, contando los pedidos pagados uno por uno,
@@ -330,6 +380,18 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                         Cancelar preventa
                       </Button>
                     ) : null}
+                    {canWrite && row.canReleasePartial ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11"
+                        disabled={loading !== null}
+                        onClick={() => onRelease(row, true)}
+                      >
+                        <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Liberar lo que llegó ({row.partialReleaseUnits})
+                      </Button>
+                    ) : null}
                     {canWrite && row.status === ProductPresaleStatus.ACTIVE ? (
                       <Button
                         size="sm"
@@ -361,9 +423,10 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
         <strong>Liberar</strong> descuenta el inventario de esas unidades con su
         movimiento y suelta los pedidos al despacho normal. Un pedido con
         preventa espera completo, también lo que ya estaba en bodega: nunca se
-        parte un envío.{" "}
+        parte un envío. Si llegó menos, <strong>Liberar lo que llegó</strong>{" "}
+        suelta los pedidos más antiguos que caben y deja los demás «sin unidad».{" "}
         <strong>Las devoluciones de dinero se hacen a mano</strong> en Bold o
-        Wompi, como cualquier otra.
+        Wompi, como cualquier otra, y se anotan al cancelar el pedido.
       </p>
     </>
   );

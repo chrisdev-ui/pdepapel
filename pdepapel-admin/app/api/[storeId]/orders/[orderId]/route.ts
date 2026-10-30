@@ -82,6 +82,16 @@ import { NextResponse } from "next/server";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+import {
+  assertSettlementBalances,
+  parseCancelSettlement,
+  SETTLEMENT_ORDER_SELECT,
+  SETTLEMENT_REQUIRED_MESSAGE,
+  settlementContext,
+  writeCancelSettlement,
+  type CancelSettlementContext,
+  type CancelSettlementInput,
+} from "@/lib/presale-cancel-settlement";
 import { parseNotifyCustomer } from "@/lib/silent-status-change";
 import { recordSilentStatusChanges } from "@/lib/silent-status-change-server";
 
@@ -300,6 +310,20 @@ export async function PATCH(
             type: transitionType,
           }),
         );
+      }
+    }
+
+    // Cancelar un pedido con anticipo o abonos deja escrito qué pasó con la
+    // plata (devuelto / retenido / saldo a favor). Sin eso no se cancela.
+    let cancelSettlement: { context: CancelSettlementContext; settlement: CancelSettlementInput } | null = null;
+    if (status === OrderStatus.CANCELLED && order.status === OrderStatus.DEPOSIT_PAID) {
+      const settlementOrder = await prismadb.order.findUnique({ where: { id: order.id }, select: SETTLEMENT_ORDER_SELECT });
+      const context = settlementOrder ? settlementContext(settlementOrder) : null;
+      if (context?.required) {
+        const settlement = parseCancelSettlement(body.settlement);
+        if (!settlement) throw ErrorFactory.InvalidRequest(SETTLEMENT_REQUIRED_MESSAGE, { settlementRequired: true });
+        assertSettlementBalances(context, settlement);
+        cancelSettlement = { context, settlement };
       }
     }
 
@@ -1178,6 +1202,15 @@ export async function PATCH(
       // Cancelar libera o devuelve el saldo de una tarjeta usada y anula la
       // tarjeta que este pedido compró si nadie la usó.
       if (status === OrderStatus.CANCELLED || status === OrderStatus.REJECTED) {
+        if (cancelSettlement) {
+          await writeCancelSettlement(tx, {
+            storeId: params.storeId,
+            orderId: updated.id,
+            context: cancelSettlement.context,
+            settlement: cancelSettlement.settlement,
+            createdBy: userId,
+          });
+        }
         await handleGiftCardOnOrderCancellation(tx, {
           storeId: params.storeId,
           orderId: updated.id,
@@ -1341,6 +1374,10 @@ export async function DELETE(
       deletedProductIds = order.orderItems.flatMap((item) => (item.productId ? [item.productId] : []));
       const deleteGuard = getInPersonOrderGuard(order.type, "delete");
       if (deleteGuard) throw ErrorFactory.Conflict(deleteGuard);
+      if (order.status === OrderStatus.DEPOSIT_PAID) {
+        const settlementOrder = await tx.order.findUnique({ where: { id: order.id }, select: SETTLEMENT_ORDER_SELECT });
+        if (settlementOrder && settlementContext(settlementOrder).required) throw ErrorFactory.Conflict(SETTLEMENT_REQUIRED_MESSAGE);
+      }
 
       // Un pedido se puede eliminar en cualquier estado (los guardas se
       // quitaron a proposito), pero no si arrastra una guia de EnvioClick

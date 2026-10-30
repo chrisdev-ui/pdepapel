@@ -1,9 +1,9 @@
-import { availableStock } from "@/lib/available-stock";
 import { OrderSource, OrderStatus, OrderType } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { parseCartMetadata, resolveCart, type ConversationCart, type ConversationCartItemInput } from "@/lib/conversations";
 import { calculateOrderTotals } from "@/lib/order-totals";
+import { owedPresaleUnits, sellableStock } from "@/lib/presale-owed";
 import prismadb from "@/lib/prismadb";
 import { priceLines } from "@/lib/product-pricing";
 import { currencyFormatter, generateOrderNumber } from "@/lib/utils";
@@ -75,8 +75,14 @@ export async function priceCartProducts<T extends CartProduct>(
       });
     }
   }
-  // `stock` sale neto de apartados: el carrito avisa «sin existencias» con lo que de verdad se puede vender.
-  return products.map((product) => ({ ...product, price: prices.get(product.id) ?? product.price, stock: availableStock(product) }));
+  // `stock` sale neto de apartados y de lo cobrado en una preventa abierta: el
+  // carrito avisa «sin existencias» con lo que de verdad se puede vender.
+  const owed = await owedPresaleUnits(prismadb, products.map((product) => product.id));
+  return products.map((product) => ({
+    ...product,
+    price: prices.get(product.id) ?? product.price,
+    stock: sellableStock(product, owed.get(product.id)),
+  }));
 }
 
 const escapeHtml = (value: string) =>

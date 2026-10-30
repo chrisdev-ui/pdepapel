@@ -19,6 +19,7 @@ vi.mock("@/lib/prismadb", () => ({
     conversation: { findFirst: mocks.conversationFindFirst },
     product: { findMany: mocks.productFindMany },
     image: { findMany: mocks.imageFindMany },
+    productPresale: { findMany: vi.fn(async () => []) },
     $transaction: mocks.transaction,
   },
 }));

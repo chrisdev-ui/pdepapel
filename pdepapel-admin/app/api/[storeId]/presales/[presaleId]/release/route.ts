@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { readOptionalJsonBody } from "@/lib/request-body";
 import { getPresaleReleasePreview, releasePresale } from "@/lib/presale-release";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -43,9 +44,16 @@ export async function GET(
     return NextResponse.json(
       {
         canRelease: preview.canRelease,
+        canReleasePartial: preview.canReleasePartial,
         pendingUnits: preview.pendingUnits,
         availableStock: preview.availableStock,
-        orders: preview.lines.length,
+        orders: new Set(preview.lines.map((line) => line.orderId)).size,
+        partial: {
+          releaseUnits: preview.partialPlan.releaseUnits,
+          releaseOrders: preview.partialPlan.releaseOrderIds.length,
+          unfulfilledUnits: preview.partialPlan.unfulfilledUnits,
+          unfulfilledOrders: preview.partialPlan.unfulfilledOrderIds.length,
+        },
         product: preview.presale.product,
       },
       { headers: CACHE_HEADERS.NO_CACHE },
@@ -59,15 +67,19 @@ export async function GET(
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: { storeId: string; presaleId: string } },
 ) {
   try {
     const userId = await authorize(params.storeId, params.presaleId);
+    // «Liberar» completo se manda sin cuerpo; «Liberar lo que llegó» trae el reparto confirmado.
+    const body = await readOptionalJsonBody<{ partial?: unknown; expectedReleaseUnits?: unknown }>(req, "PRESALE_RELEASE_POST", {});
     const result = await releasePresale({
       storeId: params.storeId,
       presaleId: params.presaleId,
       releasedBy: userId,
+      partial: body.partial === true,
+      expectedReleaseUnits: typeof body.expectedReleaseUnits === "number" ? body.expectedReleaseUnits : undefined,
     });
     // Liberar mueve stock y apaga la preventa: la ficha pasa a venta normal.
     const released = await prismadb.productPresale.findUnique({ where: { id: params.presaleId }, select: { productId: true } });
@@ -77,7 +89,7 @@ export async function POST(
   } catch (error) {
     return handleErrorResponse(error, "PRESALE_RELEASE_POST", {
       headers: CACHE_HEADERS.NO_CACHE,
-      expectedStatusCodes: [400, 404],
+      expectedStatusCodes: [400, 404, 409],
     });
   }
 }

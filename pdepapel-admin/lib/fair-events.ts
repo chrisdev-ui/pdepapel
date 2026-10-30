@@ -1,5 +1,5 @@
 import { getProductUnitShipping } from "@/lib/financial";
-import { availableStock } from "@/lib/available-stock";
+import { owedPresaleUnits, sellableStock } from "@/lib/presale-owed";
 import {
   FairCapsuleStatus,
   FairEventStatus,
@@ -253,6 +253,10 @@ export function kitLineShipping(lines: { quantityPerKit: number; component: { tr
  * salir dos veces en la misma reserva (suelta y dentro de un kit, o en dos
  * kits): el valor de la consulta inicial ya estaría viejo para el kardex.
  */
+async function fairOwedUnits(tx: TransactionClient, productId: string): Promise<number> {
+  return (await owedPresaleUnits(tx, [productId])).get(productId) ?? 0;
+}
+
 async function takeStockForFair(
   tx: TransactionClient,
   storeId: string,
@@ -264,14 +268,16 @@ async function takeStockForFair(
     select: { stock: true },
   });
   if (!before) return null;
-  // Lo apartado para una clienta no sale a la feria.
+  // Lo apartado para una clienta no sale a la feria, ni lo que ya se cobró en
+  // una preventa abierta aunque la mercancía esté en bodega.
+  const owed = await fairOwedUnits(tx, productId);
   const updated = await tx.$executeRaw`
     UPDATE \`Product\`
        SET \`stock\` = \`stock\` - ${units},
            \`updatedAt\` = NOW(3)
      WHERE \`id\` = ${productId}
        AND \`storeId\` = ${storeId}
-       AND \`stock\` - \`reservedUnits\` >= ${units}`;
+       AND \`stock\` - \`reservedUnits\` - ${owed} >= ${units}`;
   if (updated !== 1) return null;
   return { previousStock: before.stock };
 }
@@ -320,7 +326,7 @@ async function reserveKitForFair({
         where: { id: line.componentId },
         select: { stock: true, reservedUnits: true },
       });
-      const stock = current ? availableStock(current) : 0;
+      const stock = current ? sellableStock(current, await fairOwedUnits(tx, line.componentId)) : 0;
       const possible = Math.floor(stock / line.quantityPerKit);
       throw new AppError(
         `Solo alcanza para ${possible} ${possible === 1 ? "kit" : "kits"} de “${kit.name}”: «${line.component.name}» tiene ${stock} y cada kit lleva ${line.quantityPerKit}`,
@@ -547,7 +553,7 @@ export async function allocateFairInventory({
         });
         throw ErrorFactory.InsufficientStock(
           product.name,
-          current ? availableStock(current) : product.stock,
+          current ? sellableStock(current, await fairOwedUnits(tx, productId)) : product.stock,
           quantity,
         );
       }

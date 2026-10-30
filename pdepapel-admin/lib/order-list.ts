@@ -1,5 +1,5 @@
 import { OrderStatus, OrderType, ShippingStatus, type Prisma } from "@prisma/client";
-import { UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
+import { UNFULFILLED_PRESALE_LINE, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 
 import {
   DEFAULT_ORDER_VIEW,
@@ -119,9 +119,19 @@ export const ORDER_QUEUE_SELECT = {
   payment: { select: { method: true } },
   shipping: { select: { status: true, provider: true, trackingCode: true, updatedAt: true } },
   _count: { select: { inventoryIssues: { where: { resolvedAt: null } }, orderItems: { where: UNRELEASED_PRESALE_LINE } } },
+  orderItems: { where: UNFULFILLED_PRESALE_LINE, select: { id: true }, take: 1 },
 } satisfies Prisma.OrderSelect;
 
 type QueueRow = Prisma.OrderGetPayload<{ select: typeof ORDER_QUEUE_SELECT }>;
+
+function queueableRow(row: QueueRow): QueueableOrder {
+  return {
+    ...row,
+    openInventoryIssues: row._count.inventoryIssues,
+    heldByPresale: row._count.orderItems > 0,
+    unfulfilledPresale: row.orderItems.length > 0,
+  };
+}
 
 export interface OrderListPage {
   ids: string[];
@@ -151,7 +161,7 @@ export function paginateOrders(rows: readonly QueueRow[], query: OrderListQuery,
   const counts = Object.fromEntries(ORDER_VIEWS.map((view) => [view.id, 0])) as Record<OrderView, number>;
   const matching: { row: QueueRow; order: QueueableOrder }[] = [];
   for (const row of rows) {
-    const order: QueueableOrder = { ...row, openInventoryIssues: row._count.inventoryIssues, heldByPresale: row._count.orderItems > 0 };
+    const order: QueueableOrder = queueableRow(row);
     const queue = getOrderQueue(order, now);
     for (const { id } of ORDER_VIEWS) if (orderMatchesView(queue, id, order, now)) counts[id] += 1;
     if (orderMatchesView(queue, query.view, order, now)) matching.push({ row, order });
@@ -197,7 +207,7 @@ export async function countOrdersToAttend(db: OrderListDb, storeId: string, now 
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
   return rows.filter((row) => {
-    const order: QueueableOrder = { ...row, openInventoryIssues: row._count.inventoryIssues, heldByPresale: row._count.orderItems > 0 };
+    const order: QueueableOrder = queueableRow(row);
     return orderMatchesView(getOrderQueue(order, now), "por-atender", order, now);
   }).length;
 }

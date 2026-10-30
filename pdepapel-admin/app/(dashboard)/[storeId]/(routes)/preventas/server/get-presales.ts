@@ -1,4 +1,4 @@
-import { OrderPaymentStatus, OrderStatus, PresaleDepositType, PresalePaymentMode, ProductPresaleStatus } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentStatus, OrderStatus, PresaleDepositType, PresalePaymentMode, ProductPresaleStatus } from "@prisma/client";
 
 import {
   getHeldUnitsByPresale,
@@ -7,6 +7,7 @@ import {
   PAID_PRESALE_LINE,
 } from "@/lib/presale";
 import { availableStock } from "@/lib/available-stock";
+import { planPartialRelease, type PartialReleaseOrder } from "@/lib/presale-release";
 import { sumPrepaid } from "@/lib/order-payment-amounts";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
@@ -60,6 +61,19 @@ export interface PresaleRow {
   /** Lo que hay en bodega para la preventa: stock menos lo apartado para otras clientas. */
   productStock: number;
   canRelease: boolean;
+  /** Llegó menos de lo vendido: «Liberar lo que llegó» suelta los pedidos más antiguos que caben. */
+  canReleasePartial: boolean;
+  partialReleaseUnits: number;
+  partialReleaseOrders: number;
+  partialUnfulfilledUnits: number;
+  partialUnfulfilledOrders: number;
+  /** Pedidos que quedaron «sin unidad» en una liberación a medias y siguen sin cancelar. */
+  unfulfilledUnits: number;
+  unfulfilledOrders: number;
+  /** Lo anotado al cancelar pedidos de esta preventa (con anticipo o abonos). */
+  refunded: number;
+  retained: number;
+  storeCredit: number;
   delayNotifiedAt: Date | null;
   releasedAt: Date | null;
 }
@@ -71,6 +85,11 @@ export interface PresalesSummary {
   depositsReceived: number;
   customerCount: number;
   overdueCount: number;
+  /** Pedidos «sin unidad» por cancelar con su devolución, en todas las preventas. */
+  unfulfilledOrders: number;
+  refunded: number;
+  retained: number;
+  storeCredit: number;
   /** Próxima fecha prometida que todavía no ha llegado. */
   nextArrivalAt: Date | null;
   nextArrivalProduct: string | null;
@@ -120,9 +139,13 @@ export async function getPresales(
           quantity: true,
           price: true,
           preorderReleasedAt: true,
+          preorderUnfulfilledAt: true,
           order: {
             select: {
               status: true,
+              depositPaidAt: true,
+              paidAt: true,
+              createdAt: true,
               depositAmount: true,
               payments: { where: { status: OrderPaymentStatus.APPROVED }, select: { kind: true, status: true, amount: true } },
             },
@@ -131,9 +154,47 @@ export async function getPresales(
       })
     : [];
 
+  // Lo que se anotó al cancelar: esos pedidos ya no son «pagados», así que se
+  // buscan aparte por sus filas de devolución, retención o saldo a favor.
+  const settlementRows = presales.length
+    ? await prismadb.orderPayment.findMany({
+        where: {
+          storeId,
+          status: OrderPaymentStatus.APPROVED,
+          kind: { in: [OrderPaymentKind.REFUND, OrderPaymentKind.RETAINED, OrderPaymentKind.STORE_CREDIT] },
+          order: { orderItems: { some: { isPreorder: true, presaleId: { in: presales.map((presale) => presale.id) } } } },
+        },
+        select: {
+          kind: true,
+          amount: true,
+          order: { select: { orderItems: { where: { isPreorder: true, presaleId: { not: null } }, select: { presaleId: true }, take: 1 } } },
+        },
+      })
+    : [];
+  const settlements = new Map<string, { refunded: number; retained: number; storeCredit: number }>();
+  for (const row of settlementRows) {
+    const id = row.order?.orderItems[0]?.presaleId;
+    if (!id) continue;
+    const bucket = settlements.get(id) ?? { refunded: 0, retained: 0, storeCredit: 0 };
+    if (row.kind === OrderPaymentKind.REFUND) bucket.refunded += row.amount;
+    else if (row.kind === OrderPaymentKind.RETAINED) bucket.retained += row.amount;
+    else bucket.storeCredit += row.amount;
+    settlements.set(id, bucket);
+  }
+
   const byPresale = new Map<
     string,
-    { pending: number; paid: number; collected: number; deposits: number; orders: Set<string>; depositOrders: Set<string> }
+    {
+      pending: number;
+      paid: number;
+      collected: number;
+      deposits: number;
+      orders: Set<string>;
+      depositOrders: Set<string>;
+      unfulfilled: number;
+      unfulfilledOrders: Set<string>;
+      pendingByOrder: Map<string, PartialReleaseOrder>;
+    }
   >();
   for (const line of lines) {
     if (!line.presaleId) continue;
@@ -144,6 +205,9 @@ export async function getPresales(
       deposits: 0,
       orders: new Set<string>(),
       depositOrders: new Set<string>(),
+      unfulfilled: 0,
+      unfulfilledOrders: new Set<string>(),
+      pendingByOrder: new Map<string, PartialReleaseOrder>(),
     };
     // Lo cobrado cuenta lo vendido completo; con anticipo solo entró el anticipo,
     // una vez por pedido (la preventa con anticipo se compra sola).
@@ -156,7 +220,20 @@ export async function getPresales(
     }
     bucket.paid += line.quantity;
     bucket.orders.add(line.orderId);
-    if (line.preorderReleasedAt === null) bucket.pending += line.quantity;
+    if (line.preorderReleasedAt === null && line.preorderUnfulfilledAt !== null) {
+      bucket.unfulfilled += line.quantity;
+      bucket.unfulfilledOrders.add(line.orderId);
+    } else if (line.preorderReleasedAt === null) {
+      bucket.pending += line.quantity;
+      const pendingOrder = bucket.pendingByOrder.get(line.orderId);
+      if (pendingOrder) pendingOrder.units += line.quantity;
+      else
+        bucket.pendingByOrder.set(line.orderId, {
+          orderId: line.orderId,
+          units: line.quantity,
+          paidAt: line.order?.depositPaidAt ?? line.order?.paidAt ?? line.order?.createdAt ?? new Date(0),
+        });
+    }
     byPresale.set(line.presaleId, bucket);
   }
 
@@ -166,6 +243,10 @@ export async function getPresales(
     const paidUnits = bucket?.paid ?? 0;
     const heldUnits = held.get(presale.id) ?? 0;
     const capacity = getPresaleCapacity({ ...presale, heldUnits });
+    const free = availableStock(presale.product);
+    const isActive = presale.status === ProductPresaleStatus.ACTIVE;
+    const plan = planPartialRelease(Array.from(bucket?.pendingByOrder.values() ?? []), free);
+    const money = settlements.get(presale.id);
 
     return {
       id: presale.id,
@@ -193,11 +274,18 @@ export async function getPresales(
       collected: bucket?.collected ?? 0,
       depositsReceived: bucket?.deposits ?? 0,
       depositOrders: bucket?.depositOrders.size ?? 0,
-      productStock: availableStock(presale.product),
-      canRelease:
-        presale.status === ProductPresaleStatus.ACTIVE &&
-        pendingUnits > 0 &&
-        availableStock(presale.product) >= pendingUnits,
+      productStock: free,
+      canRelease: isActive && pendingUnits > 0 && free >= pendingUnits,
+      canReleasePartial: isActive && pendingUnits > 0 && free < pendingUnits && plan.releaseUnits > 0,
+      partialReleaseUnits: plan.releaseUnits,
+      partialReleaseOrders: plan.releaseOrderIds.length,
+      partialUnfulfilledUnits: plan.unfulfilledUnits,
+      partialUnfulfilledOrders: plan.unfulfilledOrderIds.length,
+      unfulfilledUnits: bucket?.unfulfilled ?? 0,
+      unfulfilledOrders: bucket?.unfulfilledOrders.size ?? 0,
+      refunded: money?.refunded ?? 0,
+      retained: money?.retained ?? 0,
+      storeCredit: money?.storeCredit ?? 0,
       delayNotifiedAt: presale.delayNotifiedAt,
       releasedAt: presale.releasedAt,
     };
@@ -219,6 +307,10 @@ export async function getPresales(
     depositsReceived: isViewer ? 0 : active.reduce((total, row) => total + row.depositsReceived, 0),
     customerCount: active.reduce((total, row) => total + row.customerCount, 0),
     overdueCount: active.filter((row) => row.isOverdue).length,
+    unfulfilledOrders: rows.reduce((total, row) => total + row.unfulfilledOrders, 0),
+    refunded: isViewer ? 0 : rows.reduce((total, row) => total + row.refunded, 0),
+    retained: isViewer ? 0 : rows.reduce((total, row) => total + row.retained, 0),
+    storeCredit: isViewer ? 0 : rows.reduce((total, row) => total + row.storeCredit, 0),
     nextArrivalAt: upcoming[0]?.expectedArrivalAt ?? null,
     nextArrivalProduct: upcoming[0]?.productName ?? null,
   };

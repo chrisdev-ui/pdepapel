@@ -11,8 +11,9 @@ import { CACHE_HEADERS } from "@/lib/utils";
 /**
  * «Cancelar preventa»: la campaña deja de vender. Solo si no queda ningún
  * pedido pagado o con anticipo esperando esta mercancía: esos se cancelan
- * uno por uno desde el pedido (ahí se decide devolver o retener y el cupo y
- * el inventario vuelven bien). El dinero se devuelve a mano, como siempre.
+ * uno por uno desde el pedido, donde se anota qué pasa con la plata
+ * (devuelto, retenido —solo el anticipo— o saldo a favor) y el cupo y el
+ * inventario vuelven bien. El dinero se devuelve a mano, como siempre.
  */
 export async function POST(
   _req: Request,
@@ -42,7 +43,7 @@ export async function POST(
     });
     if (waiting > 0) {
       throw ErrorFactory.Conflict(
-        `Hay ${waiting} ${waiting === 1 ? "pedido que espera" : "pedidos que esperan"} esta mercancía. Cancélalos primero desde cada pedido (ahí eliges devolver o retener el anticipo).`,
+        `Hay ${waiting} ${waiting === 1 ? "pedido que espera" : "pedidos que esperan"} esta mercancía. Cancélalos primero desde cada pedido: ahí anotas qué pasa con el dinero (devuelto, retenido —solo el anticipo— o saldo a favor).`,
         { waiting },
       );
     }

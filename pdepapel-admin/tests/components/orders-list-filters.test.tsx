@@ -70,7 +70,7 @@ const orders = [
     fullName: "Consumidor final", phone: "", address: "", city: "", documentId: null, isGift: false, giftRecipientName: null, riskScore: 0, riskReasons: null, giftCardReview: null, total: 10000, expiresAt: null, orderItems: [], shipping: null, openInventoryIssues: 0,
   },
 ] as never[];
-const counts = { "por-atender": 0, "por-verificar": 0, "por-despachar": 0, "por-entregar": 0, "en-camino": 0, "con-novedad": 0, "sin-cuadrar": 0, cotizaciones: 0, "borradores-viejos": 0, todos: 7 };
+const counts = { "por-atender": 0, "por-verificar": 0, "por-despachar": 0, "por-entregar": 0, "en-camino": 0, "con-novedad": 0, "sin-cuadrar": 0, cotizaciones: 0, "borradores-viejos": 0, "sin-unidad": 0, todos: 7 };
 const props = { data: orders, counts, total: 30, page: 2, pageCount: 2, pageSize: 25, totalOrders: 738, search: "" };
 const lastUrl = () => navigation.replace.mock.calls.at(-1)?.[0] as string;
 

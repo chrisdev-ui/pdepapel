@@ -17,6 +17,7 @@ describe("inventory movements", () => {
   it("creates an auditable movement and applies an atomic stock decrement", async () => {
     const movement = { id: "movement-id" };
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findFirst: vi
           .fn()
@@ -70,6 +71,7 @@ describe("inventory movements", () => {
 
   it("rejects a decrement that no longer has enough stock without writing a movement", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findFirst: vi
           .fn()
@@ -94,6 +96,7 @@ describe("inventory movements", () => {
 
   it("calculates kit availability from its most limited component", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -123,6 +126,7 @@ describe("inventory movements", () => {
 
   it("keeps a kit's stock physical and turns component reservations into kit reserved units", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -148,6 +152,7 @@ describe("inventory movements", () => {
 
   it("keeps sequential movement snapshots correct for duplicate products", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -193,6 +198,7 @@ describe("inventory movements", () => {
 
   it("rejects orders when duplicate product lines exceed available stock", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -224,6 +230,7 @@ describe("inventory movements", () => {
 
   it("expands kits into their component requirements before validating stock", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -262,6 +269,7 @@ describe("inventory movements", () => {
     // carrito con 10 unidades sueltas de A mas un kit que tambien lleva A
     // pasaba la validacion teniendo solo 10 en bodega.
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -303,6 +311,7 @@ describe("inventory movements", () => {
 
   it("bloquea un ajuste manual sobre un kit", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -320,7 +329,8 @@ describe("inventory movements", () => {
   });
 
   it("deja pasar un ajuste manual sobre un producto normal", async () => {
-    const tx = { product: { findMany: vi.fn().mockResolvedValue([]) } };
+    const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) }, product: { findMany: vi.fn().mockResolvedValue([]) } };
     await expect(
       assertNotKitProducts(tx as any, ["product-id"]),
     ).resolves.toBeUndefined();
@@ -328,6 +338,7 @@ describe("inventory movements", () => {
 
   it("explodeSaleLines reemplaza el kit por sus componentes", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -374,6 +385,7 @@ describe("inventory movements", () => {
 
   it("processes resilient batches without blocking valid products", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi.fn().mockResolvedValueOnce([
           { id: "available", name: "Agenda", stock: 3, storeId: "store-id" },
@@ -408,6 +420,7 @@ describe("inventory movements", () => {
     const { queueMarketplaceStockSyncEvents } = await import("@/lib/mercadolibre/outbox");
     vi.mocked(queueMarketplaceStockSyncEvents).mockClear();
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()
@@ -447,6 +460,7 @@ describe("inventory movements", () => {
 
   it("separates the products whose row did not take the update and keeps the rest", async () => {
     const tx = {
+      productPresale: { findMany: vi.fn().mockResolvedValue([]) },
       product: {
         findMany: vi
           .fn()

@@ -1,9 +1,9 @@
 import { Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
 
 import { AppError, ErrorFactory } from "./api-errors";
-import { availableStock } from "./available-stock";
 import { recalculateKitStock, resolvePhysicalRequirements } from "./inventory";
 import { queueMarketplaceStockSyncEvents } from "./mercadolibre/outbox";
+import { owedPresaleUnits, sellableStock } from "./presale-owed";
 import { recordReservationEvents } from "./reservation-events";
 import { headerLine, headerMirror, RESERVATION_LINES_SELECT, reservationLines, type ReservationLine } from "./reservation-header";
 
@@ -83,14 +83,17 @@ export async function adjustReservedUnits(
   const delta = Prisma.sql`CASE \`id\` ${Prisma.join(entries.map(([id, units]) => Prisma.sql`WHEN ${id} THEN ${units}`), " ")} ELSE 0 END`;
 
   if (direction === "hold") {
+    // Lo cobrado en una preventa abierta tampoco se aparta para otra clienta.
+    const owed = await owedPresaleUnits(tx as never, ids);
+    const owedCase = Prisma.sql`CASE \`id\` ${Prisma.join(ids.map((id) => Prisma.sql`WHEN ${id} THEN ${owed.get(id) ?? 0}`), " ")} ELSE 0 END`;
     const affected = await tx.$executeRaw`
       UPDATE \`Product\`
          SET \`reservedUnits\` = \`reservedUnits\` + ${delta},
              \`updatedAt\` = NOW(3)
        WHERE \`storeId\` = ${storeId}
          AND \`id\` IN (${Prisma.join(ids)})
-         AND \`stock\` - \`reservedUnits\` >= ${delta}`;
-    if (affected !== ids.length) throw await insufficientError(tx, entries);
+         AND \`stock\` - \`reservedUnits\` - ${owedCase} >= ${delta}`;
+    if (affected !== ids.length) throw await insufficientError(tx, entries, owed);
   } else {
     await tx.$executeRaw`
       UPDATE \`Product\`
@@ -108,16 +111,16 @@ export async function adjustReservedUnits(
   return affectedIds;
 }
 
-async function insufficientError(tx: PrismaTx, entries: [string, number][]): Promise<AppError> {
+async function insufficientError(tx: PrismaTx, entries: [string, number][], owed: Map<string, number>): Promise<AppError> {
   const products = await tx.product.findMany({
     where: { id: { in: entries.map(([id]) => id) } },
     select: { id: true, name: true, stock: true, reservedUnits: true },
   });
   const short = products
     .map((product) => ({ product, wanted: entries.find(([id]) => id === product.id)?.[1] ?? 0 }))
-    .filter(({ product, wanted }) => availableStock(product) < wanted)
+    .filter(({ product, wanted }) => sellableStock(product, owed.get(product.id)) < wanted)
     .sort((a, b) => entries.findIndex(([id]) => id === a.product.id) - entries.findIndex(([id]) => id === b.product.id))
-    .map(({ product, wanted }) => ({ productId: product.id, name: product.name, available: availableStock(product), requested: wanted }));
+    .map(({ product, wanted }) => ({ productId: product.id, name: product.name, available: sellableStock(product, owed.get(product.id)), requested: wanted }));
   const first = short[0];
   if (!first) return ErrorFactory.Conflict("El inventario cambió mientras reservabas. Intenta de nuevo.");
   const details = { productId: first.productId, available: first.available, requested: first.requested, short };

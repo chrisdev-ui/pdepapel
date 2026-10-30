@@ -660,7 +660,7 @@
         <li><strong>Llega la mercancía</strong>: ingrésala y pulsa <strong>Liberar</strong> en Preventas (mira «Cuando llegue la mercancía», más abajo). Los pedidos con anticipo pasan a «Por atender» con el paso <strong>Cobrar saldo</strong>.</li>
         <li><strong>Cobra el saldo</strong>: cotiza el envío, escríbele a la clienta el saldo más el envío y, cuando te pague, pulsa <strong>Marcar saldo recibido</strong> con el envío que cobraste. El pedido queda <strong>Pagado</strong> (ahí sí es venta) y entra a «Por despachar».</li>
       </ol>
-      <div class="note care"><strong>El cambio de estado normal no sirve aquí</strong><p>En un pedido con anticipo no aparece «Marcar como pagado»: el anticipo y el saldo se anotan con sus propios botones para que quede registrado cada cobro. «Cancelar preventa» cancela el pedido y devuelve la unidad al cupo, sin mover inventario (nunca se descontó). El anticipo y los abonos no se devuelven solos: si corresponde, la devolución la haces tú a mano en Bold o por transferencia.</p></div>
+      <div class="note care"><strong>El cambio de estado normal no sirve aquí</strong><p>En un pedido con anticipo no aparece «Marcar como pagado»: el anticipo y el saldo se anotan con sus propios botones para que quede registrado cada cobro. Cancelar un pedido con anticipo devuelve la unidad al cupo, sin mover inventario (nunca se descontó), y <strong>te pide anotar qué pasa con la plata</strong> (mira «Cancelar un pedido con anticipo», más abajo). La devolución en sí la haces tú a mano en Bold o por transferencia.</p></div>
 
       <div class="note rule"><strong>El bot de WhatsApp y la preventa</strong><p>El bot solo habla de la preventa (precio, anticipo y enlace) cuando el producto está visible en la tienda y la preventa está abierta y con cupo; mientras esté archivado contesta como por cualquier producto que no está. Termina con «Si prefieres esperar, dime y te anoto en la lista de espera.»: si la clienta pide que la anoten, el bot <strong>te la pasa</strong> (no anota a nadie). Anótala tú en la lista de espera del producto.</p></div>
 
@@ -681,7 +681,7 @@
         <tr><th>Etiqueta</th><th>Qué significa</th></tr>
         <tr><td><span class="pill sky">En preventa</span></td><td>Se está vendiendo. Es el único estado que aparta unidades.</td></tr>
         <tr><td><span class="pill cream">Vencida</span></td><td>Pasó la fecha que prometiste y todavía no has liberado. Hay clientas esperando una respuesta.</td></tr>
-        <tr><td><span class="pill mint">Liberada</span></td><td>Llegó la mercancía y los pedidos ya salieron al despacho normal.</td></tr>
+        <tr><td><span class="pill mint">Liberada</span></td><td>Llegó la mercancía y los pedidos ya salieron al despacho normal. Si llegó menos, la tarjeta dice además cuántos pedidos quedaron «sin unidad» por cancelar con su devolución.</td></tr>
       </table></div>
       <p>Junto a <strong>Preventas</strong> en el menú aparece un número cuando alguna se venció. Es tu lista de pendientes: cada una es una clienta que pagó y no ha recibido.</p>
 
@@ -698,8 +698,27 @@
         <li><strong>Cobra el saldo</strong>: los pedidos con anticipo aparecen en «Por atender» con <strong>Cobrar saldo</strong>. Cotiza el envío, escríbele a la clienta y pulsa <strong>Marcar saldo recibido</strong> cuando te pague (si ya tenía <span class="pill mint">Saldo pagado</span>, solo cobras el envío).</li>
         <li><strong>Despacha</strong>: el pedido pasa a «Por despachar» como cualquier otro.</li>
       </ol>
-      <div class="note care"><strong>No vendas la mercancía nueva antes de Liberar</strong><p>Entre que recibes el pedido y pulsas Liberar, esas unidades ya son de tus clientas de la preventa. <strong>No las vendas en el punto de venta ni las lleves a una feria</strong> hasta liberar: si se venden, Liberar no te deja (faltarían unidades) y alguien que ya pagó se queda sin la suya. La tienda en línea y Mercado Libre ya no las venden mientras la preventa siga abierta.</p></div>
-      <p>Si llega <strong>más</strong> de lo que se debía, lo que sobra queda como stock normal después de liberar, y la tienda lo vende sola. Si llega <strong>menos</strong>, todavía no se puede liberar solo una parte (viene en la próxima mejora): antes de cancelar pedidos, avísale a Christian.</p>
+      <div class="note care"><strong>No vendas la mercancía nueva antes de Liberar</strong><p>Entre que recibes el pedido y pulsas Liberar, esas unidades ya son de tus clientas de la preventa. El panel ya lo frena solo: <strong>Vender</strong>, la reserva de una feria, un apartado y un pedido del panel o de WhatsApp no dejan tomar las unidades que se le deben a una preventa abierta, y te dicen cuántas son de la preventa. La tienda en línea y Mercado Libre tampoco las venden mientras la preventa siga abierta.</p></div>
+      <p>Si llega <strong>más</strong> de lo que se debía, lo que sobra queda como stock normal después de liberar, y la tienda lo vende sola. Si llega <strong>menos</strong>, usa <strong>Liberar lo que llegó</strong> (abajo).</p>
+
+      <h3>Liberar lo que llegó (llegó menos de lo vendido)</h3>
+      <p>Si en bodega hay menos de lo que vendiste, la tarjeta muestra <strong>Liberar lo que llegó (N)</strong>. Antes de hacer nada te dice el reparto: salen <strong>completos los pedidos más antiguos que caben</strong> en lo que llegó (por la fecha en que pagaron el anticipo; un pedido nunca se parte), y los demás quedan <span class="pill cream">sin unidad</span>. Por ejemplo, llegaron 3 y se vendieron 2 + 2 + 1: salen el pedido de 2 más antiguo y el de 1; el otro de 2 queda sin unidad.</p>
+      <ul>
+        <li>Los que salen siguen el camino normal: cobrar saldo y despachar.</li>
+        <li>Los «sin unidad» <strong>no salen</strong> y aparecen en <strong>Pedidos → Preventa sin unidad</strong> y en «Por atender», con el paso <strong>Cancelar y devolver</strong>.</li>
+        <li>La preventa <strong>se cierra</strong>. Si después llega más mercancía, entra como stock normal: no se reparte sola a los pedidos «sin unidad». Si quieres dársela a una de esas clientas, hazle un pedido nuevo.</li>
+      </ul>
+      <div class="note care"><strong>Qué hacer con cada pedido «sin unidad»</strong><p>1. Escríbele a la clienta: no llegó su unidad y le devuelves todo (o, si lo prefiere, queda como saldo a favor). 2. Haz la devolución en Bold o por transferencia. <strong>No se retiene nada</strong>: los términos dicen que si el producto no llega, se devuelve todo. 3. Cancela el pedido y anota lo devuelto (valor, fecha y medio) o el saldo a favor.</p></div>
+
+      <h3>Cancelar un pedido con anticipo</h3>
+      <p>Un pedido con anticipo o abonos ya no se cancela sin más: el diálogo de cancelar te pide <strong>qué pasa con la plata que pagó</strong> (anticipo + abonos), en tres partes que tienen que sumar exactamente eso:</p>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Parte</th><th>Qué es</th></tr>
+        <tr><td><strong>Devuelto</strong></td><td>Lo que le devolviste: valor, fecha y por dónde (transferencia, efectivo, Bold o Wompi), con la referencia si la tienes.</td></tr>
+        <tr><td><strong>Retenido</strong></td><td>Lo que se queda la tienda. <strong>Solo el anticipo no es reembolsable</strong>: nunca más que el anticipo pactado, y nada si la preventa no le alcanzó o si la clienta ejerce el derecho de retracto.</td></tr>
+        <tr><td><strong>Saldo a favor</strong></td><td>Lo que queda para una compra futura.</td></tr>
+      </table></div>
+      <p>Cada parte queda en el historial de pagos del pedido («Al cancelar») y en los totales de Preventas. Ninguna cuenta como dinero recibido. Estos pedidos se cancelan <strong>de a uno, desde su página</strong>: en Pedidos, «Cancelar» en bloque y «Eliminar» no los dejan pasar. Un pedido con anticipo cancelado no se reactiva.</p>
 
       <h3>Liberar</h3>
       <p>Cuando la mercancía llega a tu bodega y ya la ingresaste al inventario, el botón <strong>Liberar</strong> cierra el ciclo. Hace tres cosas de un golpe:</p>
@@ -708,7 +727,7 @@
         <li>Marca como entregables las líneas de preventa de cada pedido.</li>
         <li>Suelta esos pedidos al despacho normal: vuelven a aparecer en «por despachar», completos, con todo lo que llevaban.</li>
       </ol>
-      <div class="note care"><strong>Necesita mercancía de verdad, y no se puede deshacer</strong><p>El botón no funciona si en bodega no hay suficientes unidades para cubrir lo vendido (lo apartado para otras clientas no cuenta): primero ingresa la mercancía, después libera. Y liberar no tiene vuelta atrás — descuenta inventario real y suelta pedidos reales. Si te equivocas, toca arreglarlo a mano con un ajuste de inventario.</p></div>
+      <div class="note care"><strong>Necesita mercancía de verdad, y no se puede deshacer</strong><p>El botón no funciona si en bodega no hay suficientes unidades para cubrir lo vendido (lo apartado para otras clientas no cuenta): primero ingresa la mercancía, después libera, o usa «Liberar lo que llegó» si llegó menos. Y liberar no tiene vuelta atrás — descuenta inventario real y suelta pedidos reales. Si te equivocas, toca arreglarlo a mano con un ajuste de inventario.</p></div>
 
       <h3>Mercado Libre no ve las preventas</h3>
       <div class="note rule"><strong>No es un error</strong><p>Mientras un producto esté en preventa <strong>no se publica en Mercado Libre</strong>, y si ya estaba publicado su cantidad allá se pone en cero. Es a propósito: esas unidades ya están vendidas y cobradas aquí. Si además se vendieran allá, estarías vendiendo dos veces lo mismo y quedándole mal a alguien — y Mercado Libre castiga duro despachar tarde. En cuanto liberes la preventa, el producto vuelve a Mercado Libre con normalidad.</p></div>

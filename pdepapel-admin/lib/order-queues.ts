@@ -31,6 +31,7 @@ export type OrderView =
   | "sin-cuadrar"
   | "cotizaciones"
   | "borradores-viejos"
+  | "sin-unidad"
   | "todos";
 
 export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
@@ -43,6 +44,7 @@ export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
   { id: "sin-cuadrar", label: "Inventario sin cuadrar" },
   { id: "cotizaciones", label: "Cotizaciones" },
   { id: "borradores-viejos", label: "Borradores viejos" },
+  { id: "sin-unidad", label: "Preventa sin unidad" },
   { id: "todos", label: "Todos" },
 ];
 
@@ -89,6 +91,8 @@ export interface QueueableOrder {
   heldByPresale?: boolean;
   /** Preventa con anticipo: el anticipo y el saldo tienen sus propias acciones. */
   paymentPlan?: "FULL" | "DEPOSIT" | null;
+  /** «Liberar N» no le alcanzó: hay que cancelarlo y devolver o dejar saldo a favor. */
+  unfulfilledPresale?: boolean;
 }
 
 /**
@@ -265,7 +269,7 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
     case "pickup":
       return { label: "Marcar entregado", primary: true };
     case "presale":
-      return { label: "Ver preventa", primary: false };
+      return order?.unfulfilledPresale ? { label: "Cancelar y devolver", primary: true } : { label: "Ver preventa", primary: false };
     case "balance":
       return { label: "Cobrar saldo", primary: true };
     case "in-transit":
@@ -298,6 +302,7 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
         (queue === "in-transit" && Boolean(order && isShippingStale(order, now))) ||
         queue === "verify" ||
         queue === "balance" ||
+        (queue === "presale" && order?.unfulfilledPresale === true) ||
         queue === "dispatch" ||
         queue === "pickup" ||
         queue === "issue" ||
@@ -320,6 +325,8 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
       return queue === "quote";
     case "borradores-viejos":
       return isStaleDraft(order, now);
+    case "sin-unidad":
+      return queue !== "closed" && order?.unfulfilledPresale === true;
   }
 }
 

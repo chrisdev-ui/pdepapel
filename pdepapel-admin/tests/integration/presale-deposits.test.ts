@@ -274,7 +274,10 @@ describe("preventa con anticipo", () => {
     expect(toPaid.status).toBe(400);
     expect((await orderOf(order.id)).status).toBe(OrderStatus.DEPOSIT_PAID);
 
-    const cancel = await PATCH(json("PATCH", { status: OrderStatus.CANCELLED }), { params: { storeId: f.store.id, orderId: order.id } });
+    // Con anticipo, cancelar pide anotar qué pasa con la plata (push B).
+    const bare = await PATCH(json("PATCH", { status: OrderStatus.CANCELLED }), { params: { storeId: f.store.id, orderId: order.id } });
+    expect(bare.status).toBe(400);
+    const cancel = await PATCH(json("PATCH", { status: OrderStatus.CANCELLED, settlement: { retained: UNIT_DEPOSIT } }), { params: { storeId: f.store.id, orderId: order.id } });
     await flushBackground();
     expect(cancel.status).toBe(200);
     expect((await orderOf(order.id)).status).toBe(OrderStatus.CANCELLED);

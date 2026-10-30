@@ -386,6 +386,9 @@ export const VIEWER_HIDDEN_PRESALE_FIELDS = [
   "depositTotal",
   "totalReceived",
   "totalCollected",
+  "refunded",
+  "retained",
+  "storeCredit",
 ] as const;
 
 export function scrubPresale<T extends AnyRecord | null | undefined>(presale: T): T {

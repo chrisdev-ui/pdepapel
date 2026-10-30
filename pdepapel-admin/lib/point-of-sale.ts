@@ -1,5 +1,5 @@
 import { getProductUnitShipping } from "@/lib/financial";
-import { availableStock } from "@/lib/available-stock";
+import { owedPresaleUnits, sellableStock } from "@/lib/presale-owed";
 import {
   InventoryMovementType,
   OrderStatus,
@@ -35,9 +35,13 @@ export const TRANSFER_REFERENCE_MIN = 4;
 
 /** Mensaje claro cuando el inventario no alcanza: qué producto, cuánto hay y cuánto se pidió. */
 export function describeInsufficientStock(
-  items: { productName: string; available: number; requested: number }[],
+  items: { productName: string; available: number; requested: number; owedToPresale?: number }[],
 ): string {
-  const parts = items.map((item) => `${item.productName} (hay ${item.available}, pediste ${item.requested})`);
+  const parts = items.map((item) =>
+    item.owedToPresale
+      ? `${item.productName} (hay ${item.available} para vender, pediste ${item.requested}; ${item.owedToPresale} son de clientas de la preventa)`
+      : `${item.productName} (hay ${item.available}, pediste ${item.requested})`,
+  );
   const list = parts.length > 3 ? `${parts.slice(0, 3).join("; ")} y ${parts.length - 3} más` : parts.join("; ");
   return `No alcanzó el inventario: ${list}. No se registró nada; ajusta las cantidades o revisa Inventario.`;
 }
@@ -234,16 +238,20 @@ export async function createPointOfSaleSale({
       physicalProducts.map((product) => [product.id, product]),
     );
 
+    // Lo que llegó para la preventa ya es de esas clientas, aunque no se haya pulsado «Liberar».
+    const owed = await owedPresaleUnits(tx, physicalProductIds);
     const insufficientItems = physicalProductIds.flatMap((productId) => {
       const product = physicalProductsById.get(productId);
       const requested = physicalRequirements.get(productId)!.quantity;
-      if (!product || availableStock(product) < requested) {
+      const sellable = product ? sellableStock(product, owed.get(productId)) : 0;
+      if (!product || sellable < requested) {
         return [
           {
             productId,
             productName: product?.name || "Producto no encontrado",
-            available: product ? availableStock(product) : 0,
+            available: sellable,
             requested,
+            owedToPresale: owed.get(productId) ?? 0,
           },
         ];
       }

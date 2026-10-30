@@ -50,6 +50,13 @@ let presaleId = "";
 let noCampaignProductId = "";
 const orders: string[] = [];
 
+/** La página monta el cliente después de pintar: si el nodo se reemplaza a mitad del scroll, se vuelve a intentar. */
+async function scrollIntoView(locator: Locator) {
+  await expect(async () => {
+    await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+  }).toPass({ timeout: 60_000 });
+}
+
 async function settled(locator: Locator) {
   await expect
     .poll(
@@ -195,7 +202,7 @@ test.describe("preventa con anticipo en el panel", () => {
     await signIn(page, `/${storeId}/productos/${noCampaignProductId}`);
     const line = page.getByTestId("presale-open-first");
     await expect(line).toBeVisible({ timeout: 90_000 });
-    await line.scrollIntoViewIfNeeded();
+    await scrollIntoView(line);
     await settled(line);
     await expect(line).toHaveText("Abre la preventa para usar la lista de espera y registrar anticipos (con el producto archivado la tienda no la muestra).");
     await expect(page.getByRole("button", { name: "Abrir preventa" })).toBeVisible();
@@ -255,7 +262,7 @@ test.describe("preventa con anticipo en el panel", () => {
       const entry = page.getByText("Clienta Lista E2E").filter({ visible: true }).first();
       await expect(entry).toBeVisible({ timeout: 90_000 });
       await expect(page.getByRole("heading", { name: "Lista de espera" })).toHaveCount(1);
-      await entry.scrollIntoViewIfNeeded();
+      await scrollIntoView(entry);
       await settled(entry);
       await expect(page.getByText("Anticipo de", { exact: false }).filter({ visible: true }).first()).toBeVisible();
       if (viewport.confirm) {

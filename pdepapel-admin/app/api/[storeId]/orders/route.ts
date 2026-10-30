@@ -65,6 +65,7 @@ import {
   stockLinesOnPayment,
   stockLinesOnReversal,
 } from "@/lib/presale";
+import { SETTLEMENT_ORDER_SELECT, SETTLEMENT_REQUIRED_MESSAGE, settlementContext } from "@/lib/presale-cancel-settlement";
 import {
   ORDER_STATUS_LABELS,
   canTransition,
@@ -1407,6 +1408,24 @@ export async function PATCH(
           throw ErrorFactory.InvalidRequest(
             `${rejected.length} de ${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} ${rejected.length === 1 ? "no admite" : "no admiten"} pasar a «${ORDER_STATUS_LABELS[status]}»: ${detail}${extra}. ${describeForbiddenTransition(rejected[0].status, status, { type: rejected[0].type })} No se cambió ninguno.`,
           );
+        }
+      }
+
+      // Un pedido con anticipo o abonos se cancela de a uno, desde su página:
+      // ahí se anota qué pasa con la plata (devuelto, retenido o saldo a favor).
+      if (status === OrderStatus.CANCELLED) {
+        const depositOrders = orders.filter((order) => order.status === OrderStatus.DEPOSIT_PAID);
+        if (depositOrders.length > 0) {
+          const withMoney = await tx.order.findMany({
+            where: { id: { in: depositOrders.map((order) => order.id) } },
+            select: { orderNumber: true, ...SETTLEMENT_ORDER_SELECT },
+          });
+          const blocked = withMoney.filter((order) => settlementContext(order).required);
+          if (blocked.length > 0) {
+            throw ErrorFactory.Conflict(
+              `${blocked.slice(0, 5).map((order) => order.orderNumber).join(", ")}: ${SETTLEMENT_REQUIRED_MESSAGE} No se cambió ninguno.`,
+            );
+          }
         }
       }
 
