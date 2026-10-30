@@ -2148,22 +2148,31 @@ model StoreSettings {
   /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
   /// bueno de los datos del negocio a propósito: si compartieran versión,
   /// añadir respuestas nuevas retiraría sin querer la aprobación de las viejas.
-  botProductsApprovedAt   DateTime?
-  botProductsApprovedBy   String?
-  botProductsVersion      String?   @db.VarChar(64)
+  botProductsApprovedAt      DateTime?
+  botProductsApprovedBy      String?
+  botProductsVersion         String?   @db.VarChar(64)
   /// Visto bueno de Paula a las respuestas de cortesía (`lib/whatsapp/bot-casual.ts`).
-  botCasualApprovedAt     DateTime?
-  botCasualApprovedBy     String?
-  botCasualVersion        String?
+  botCasualApprovedAt        DateTime?
+  botCasualApprovedBy        String?
+  botCasualVersion           String?
   /// Correos del equipo que no cuentan como clientas (uno por línea). Se
   /// suman al correo de la tienda y al de relleno (lib/store-email-settings.ts).
-  excludedCustomerEmails  String?   @db.Text
+  excludedCustomerEmails     String?   @db.Text
   /// Quién recibe los avisos del panel (uno por línea); vacía usa Store.email.
   /// Nunca sale por una ruta pública.
-  adminNotificationEmails String?   @db.Text
+  adminNotificationEmails    String?   @db.Text
   /// Interruptor de emergencia de la alerta temprana de redes. Encendida por defecto: cada red
   /// la activa sola al juntar 10 publicaciones con lectura a las 2–6 h; esto solo la pausa sin desplegar.
-  socialEarlyAlertEnabled Boolean   @default(true)
+  socialEarlyAlertEnabled    Boolean   @default(true)
+  /// Interruptor de emergencia de Mercado Libre: encendido, ninguna escritura sale hacia
+  /// Mercado Libre (publicar, precio, stock, fotos, descripción, condiciones, publicidad).
+  /// La cola sigue guardando lo pendiente y lo envía al apagarlo. Responder preguntas no se frena.
+  mercadoLibreWritesPaused   Boolean   @default(false)
+  mercadoLibreWritesPausedAt DateTime?
+  mercadoLibreWritesPausedBy String?
+  /// Quién recibe las alertas de Mercado Libre (uno por línea). Vacía: no se envían por correo
+  /// (siguen en el panel). Nunca usa la lista de avisos del panel. Nunca sale por una ruta pública.
+  mercadoLibreAlertEmails    String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
