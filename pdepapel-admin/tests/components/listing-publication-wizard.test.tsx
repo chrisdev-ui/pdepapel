@@ -12,6 +12,14 @@ vi.mock("@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/use-pictur
     Object.fromEntries(urls.map((url) => [url, pictureMocks.sizes[url] ?? { width: 1200, height: 1200 }])),
 }));
 
+// jsdom no tiene lienzo: la revisión de portada la decide cada prueba.
+const coverMocks = vi.hoisted(() => ({
+  inspections: {} as Record<string, { whiteBorderShare: number; touchesEdge: boolean; compliant: boolean; reasons: string[] }>,
+}));
+vi.mock("@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/use-cover-check", () => ({
+  useCoverCheck: (url: string | null) => (url ? coverMocks.inspections[url] ?? null : null),
+}));
+
 vi.mock("next/image", () => ({
   default: (props: { alt: string }) => <img alt={props.alt} />,
 }));
@@ -70,7 +78,9 @@ function WizardHarness({
   listingTargetProfit = "12000",
   quickProfileOverride,
   onUseProfileCategory,
+  productName = product.name,
 }: {
+  productName?: string;
   quickProfileOverride?: Record<string, unknown>;
   onUseProfileCategory?: (categoryId: string) => void;
   pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
@@ -181,7 +191,7 @@ function WizardHarness({
       form={form}
       setForm={setForm}
       error={error}
-      selectedProduct={{ ...product, ...(noCost ? { acqPrice: null } : {}), images, hasNoProductIdentifier, isKit }}
+      selectedProduct={{ ...product, name: productName, ...(noCost ? { acqPrice: null } : {}), images, hasNoProductIdentifier, isKit }}
       suggestions={suggestions}
       suggestionsNotice={suggestionsNotice}
       categoryAttributes={[
@@ -297,6 +307,58 @@ function WizardHarness({
 describe("ListingPublicationWizard", () => {
   afterEach(() => {
     cleanup();
+    coverMocks.inspections = {};
+  });
+
+  it("avisa sin bloquear cuando la portada no parece un producto sobre fondo blanco", async () => {
+    coverMocks.inspections = {
+      "https://example.com/lapicero.jpg": {
+        whiteBorderShare: 0.3,
+        touchesEdge: true,
+        compliant: false,
+        reasons: ["El fondo de la portada no es blanco."],
+      },
+    };
+    const onPersistStep = vi.fn(async () => true);
+    render(<WizardHarness onPublish={async () => undefined} initialStep={2} onPersistStep={onPersistStep} />);
+    expect(
+      screen.getByText(/La portada no parece un solo producto entero sobre fondo blanco: Mercado Libre puede bajarle exposición\. Puedes publicar igual\./),
+    ).toBeVisible();
+    expect(screen.getByText("El fondo de la portada no es blanco.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await vi.waitFor(() => expect(onPersistStep).toHaveBeenCalled());
+  });
+
+  it("no avisa de la portada cuando la revisión no dio resultado o la portada está bien", () => {
+    render(<WizardHarness onPublish={async () => undefined} initialStep={2} />);
+    expect(screen.queryByText(/La portada no parece un solo producto/)).not.toBeInTheDocument();
+    cleanup();
+    coverMocks.inspections = {
+      "https://example.com/lapicero.jpg": { whiteBorderShare: 1, touchesEdge: false, compliant: true, reasons: [] },
+    };
+    render(<WizardHarness onPublish={async () => undefined} initialStep={2} />);
+    expect(screen.queryByText(/La portada no parece un solo producto/)).not.toBeInTheDocument();
+  });
+
+  it("un personaje con licencia lleva su aviso, pero no impide seguir a mano", async () => {
+    const onPersistStep = vi.fn(async () => true);
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        productName="Cartuchera Hello Kitty"
+        onPersistStep={onPersistStep}
+      />,
+    );
+    expect(
+      screen.getByText(/Personaje con licencia \(Hello Kitty\): excluido de Mercado Libre\. No entra en las tandas automáticas; publicarla a mano es decisión tuya\./),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await vi.waitFor(() => expect(onPersistStep).toHaveBeenCalled());
+  });
+
+  it("sin personaje con licencia no hay aviso", () => {
+    render(<WizardHarness onPublish={async () => undefined} />);
+    expect(screen.queryByText(/Personaje con licencia/)).not.toBeInTheDocument();
   });
 
   it("guides an administrator from product details to direct publishing", async () => {

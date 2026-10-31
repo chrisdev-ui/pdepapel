@@ -56,6 +56,11 @@ import {
   type MercadoLibrePricingTargets,
   type SaleFeeSource,
 } from "@/lib/pricing/mercadolibre-fees";
+import {
+  LICENSED_EXCLUSION_REASON,
+  findLicensedCharacter,
+} from "@/lib/mercadolibre/licensed-characters";
+import { useCoverCheck } from "./use-cover-check";
 import { usePictureChecks } from "./use-picture-checks";
 import {
   Check,
@@ -443,6 +448,13 @@ export function ListingPublicationWizard({
   const [lastCategoryQuery, setLastCategoryQuery] = useState("");
   const productImageUrls = (selectedProduct?.images ?? []).map((image) => image.url);
   const pictureChecks = usePictureChecks(productImageUrls);
+  const coverCheck = useCoverCheck(form.imageUrls[0] ?? null);
+  const licensedCharacter = selectedProduct
+    ? findLicensedCharacter(selectedProduct.name, [
+        selectedProduct.productGroupName,
+        selectedProduct.brand,
+      ])
+    : null;
   /** Atributos de lista en los que se eligió escribir un valor libre. */
   const [freeValueAttributeIds, setFreeValueAttributeIds] = useState<
     string[]
@@ -764,6 +776,18 @@ export function ListingPublicationWizard({
         Paso {step} de {LISTING_WIZARD_STEPS.length} ·{" "}
         {getListingWizardStepLabel(step)}
       </p>
+      {licensedCharacter ? (
+        <div
+          className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-xs"
+          role="status"
+        >
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <p>
+            {LICENSED_EXCLUSION_REASON(licensedCharacter.label)} No entra en las
+            tandas automáticas; publicarla a mano es decisión tuya.
+          </p>
+        </div>
+      ) : null}
 
       {step === 1 ? (
         <div className="space-y-4">
@@ -1334,6 +1358,28 @@ export function ListingPublicationWizard({
                     );
                   })}
                 </div>
+                {coverCheck && !coverCheck.compliant ? (
+                  <div
+                    className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-xs"
+                    role="status"
+                  >
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                    <div className="space-y-1">
+                      <p>
+                        La portada no parece un solo producto entero sobre fondo
+                        blanco: Mercado Libre puede bajarle exposición. Puedes
+                        publicar igual.
+                      </p>
+                      {coverCheck.reasons.length > 0 ? (
+                        <ul className="list-disc pl-4 text-muted-foreground">
+                          {coverCheck.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 {form.imageUrls.length > 1 ? (
                   <div className="grid gap-1 sm:max-w-sm">
                     <Label htmlFor="mercadolibre-cover-image">

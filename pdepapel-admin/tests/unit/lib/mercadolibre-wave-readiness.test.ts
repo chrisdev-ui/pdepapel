@@ -2,15 +2,40 @@ import { describe, expect, it } from "vitest";
 
 import { waveItemReadiness, type WaveItemFacts } from "@/lib/mercadolibre/wave-readiness";
 
-const ready: WaveItemFacts = { categoryStatus: "validada", feeSource: "real", photoStatus: "apta", contactSheetApproved: true, presaleBlocked: false };
+const ready: WaveItemFacts = {
+  categoryStatus: "validada",
+  categoryMatchesPredictorTop: false,
+  feeSource: "real",
+  photoStatus: "apta",
+  contactSheetApproved: true,
+  presaleBlocked: false,
+  licensed: null,
+};
 
-/** Una tanda solo publica lo que tiene categoría validada (o confirmada por Christian), comisión real, foto apta, hoja aprobada y no está en preventa. */
+/** Una tanda solo publica lo que tiene categoría validada (o la primera del predictor), comisión real, foto apta, hoja aprobada, sin preventa ni licencia. */
 describe("listo para una tanda de Mercado Libre", () => {
-  it("con todo en regla se publica; una categoría corregida por el predictor espera el visto bueno", () => {
+  it("con todo en regla se publica; una categoría corregida solo pasa si es la primera del predictor", () => {
     expect(waveItemReadiness(ready)).toEqual({ publishable: true, reasons: [] });
+    expect(waveItemReadiness({ ...ready, categoryStatus: "corregida", categoryMatchesPredictorTop: true })).toEqual({
+      publishable: true,
+      reasons: [],
+    });
     expect(waveItemReadiness({ ...ready, categoryStatus: "corregida" })).toEqual({
       publishable: false,
-      reasons: ["La categoría la propuso el predictor de Mercado Libre: falta tu visto bueno."],
+      reasons: ["La categoría no es la primera del predictor de Mercado Libre: queda por confirmar."],
+    });
+  });
+
+  it("coincidir con el predictor no valida una categoría por confirmar", () => {
+    expect(waveItemReadiness({ ...ready, categoryStatus: "por confirmar", categoryMatchesPredictorTop: true }).reasons).toEqual([
+      "Falta validar la categoría de Mercado Libre.",
+    ]);
+  });
+
+  it("un personaje con licencia nunca entra, aunque todo lo demás esté listo", () => {
+    expect(waveItemReadiness({ ...ready, licensed: { label: "Hello Kitty" } })).toEqual({
+      publishable: false,
+      reasons: ["Personaje con licencia (Hello Kitty): excluido de Mercado Libre."],
     });
   });
 
