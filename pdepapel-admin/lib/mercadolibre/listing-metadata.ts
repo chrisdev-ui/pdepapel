@@ -46,6 +46,12 @@ export type MercadoLibreListingMetadata = {
   belowCostOverride: MercadoLibreBelowCostOverride | null;
   media: {
     imageUrls: string[];
+    /**
+     * Paquete de fotos de Mercado Libre (`lib/mercadolibre/image-pack.ts`) aprobado en la hoja de
+     * contacto. Si existe, se envía tal cual en vez de las fotos de la galería.
+     */
+    packPictures?: string[];
+    packRecipe?: string | null;
   } | null;
   quality: {
     videoRecommendationSnoozedUntil: string | null;
@@ -237,6 +243,8 @@ export function getMercadoLibreListingMetadata(
   const quality =
     isRecord(value) && isRecord(value.quality) ? value.quality : null;
   const imageUrls = media ? getStringArray(media.imageUrls) : [];
+  const packPictures = media ? getStringArray(media.packPictures) : [];
+  const packRecipe = media && typeof media.packRecipe === "string" && media.packRecipe.trim() ? media.packRecipe.trim() : null;
   const familyName = isRecord(value)
     ? normalizeMercadoLibreFamilyName(value.familyName)
     : null;
@@ -256,7 +264,10 @@ export function getMercadoLibreListingMetadata(
     belowCostOverride: isRecord(value)
       ? parseMercadoLibreBelowCostOverride(value.belowCostOverride)
       : null,
-    media: imageUrls.length > 0 ? { imageUrls } : null,
+    media:
+      imageUrls.length > 0 || packPictures.length > 0
+        ? { imageUrls, ...(packPictures.length > 0 ? { packPictures, packRecipe } : {}) }
+        : null,
     quality: videoRecommendationSnoozedUntil
       ? { videoRecommendationSnoozedUntil }
       : null,
@@ -322,9 +333,15 @@ export function buildMercadoLibreListingMetadata({
   );
   assign("belowCostOverride", normalizedBelowCostOverride);
   assign("familyName", normalizedFamilyName);
+  // El paquete de fotos lo escribe solo el publicador por tandas; una edición del panel lo conserva.
+  const pack = currentMetadata.media?.packPictures?.length
+    ? { packPictures: currentMetadata.media.packPictures, packRecipe: currentMetadata.media.packRecipe ?? null }
+    : {};
   assign(
     "media",
-    normalizedImages?.length ? { imageUrls: normalizedImages } : null,
+    normalizedImages?.length || "packPictures" in pack
+      ? { imageUrls: normalizedImages ?? [], ...pack }
+      : null,
   );
   assign(
     "quality",

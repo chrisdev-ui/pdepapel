@@ -282,6 +282,11 @@ function addProductIdentifiers(
   return result;
 }
 
+/** El cuerpo exacto de `POST /items`; el publicador por tandas lo usa en el ensayo. */
+export function buildMercadoLibreItemPayload(listing: ListingForPublication) {
+  return buildItemPayload(listing);
+}
+
 function buildItemPayload(listing: ListingForPublication) {
   if (listing.product.isArchived) {
     throw new MercadoLibrePublicationError(
@@ -318,10 +323,10 @@ function buildItemPayload(listing: ListingForPublication) {
       { requiresDraftReview: true },
     );
   }
-  const pictures = getMercadoLibreListingImageUrls(
-    listing.product.images,
-    listing.metadata,
-  );
+  const packPictures = metadata.media?.packPictures ?? [];
+  const pictures = packPictures.length
+    ? packPictures
+    : getMercadoLibreListingImageUrls(listing.product.images, listing.metadata);
   if (pictures.length === 0) {
     throw new MercadoLibrePublicationError(
       "El producto necesita al menos una imagen para publicarse",
@@ -366,8 +371,9 @@ function buildItemPayload(listing: ListingForPublication) {
     ...(listing.product.sku.trim()
       ? { seller_custom_field: listing.product.sku.trim() }
       : {}),
-    // Mercado Libre descarga la foto una vez: la copia de 1600 px, no el original.
-    pictures: pictures.map((source) => ({ source: toGoogleMerchantImageUrl(source) })),
+    // Mercado Libre descarga la foto una vez: la copia de 1600 px, no el original. El paquete
+    // ya viene transformado (1200 px, JPG): una segunda transformación encima lo cambiaría.
+    pictures: pictures.map((source) => ({ source: packPictures.length ? source : toGoogleMerchantImageUrl(source) })),
     attributes: addPackageDimensionAttributes(
       addProductIdentifiers(
         getConfiguredAttributes(listing.metadata),
