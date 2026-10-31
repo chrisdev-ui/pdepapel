@@ -42,6 +42,7 @@ import {
   type MercadoLibreAttribute,
 } from "./listing-metadata";
 import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName, type MercadoLibreBrandSource } from "@/lib/mercadolibre/brand";
+import { mercadoLibreGtinRequiredBrandProblem } from "@/lib/mercadolibre/gtin-required-brands";
 
 export { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listing-wizard";
 
@@ -455,7 +456,8 @@ const attributeValueMatches = (attribute: MercadoLibreAttribute, values: { id: s
  * los `conditional_required` (GTIN o su motivo vacío, uno de los dos; las
  * unidades por paquete cuando el formato de venta es «Pack»; el resto, siempre).
  * Un valor de una lista cerrada (`list`) debe ser uno de sus valores. Los de
- * catálogo que faltan son avisos, no bloquean.
+ * catálogo que faltan son avisos, no bloquean. Una marca con códigos
+ * registrados en Mercado Libre exige un GTIN válido aunque traiga el motivo vacío.
  */
 export function checkMercadoLibreRequiredAttributes(
   categoryAttributes: MercadoLibreCategoryAttribute[],
@@ -489,6 +491,8 @@ export function checkMercadoLibreRequiredAttributes(
     }
   }
   if (gtinGroupNeeded && !has("GTIN") && !has("EMPTY_GTIN_REASON")) missing.push("GTIN o EMPTY_GTIN_REASON");
+  const brandProblem = mercadoLibreGtinRequiredBrandProblem(byId.get("BRAND")?.value_name, byId.get("GTIN")?.value_name);
+  if (brandProblem) (brandProblem.kind === "missing" ? missing : invalid).push(brandProblem.message);
   return { missing, invalid, warnings };
 }
 

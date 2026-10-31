@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MercadoLibreCategoryAttribute } from "@/lib/mercadolibre/categories";
+import { isMercadoLibreGtinRequiredBrand } from "@/lib/mercadolibre/gtin-required-brands";
 import { checkMercadoLibreRequiredAttributes } from "@/lib/mercadolibre/listings";
 
 const attr = (id: string, extra: Partial<MercadoLibreCategoryAttribute> = {}): MercadoLibreCategoryAttribute => ({
@@ -70,7 +71,7 @@ describe("ficha técnica frente a la categoría (la misma regla del trabajador y
   });
 
   it("unidades por paquete solo cuando el formato de venta es «Pack»", () => {
-    const base = [{ id: "BRAND", value_name: "Kores" }, { id: "MODEL", value_name: "K-Liner" }, { id: "EMPTY_GTIN_REASON", value_id: "17055160" }];
+    const base = [{ id: "BRAND", value_name: "Scribe" }, { id: "MODEL", value_name: "Incolors" }, { id: "EMPTY_GTIN_REASON", value_id: "17055160" }];
     expect(checkMercadoLibreRequiredAttributes(markers, base, noBarcode).missing).toEqual([]);
     expect(checkMercadoLibreRequiredAttributes(markers, [...base, { id: "SALE_FORMAT", value_id: "1359392" }], noBarcode).missing).toEqual(["UNITS_PER_PACK"]);
     expect(checkMercadoLibreRequiredAttributes(markers, [...base, { id: "SALE_FORMAT", value_id: "1359392" }, { id: "UNITS_PER_PACK", value_name: "24" }], noBarcode).missing).toEqual([]);
@@ -79,5 +80,39 @@ describe("ficha técnica frente a la categoría (la misma regla del trabajador y
   it("GTIN obligatorio (no condicional) sigue exento para un producto sin código legítimo", () => {
     const strict = [attr("GTIN", { required: true })];
     expect(checkMercadoLibreRequiredAttributes(strict, [], noBarcode).missing).toEqual([]);
+  });
+});
+
+describe("marcas con códigos registrados en Mercado Libre (rechazo de la tanda ola-1)", () => {
+  const ficha = (brand: string, extra: { id: string; value_id?: string; value_name?: string }[]) => [
+    { id: "BRAND", value_name: brand },
+    { id: "MODEL", value_name: "x" },
+    ...extra,
+  ];
+
+  it("Primavera, Offi-Esco y Kores no pasan con el motivo «sin código»", () => {
+    for (const brand of ["Primavera", "Offi-Esco", "Kores"]) {
+      const { missing } = checkMercadoLibreRequiredAttributes(markers, ficha(brand, [{ id: "EMPTY_GTIN_REASON", value_id: "17055160" }]), noBarcode);
+      expect(missing).toHaveLength(1);
+      expect(missing[0]).toMatch(new RegExp(`^GTIN \\(${brand} tiene códigos registrados`));
+    }
+  });
+
+  it("con un GTIN válido pasan; con un dígito de control malo, no", () => {
+    expect(checkMercadoLibreRequiredAttributes(markers, ficha("Kores", [{ id: "GTIN", value_name: "4006381333931" }]), noBarcode)).toMatchObject({ missing: [], invalid: [] });
+    const wrong = checkMercadoLibreRequiredAttributes(markers, ficha("Kores", [{ id: "GTIN", value_name: "4006381333932" }]), noBarcode);
+    expect(wrong.missing).toEqual([]);
+    expect(wrong.invalid[0]).toMatch(/^GTIN \(4006381333932 no es un código válido/);
+  });
+
+  it("reconoce la marca sin importar mayúsculas, tildes ni guiones; las demás siguen aceptando el motivo vacío", () => {
+    expect(["OFFI ESCO", "offi-esco", "Offiesco", "KORES", "primavera"].every(isMercadoLibreGtinRequiredBrand)).toBe(true);
+    expect(isMercadoLibreGtinRequiredBrand("Scribe")).toBe(false);
+    expect(isMercadoLibreGtinRequiredBrand(null)).toBe(false);
+    expect(checkMercadoLibreRequiredAttributes(markers, ficha("Scribe", [{ id: "EMPTY_GTIN_REASON", value_id: "17055160" }]), noBarcode).missing).toEqual([]);
+  });
+
+  it("la exige aunque la categoría no pida el grupo GTIN", () => {
+    expect(checkMercadoLibreRequiredAttributes([attr("BRAND", { required: true })], [{ id: "BRAND", value_name: "Primavera" }], noBarcode).missing[0]).toMatch(/^GTIN \(Primavera/);
   });
 });
