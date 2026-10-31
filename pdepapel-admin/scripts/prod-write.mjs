@@ -45,6 +45,7 @@ import {
   PROD_WRITE_LOG,
   PROD_WRITE_OLD_DB_ENV_FILE,
   prodWriteEnvFileFor,
+  realRunEnv,
   RUN_STATUS,
   runnerFor,
 } from "./lib/prod-guard.mjs";
@@ -168,13 +169,7 @@ console.log(`prod-write: motivo «${approval.reason}» (aprobado por ${approval.
 
 const result = spawnSync(runner.command, [...runner.args, absoluteScript, ...scriptArgs], {
   cwd: projectRoot,
-  env: {
-    ...process.env,
-    DATABASE_URL: writeUrl,
-    PROD_WRITE_REASON: approval.reason,
-    PROD_WRITE_APPROVED: "1",
-    PROD_WRITE_EXPECT: expect,
-  },
+  env: realRunEnv(process.env, { writeUrl, reason: approval.reason, expect }),
   stdio: ["inherit", "pipe", "inherit"],
   encoding: "utf8",
 });

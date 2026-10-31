@@ -20,7 +20,9 @@ import {
   isBlockedLedgerOperation,
   isProductionDatabaseUrl,
   markApprovalUsed,
+  PRODUCTION_ADMIN_URL,
   prodWriteEnvFileFor,
+  realRunEnv,
   reasonNamesModel,
   runnerFor,
 } from "../../../scripts/lib/prod-guard.mjs";
@@ -362,6 +364,18 @@ describe("prod-write wrapper", () => {
       expect(project.log()).toMatch(/\[base nueva\] \| scripts\/escribe\.mjs@/);
     });
 
+    it("la corrida real encola hacia el panel de producción aunque .env diga localhost", () => {
+      const project = fakeProject();
+      writeFileSync(join(project.root, "scripts/encola.mjs"), "console.log(`admin=${process.env.ADMIN_WEB_URL}`);\nconsole.log('PROD_WRITE_ROWS=0');\n");
+      const result = spawnSync(process.execPath, [join(project.root, "scripts", "prod-write.mjs"), "--expect", "new", "scripts/encola.mjs"], {
+        cwd: project.root,
+        encoding: "utf8",
+        env: { PATH: process.env.PATH ?? "", NODE_ENV: "test", ADMIN_WEB_URL: "http://localhost:3001" },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(`admin=${PRODUCTION_ADMIN_URL}`);
+    });
+
     it("with --expect old uses .env.prod-write.old-db when it exists", () => {
       const project = fakeProject();
       writeFileSync(join(project.root, ".env.prod-write.old-db"), "DATABASE_URL=mysql://root:falso@vieja.proxy.rlwy.net:1/railway\n");
@@ -419,6 +433,14 @@ describe("extractExpectArg / prodWriteEnvFileFor / databaseIdentityProblem", () 
     expect(classifyDatabaseIdentity({ markerVisible: false, globalSelect: false })).toBe("unknown");
     expect(databaseIdentityProblem("old", "unknown")).toMatch(/no puede ver la marca/);
     expect(databaseIdentityProblem("new", "unknown")).toMatch(/no puede ver la marca/);
+  });
+});
+
+describe("realRunEnv", () => {
+  it("lleva la base de escritura, la aprobación y el panel de producción por encima de lo que traiga el padre", () => {
+    const env = realRunEnv({ ADMIN_WEB_URL: "http://localhost:3001", DATABASE_URL: "mysql://ro@localhost/x", OTRA: "1" }, { writeUrl: "mysql://root@h.rlwy.net/railway", reason: "motivo", expect: "new" });
+    expect(env).toMatchObject({ ADMIN_WEB_URL: PRODUCTION_ADMIN_URL, DATABASE_URL: "mysql://root@h.rlwy.net/railway", PROD_WRITE_APPROVED: "1", PROD_WRITE_REASON: "motivo", PROD_WRITE_EXPECT: "new", OTRA: "1" });
+    expect(new URL(PRODUCTION_ADMIN_URL).protocol).toBe("https:");
   });
 });
 

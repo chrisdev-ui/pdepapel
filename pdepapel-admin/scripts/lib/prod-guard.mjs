@@ -93,6 +93,25 @@ export function databaseIdentityProblem(expect, actual) {
   return `la base de destino es ${name(actual)}, no ${name(expect)} como dice --expect ${expect}. No se ejecutó nada y la aprobación sigue válida.`;
 }
 export const PROD_WRITE_LOG = "ops/prod-writes.log";
+
+/**
+ * Lo que la corrida real encola en QStash apunta a `ADMIN_WEB_URL`. Con el
+ * localhost de `.env` QStash no llega a ningún lado y el trabajo esperaba al
+ * barrido de 15 minutos (tanda ola-1, 2026-10-31).
+ */
+export const PRODUCTION_ADMIN_URL = "https://admin.papeleriapdepapel.com";
+
+/** Entorno del guion en una corrida real; Prisma lee `.env` después sin pisar estas variables. */
+export function realRunEnv(parentEnv, { writeUrl, reason, expect }) {
+  return {
+    ...parentEnv,
+    DATABASE_URL: writeUrl,
+    PROD_WRITE_REASON: reason,
+    PROD_WRITE_APPROVED: "1",
+    PROD_WRITE_EXPECT: expect,
+    ADMIN_WEB_URL: PRODUCTION_ADMIN_URL,
+  };
+}
 export const APPROVAL_TTL_MS = 15 * 60 * 1000;
 
 /** Hosts de la base de producción; cualquier otro destino se rechaza. */
