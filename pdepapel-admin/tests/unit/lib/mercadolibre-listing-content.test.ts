@@ -96,6 +96,49 @@ describe("Mercado Libre listing content synchronization", () => {
     });
   });
 
+  it("una publicación con paquete de fotos aprobado sincroniza ese paquete, no las fotos del producto", async () => {
+    // Tanda ola-1 (2026-10-31): «Sincronizar contenido», editar la publicación o
+    // una acción masiva reemplazaban en Mercado Libre el paquete aprobado.
+    const pack = [
+      "https://res.cloudinary.com/demo/image/upload/mlp2/portada.jpg",
+      "https://res.cloudinary.com/demo/image/upload/mlp2/detalle.jpg",
+    ];
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ attributes: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      .mockResolvedValueOnce(new Response("", { status: 404 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 201 }));
+    pictureChecks.inspect.mockClear();
+    await syncMercadoLibreListingContent(
+      {
+        id: "listing-id",
+        connectionId: "connection-id",
+        externalItemId: "MCO123",
+        categoryId: "MCO1234",
+        listingType: "gold_special",
+        marketplacePrice: 19_900,
+        stockSafetyBuffer: 1,
+        metadata: { media: { imageUrls: ["https://images.example.com/cover.jpg"], packPictures: pack } },
+        product: {
+          id: "product-id",
+          name: "Agenda kawaii",
+          description: "Agenda",
+          stock: 5,
+          sku: "AGENDA-01",
+          brand: "P de Papel",
+          gtin: null,
+          mpn: null,
+          isArchived: false,
+          images: [{ url: "https://images.example.com/cover.jpg" }, { url: "https://images.example.com/detail.jpg" }],
+        },
+      } as never,
+      request,
+    );
+    expect(JSON.parse(request.mock.calls[1][1].body).pictures).toEqual(pack.map((source) => ({ source })));
+    expect(pictureChecks.inspect.mock.calls[0][0]).toEqual(pack);
+  });
+
   // Sin marca en el panel ni texto anterior: no se manda BRAND propio; queda el valor que ya tiene Mercado Libre.
   async function syncWithoutBrand(remoteAttributes: unknown[]) {
     const request = vi

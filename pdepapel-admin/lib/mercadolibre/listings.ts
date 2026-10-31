@@ -284,6 +284,18 @@ function addProductIdentifiers(
   return result;
 }
 
+/**
+ * Las fotos que se mandan a Mercado Libre, igual al publicar que al
+ * sincronizar: las del paquete aprobado (`media.packPictures`) tal cual, o si
+ * no hay paquete las del producto con la transformación de catálogo. La
+ * sincronización usaba siempre las del producto y reemplazaba el paquete.
+ */
+export function mercadoLibreListingPictureSources(listing: { metadata: Prisma.JsonValue | null; product: { images: { url: string }[] } }) {
+  const packPictures = getMercadoLibreListingMetadata(listing.metadata).media?.packPictures ?? [];
+  if (packPictures.length) return packPictures;
+  return getMercadoLibreListingImageUrls(listing.product.images, listing.metadata).map((source) => toGoogleMerchantImageUrl(source));
+}
+
 /** La descripción que va a Mercado Libre: la propia de la publicación o, sin ella, la de la tienda. */
 export function mercadoLibreListingDescription(listing: { metadata: Prisma.JsonValue | null; product: { description: string } }) {
   return getMercadoLibreListingMetadata(listing.metadata).descriptionOverride ?? listing.product.description;
@@ -330,10 +342,7 @@ function buildItemPayload(listing: ListingForPublication) {
       { requiresDraftReview: true },
     );
   }
-  const packPictures = metadata.media?.packPictures ?? [];
-  const pictures = packPictures.length
-    ? packPictures
-    : getMercadoLibreListingImageUrls(listing.product.images, listing.metadata);
+  const pictures = mercadoLibreListingPictureSources(listing);
   if (pictures.length === 0) {
     throw new MercadoLibrePublicationError(
       "El producto necesita al menos una imagen para publicarse",
@@ -380,7 +389,7 @@ function buildItemPayload(listing: ListingForPublication) {
       : {}),
     // Mercado Libre descarga la foto una vez: la copia de 1600 px, no el original. El paquete
     // ya viene transformado (1200 px, JPG): una segunda transformación encima lo cambiaría.
-    pictures: pictures.map((source) => ({ source: packPictures.length ? source : toGoogleMerchantImageUrl(source) })),
+    pictures: pictures.map((source) => ({ source })),
     attributes: addPackageDimensionAttributes(
       addProductIdentifiers(
         getConfiguredAttributes(listing.metadata),
@@ -714,16 +723,13 @@ export async function syncMercadoLibreListingContent(
       "No puedes sincronizar el contenido de un producto archivado",
     );
   }
-  const imageUrls = getMercadoLibreListingImageUrls(
-    listing.product.images,
-    listing.metadata,
-  );
-  if (imageUrls.length === 0) {
+  const pictures = mercadoLibreListingPictureSources(listing);
+  if (pictures.length === 0) {
     throw new MercadoLibrePublicationError(
       "El producto necesita al menos una imagen para sincronizarse",
     );
   }
-  await assertPicturesMeetMercadoLibreRules(imageUrls.map((source) => toGoogleMerchantImageUrl(source)));
+  await assertPicturesMeetMercadoLibreRules(pictures);
 
   const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
   const itemUrl = `https://api.mercadolibre.com/items/${encodeURIComponent(listing.externalItemId)}`;
@@ -741,7 +747,7 @@ export async function syncMercadoLibreListingContent(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      pictures: imageUrls.map((source) => ({ source: toGoogleMerchantImageUrl(source) })),
+      pictures: pictures.map((source) => ({ source })),
       attributes: mergeRemoteAttributes(
         getRemoteAttributes(existingPayload),
         listing,
