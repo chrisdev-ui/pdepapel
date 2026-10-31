@@ -16,7 +16,8 @@ import { isBlockedByPresaleForMercadoLibre } from "./available-quantity";
 import { assertMercadoLibreWritesAllowed } from "./writes-switch";
 import { DESCRIPTION_ISSUE_LABEL, inspectMercadoLibreDescription } from "./description-rules";
 import { inspectRemotePictures } from "./picture-fetch";
-import { inspectMercadoLibreCategory } from "./category-validation";
+import { type MercadoLibreCategoryJsonFetcher, inspectMercadoLibreCategory } from "./category-validation";
+import type { MercadoLibreCategoryAttribute } from "./categories";
 import { isPriceBelowCost } from "./listing-price-guard";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES, shouldUseEmptyGtinReason } from "./listing-wizard";
 import {
@@ -439,10 +440,63 @@ async function assertNotInPresale(productId: string) {
   }
 }
 
+const EMPTY_GTIN_GROUP = new Set(["GTIN", "EMPTY_GTIN_REASON"]);
+const SALE_FORMAT_PACK = { id: "1359392", name: "pack" };
+
+const attributeValueMatches = (attribute: MercadoLibreAttribute, values: { id: string; name: string }[]) =>
+  values.some(
+    (value) =>
+      (attribute.value_id && attribute.value_id === value.id) ||
+      (attribute.value_name && attribute.value_name.trim().toLowerCase() === value.name.trim().toLowerCase()),
+  );
+
+/**
+ * Qué falta en la ficha frente a la categoría. Obligatorios: los `required` y
+ * los `conditional_required` (GTIN o su motivo vacío, uno de los dos; las
+ * unidades por paquete cuando el formato de venta es «Pack»; el resto, siempre).
+ * Un valor de una lista cerrada (`list`) debe ser uno de sus valores. Los de
+ * catálogo que faltan son avisos, no bloquean.
+ */
+export function checkMercadoLibreRequiredAttributes(
+  categoryAttributes: MercadoLibreCategoryAttribute[],
+  attributes: MercadoLibreAttribute[],
+  product: Parameters<typeof shouldUseEmptyGtinReason>[0],
+) {
+  const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
+  const has = (id: string) => byId.has(id);
+  const saleFormat = byId.get("SALE_FORMAT");
+  const isPack = Boolean(
+    saleFormat && (saleFormat.value_id === SALE_FORMAT_PACK.id || saleFormat.value_name?.trim().toLowerCase() === SALE_FORMAT_PACK.name),
+  );
+  const missing: string[] = [];
+  const invalid: string[] = [];
+  const warnings: string[] = [];
+  let gtinGroupNeeded = false;
+  for (const attribute of categoryAttributes) {
+    if (attribute.required) {
+      if (!has(attribute.id) && !(attribute.id === "GTIN" && shouldUseEmptyGtinReason(product))) missing.push(attribute.id);
+    } else if (attribute.conditionalRequired) {
+      if (EMPTY_GTIN_GROUP.has(attribute.id)) gtinGroupNeeded = true;
+      else if (attribute.id === "UNITS_PER_PACK") {
+        if (isPack && !has(attribute.id)) missing.push(attribute.id);
+      } else if (!has(attribute.id)) missing.push(attribute.id);
+    } else if (attribute.catalogRequired && !has(attribute.id)) {
+      warnings.push(attribute.id);
+    }
+    const configured = byId.get(attribute.id);
+    if (configured && attribute.valueType === "list" && attribute.values.length > 0 && !attribute.truncated && !attributeValueMatches(configured, attribute.values)) {
+      invalid.push(`${attribute.id} (${configured.value_name ?? configured.value_id}; vale: ${attribute.values.map((value) => value.name).join(", ")})`);
+    }
+  }
+  if (gtinGroupNeeded && !has("GTIN") && !has("EMPTY_GTIN_REASON")) missing.push("GTIN o EMPTY_GTIN_REASON");
+  return { missing, invalid, warnings };
+}
+
 export async function validateMercadoLibreListingForPublication(
   listing: ListingForPublication,
   request: typeof fetch = mercadoLibreFetch,
-) {
+  { categoryJson }: { categoryJson?: MercadoLibreCategoryJsonFetcher } = {},
+): Promise<{ warnings: string[] }> {
   await assertNotInPresale(listing.product.id);
   const payload = buildItemPayload(listing);
   let categoryInspection: Awaited<ReturnType<typeof inspectMercadoLibreCategory>>;
@@ -458,6 +512,7 @@ export async function validateMercadoLibreListingForPublication(
           pictureCount: payload.pictures.length,
         },
         request,
+        categoryJson,
       },
     );
   } catch (error) {
@@ -490,19 +545,10 @@ export async function validateMercadoLibreListingForPublication(
       code: categoryInspection.code,
     });
   }
-  const requiredAttributeIds = (categoryInspection.attributes ?? [])
-    .filter((attribute) => attribute.required)
-    .map((attribute) => attribute.id);
-  const configuredAttributeIds = new Set(
-    payload.attributes.map((attribute) => attribute.id),
-  );
-  // Un producto marcado «sin identificador» no puede aportar GTIN y no se
-  // inventa: la exigencia local se levanta; si Mercado Libre insiste, su
-  // rechazo llega mapeado al campo.
-  const missingAttributes = requiredAttributeIds.filter(
-    (attributeId) =>
-      !configuredAttributeIds.has(attributeId) &&
-      !(shouldUseEmptyGtinReason(listing.product) && attributeId === "GTIN"),
+  const { missing: missingAttributes, invalid, warnings } = checkMercadoLibreRequiredAttributes(
+    categoryInspection.attributes ?? [],
+    payload.attributes,
+    listing.product,
   );
   if (missingAttributes.length > 0) {
     throw new MercadoLibrePublicationError(
@@ -510,7 +556,15 @@ export async function validateMercadoLibreListingForPublication(
       { kind: "review", step: "ficha", field: missingAttributes[0] },
     );
   }
+  if (invalid.length > 0) {
+    throw new MercadoLibrePublicationError(`Valor fuera de la lista de Mercado Libre: ${invalid.join("; ")}.`, {
+      kind: "review",
+      step: "ficha",
+      field: invalid[0].split(" ")[0],
+    });
+  }
   await assertPicturesMeetMercadoLibreRules(payload.pictures.map((picture) => picture.source));
+  return { warnings: warnings.map((id) => `Falta ${id} (lo pide el catálogo de Mercado Libre; no bloquea).`) };
 }
 
 /** JPG o PNG, hasta 10 MB y al menos 500 px por lado (reglas duras de Mercado Libre). */

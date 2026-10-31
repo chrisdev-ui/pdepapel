@@ -32,7 +32,8 @@ import { MarketplaceListingStatus, MarketplaceProvider, PrismaClient } from "@pr
 
 import { MERCADOLIBRE_BRAND_SELECT } from "@/lib/mercadolibre/brand";
 import { findLicensedCharacter } from "@/lib/mercadolibre/licensed-characters";
-import { buildMercadoLibreItemPayload } from "@/lib/mercadolibre/listings";
+import { publicMercadoLibreCategoryJson } from "@/lib/mercadolibre/category-validation";
+import { buildMercadoLibreItemPayload, validateMercadoLibreListingForPublication } from "@/lib/mercadolibre/listings";
 import { loadMercadoLibrePresaleBlocked, loadMercadoLibreSellable } from "@/lib/mercadolibre/available-quantity";
 import { type WavePlan, type WaveProduct, isHeldWaveItem, planWaveItem, wavePublishBlockers, wavePublishItems } from "@/lib/mercadolibre/wave-publisher";
 import { areMercadoLibreWritesPausedForStore } from "@/lib/mercadolibre/writes-switch";
@@ -120,6 +121,11 @@ async function main() {
     const isOwnWaveDraft = (row: (typeof existing)[number]) =>
       !row.externalItemId && (row.metadata as { source?: { kind?: string } } | null)?.source?.kind === "wave";
     const adoptable = new Map(existing.filter(isOwnWaveDraft).map((row) => [row.productId, row.id]));
+    const publishedByWave = new Map(
+      existing
+        .filter((row) => row.externalItemId && (row.metadata as { source?: { kind?: string } } | null)?.source?.kind === "wave")
+        .map((row) => [row.productId, row.externalItemId as string]),
+    );
     const listed = new Set(existing.filter((row) => !isOwnWaveDraft(row)).map((row) => row.productId));
 
     const planned = plan.items.map((item) => {
@@ -132,9 +138,31 @@ async function main() {
         licensed: findLicensedCharacter(product.name, [item.title, product.productGroup?.name, item.brandName ?? product.brandRef?.name ?? product.brand]),
         licenseApproved: Boolean(record.mercadoLibreLicenseApprovedAt),
         alreadyListed: listed.has(product.id),
+        publishedByWave: publishedByWave.get(product.id) ?? null,
       }, connection.id);
     });
 
+    // La misma validación que corre el trabajador antes de crear el ítem (categoría,
+    // ficha técnica, fotos), con la lectura pública de la categoría: sin token.
+    const categoryJson = publicMercadoLibreCategoryJson();
+    const validations = new Map<string, { error: string | null; warnings: string[] }>();
+    for (const item of planned) {
+      if (!item.draft || isHeldWaveItem(item)) continue;
+      try {
+        const { warnings } = await validateMercadoLibreListingForPublication(item.draft, fetch, { categoryJson });
+        validations.set(item.sku, { error: null, warnings });
+      } catch (error) {
+        validations.set(item.sku, { error: error instanceof Error ? error.message : String(error), warnings: [] });
+      }
+    }
+    // Lo que no pasa la validación del trabajador no se publica: frena la tanda como cualquier otro motivo.
+    for (const item of planned) {
+      const validation = validations.get(item.sku);
+      if (validation?.error) {
+        item.publishable = false;
+        item.reasons.push(`Validación previa a publicar: ${validation.error}`);
+      }
+    }
     const report = planned.map((item) => {
       let payload: unknown = null;
       let payloadError: string | null = null;
@@ -145,6 +173,7 @@ async function main() {
           payloadError = error instanceof Error ? error.message : String(error);
         }
       }
+      const validation = validations.get(item.sku);
       const product = products.find((row) => row.sku === item.sku);
       return {
         rank: item.rank,
@@ -152,7 +181,7 @@ async function main() {
         reutilizaBorrador: product ? adoptable.get(product.id) ?? null : null,
         publishable: item.publishable && !payloadError,
         reasons: payloadError ? [...item.reasons, payloadError] : item.reasons,
-        warnings: item.warnings,
+        warnings: [...item.warnings, ...(validation?.warnings ?? [])],
         packageSource: item.packageSource,
         payload,
       };

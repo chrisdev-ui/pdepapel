@@ -212,6 +212,17 @@ describe("publicador por tandas", () => {
       ]);
     });
 
+    it("lo que esta tanda ya publicó se salta sin frenar a los demás; otra publicación ajena sí frena", () => {
+      const done = planWaveItem({ ...item, rank: 21, sku: "SKE-1" }, product, { ...facts, alreadyListed: true, publishedByWave: "MCO4594321490" }, "conn-1");
+      expect(done.reasons).toEqual(["Ya publicado en esta tanda: MCO4594321490"]);
+      expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: [...ready, done] })).toEqual([]);
+      expect(wavePublishItems([...ready, done]).map((row) => row.sku)).toEqual(["RES-1"]);
+      const foreign = planWaveItem({ ...item, rank: 22, sku: "X-2" }, product, { ...facts, alreadyListed: true }, "conn-1");
+      expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: [...ready, foreign] })).toEqual([
+        "#22 X-2: Ya tiene una publicación en Mercado Libre (borrador o viva).",
+      ]);
+    });
+
     it("un producto fuera por otra razón (no retenido) sigue frenando la tanda", () => {
       const out = planWaveItem({ ...item, rank: 12, sku: "X-1" }, product, { ...facts, sellable: 1 }, "conn-1");
       expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: [...ready, out] })).toEqual([

@@ -95,6 +95,8 @@ export interface WaveProductFacts {
   licenseApproved: boolean;
   /** Ya existe una publicación (borrador o viva) de este producto en la conexión. */
   alreadyListed: boolean;
+  /** Esta misma tanda ya lo publicó (id del ítem en Mercado Libre): se salta, no frena a los demás. */
+  publishedByWave?: string | null;
 }
 
 export interface WaveItemPlan {
@@ -129,7 +131,8 @@ export function planWaveItem(
   const reasons: string[] = [];
   const warnings: string[] = [];
   if (product.isArchived) reasons.push("El producto está archivado.");
-  if (facts.alreadyListed) reasons.push("Ya tiene una publicación en Mercado Libre (borrador o viva).");
+  if (facts.publishedByWave) reasons.push(`${PUBLISHED_PREFIX} ${facts.publishedByWave}`);
+  else if (facts.alreadyListed) reasons.push("Ya tiene una publicación en Mercado Libre (borrador o viva).");
 
   // La hoja de contacto es la aprobación de la tanda: sin ella nada sale.
   const pack = item.imagePack ?? null;
@@ -251,9 +254,14 @@ export function planWaveItem(
 }
 
 const HOLD_PREFIX = "Retenido:";
+const PUBLISHED_PREFIX = "Ya publicado en esta tanda:";
 
-/** Retenido por Christian: se salta en esta corrida (sale cuando él lo suelte), sin frenar a los demás. */
-export const isHeldWaveItem = (item: WaveItemPlan) => item.reasons.some((reason) => reason.startsWith(HOLD_PREFIX));
+/**
+ * Se salta en esta corrida sin frenar a los demás: retenido por Christian (sale
+ * cuando él lo suelte) o ya publicado por esta misma tanda en una corrida anterior.
+ */
+export const isHeldWaveItem = (item: WaveItemPlan) =>
+  item.reasons.some((reason) => reason.startsWith(HOLD_PREFIX) || reason.startsWith(PUBLISHED_PREFIX));
 
 /** Lo que sí se publica en esta corrida: publicable y no retenido. */
 export const wavePublishItems = (items: readonly WaveItemPlan[]) => items.filter((item) => item.publishable && !isHeldWaveItem(item));

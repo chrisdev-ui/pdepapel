@@ -65,6 +65,27 @@ function getLookupFailure(
   };
 }
 
+export type MercadoLibreCategoryJsonFetcher = (resource: string) => Promise<{ ok: boolean; status: number; payload: unknown }>;
+
+/**
+ * Lectura pública (sin token) de `/categories/...`: Mercado Libre la sirve sin
+ * autenticación. La usa el ensayo del publicador por tandas para correr la
+ * misma validación que el trabajador sin tocar ni renovar el token.
+ */
+export function publicMercadoLibreCategoryJson(request: typeof fetch = fetch): MercadoLibreCategoryJsonFetcher {
+  return async (resource) => {
+    const response = await request(`https://api.mercadolibre.com${resource}`, { cache: "no-store" });
+    const body = await response.text();
+    let payload: unknown = null;
+    try {
+      payload = body ? JSON.parse(body) : null;
+    } catch {
+      payload = null;
+    }
+    return { ok: response.ok && payload !== null, status: response.status, payload };
+  };
+}
+
 export async function inspectMercadoLibreCategory(
   connectionId: string,
   categoryId: string,
@@ -72,12 +93,16 @@ export async function inspectMercadoLibreCategory(
     includeAttributes = false,
     requirements,
     request = fetch,
+    categoryJson,
   }: {
     includeAttributes?: boolean;
     requirements?: MercadoLibreCategoryPublicationRequirements;
     request?: typeof fetch;
+    /** Sin él, lectura autenticada de la conexión (la del trabajador). */
+    categoryJson?: MercadoLibreCategoryJsonFetcher;
   } = {},
 ): Promise<MercadoLibreCategoryInspection> {
+  const fetchJson: MercadoLibreCategoryJsonFetcher = categoryJson ?? ((resource) => requestMercadoLibreJson(connectionId, resource, request));
   const normalizedCategoryId = categoryId.trim().toUpperCase();
   if (!isMercadoLibreCategoryId(normalizedCategoryId)) {
     return {
@@ -90,11 +115,7 @@ export async function inspectMercadoLibreCategory(
     };
   }
 
-  const categoryResult = await requestMercadoLibreJson(
-    connectionId,
-    `/categories/${encodeURIComponent(normalizedCategoryId)}`,
-    request,
-  );
+  const categoryResult = await fetchJson(`/categories/${encodeURIComponent(normalizedCategoryId)}`);
   if (!categoryResult.ok) {
     return getLookupFailure(normalizedCategoryId, categoryResult.status);
   }
@@ -124,11 +145,7 @@ export async function inspectMercadoLibreCategory(
     };
   }
 
-  const attributesResult = await requestMercadoLibreJson(
-    connectionId,
-    `/categories/${encodeURIComponent(normalizedCategoryId)}/attributes`,
-    request,
-  );
+  const attributesResult = await fetchJson(`/categories/${encodeURIComponent(normalizedCategoryId)}/attributes`);
   if (!attributesResult.ok) {
     return getLookupFailure(normalizedCategoryId, attributesResult.status);
   }
