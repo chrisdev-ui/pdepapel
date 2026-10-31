@@ -57,6 +57,11 @@ export type MercadoLibreListingMetadata = {
     videoRecommendationSnoozedUntil: string | null;
   } | null;
   saleConditions: MercadoLibreSaleConditions | null;
+  /**
+   * Descripción propia de esta publicación (texto plano), cuando no debe ser la
+   * de la tienda: por ejemplo, un producto multicolor publicado solo en rosado.
+   */
+  descriptionOverride: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -272,6 +277,10 @@ export function getMercadoLibreListingMetadata(
       ? { videoRecommendationSnoozedUntil }
       : null,
     saleConditions,
+    descriptionOverride:
+      isRecord(value) && typeof value.descriptionOverride === "string" && value.descriptionOverride.trim()
+        ? value.descriptionOverride.trim()
+        : null,
   };
 }
 

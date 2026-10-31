@@ -46,6 +46,18 @@ export interface WavePlanItem {
   title?: string | null;
   /** Marca para BRAND aprobada en la tanda, cuando el producto no la tiene enlazada. */
   brandName?: string | null;
+  /** Atributos extra de la ficha aprobados en la tanda (p. ej. COLOR cuando se publica un solo color). */
+  attributes?: MercadoLibreAttribute[] | null;
+  /** Descripción propia de la publicación (texto plano) en vez de la de la tienda. */
+  description?: string | null;
+  /**
+   * Unidades de la variante que se publica cuando el producto mezcla colores en un
+   * solo registro (#11: solo rosadas). El colchón de la publicación se fija para que
+   * Mercado Libre muestre estas − 1, y cada venta posterior solo lo baja.
+   */
+  colorUnits?: number | null;
+  /** Retenido por Christian: no sale aunque todo lo demás esté listo. */
+  hold?: string | null;
   package?: (ProductPackage & { profile?: string }) | null;
   imagePack?: { recipe: string; approved: boolean; flags?: string[]; pictures: WavePlanPicture[] } | null;
 }
@@ -133,8 +145,20 @@ export function planWaveItem(
   });
   reasons.push(...readiness.reasons);
 
-  if (facts.sellable <= 1) reasons.push(`Solo ${facts.sellable} unidad(es) vendible(s): las tandas excluyen productos de una sola unidad.`);
-  const availableQuantity = Math.max(0, facts.sellable - WAVE_STOCK_SAFETY_BUFFER);
+  if (item.hold?.trim()) reasons.push(`Retenido: ${item.hold.trim()}`);
+
+  const colorUnits = typeof item.colorUnits === "number" ? Math.max(0, Math.floor(item.colorUnits)) : null;
+  const units = colorUnits === null ? facts.sellable : Math.min(colorUnits, facts.sellable);
+  if (units <= 1) {
+    reasons.push(
+      colorUnits === null
+        ? `Solo ${facts.sellable} unidad(es) vendible(s): las tandas excluyen productos de una sola unidad.`
+        : `Solo ${units} unidad(es) del color publicado: con el colchón de 1 no queda nada para Mercado Libre.`,
+    );
+  }
+  const availableQuantity = Math.max(0, units - WAVE_STOCK_SAFETY_BUFFER);
+  // Con un solo color, el colchón absorbe las unidades de los otros colores.
+  const stockSafetyBuffer = Math.max(WAVE_STOCK_SAFETY_BUFFER, facts.sellable - availableQuantity);
 
   const measured = productPackageOf(product);
   const packageValue = measured ?? item.package ?? null;
@@ -152,11 +176,12 @@ export function planWaveItem(
     else warnings.push(message);
   }
 
-  const description = inspectMercadoLibreDescription(richTextToPlainText(product.description ?? ""));
+  const descriptionOverride = item.description?.trim() || null;
+  const description = inspectMercadoLibreDescription(richTextToPlainText(descriptionOverride ?? product.description ?? ""));
   if (!description.clean.trim()) warnings.push("Sin descripción: se publica solo con la ficha.");
   else if (description.issues.length) warnings.push("La descripción se envía limpia (sin enlaces, contacto, HTML ni emojis).");
 
-  const attributes: MercadoLibreAttribute[] = [];
+  const attributes: MercadoLibreAttribute[] = [...(item.attributes ?? [])];
   const planBrand = item.brandName?.trim() || null;
   if (planBrand) {
     attributes.push({ id: "BRAND", value_name: planBrand });
@@ -180,6 +205,7 @@ export function planWaveItem(
       localPickUp: false,
       packageDimensions: packageValue ? toDimensions(packageValue) : null,
     },
+    ...(descriptionOverride ? { descriptionOverride } : {}),
     source: { kind: "wave", waveRank: item.rank },
     version: 1,
   } satisfies Record<string, unknown>;
@@ -190,14 +216,14 @@ export function planWaveItem(
     categoryId: item.categoryId,
     listingType: waveListingType(item.approvedMlPrice),
     marketplacePrice: item.approvedMlPrice,
-    stockSafetyBuffer: WAVE_STOCK_SAFETY_BUFFER,
+    stockSafetyBuffer,
     metadata: metadata as unknown as Prisma.JsonValue,
     product: {
       id: product.id,
       name: product.name,
       description: product.description,
       // El borrador lleva lo vendible ya calculado (con preventas en 0) para que el payload use la misma cifra.
-      stock: availableQuantity + WAVE_STOCK_SAFETY_BUFFER,
+      stock: availableQuantity + stockSafetyBuffer,
       reservedUnits: 0,
       sku: product.sku,
       brand: product.brand ?? null,

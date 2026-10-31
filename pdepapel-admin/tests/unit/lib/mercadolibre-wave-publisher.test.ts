@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildMercadoLibreListingMetadata, getMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
-import { buildMercadoLibreItemPayload } from "@/lib/mercadolibre/listings";
+import { buildMercadoLibreItemPayload, mercadoLibreListingDescription } from "@/lib/mercadolibre/listings";
 import {
   type WavePlan,
   type WavePlanItem,
@@ -146,6 +146,30 @@ describe("publicador por tandas", () => {
     const fromName = planWaveItem(item, { ...product, name: long }, facts, "c");
     expect(fromName.publishable).toBe(true);
     expect(fromName.warnings).toContain(`El título tiene ${long.length} caracteres; el máximo es 60.`);
+  });
+
+  it("un solo color: Mercado Libre ve las unidades de ese color − 1 y el colchón absorbe el resto", () => {
+    const pink = planWaveItem(
+      { ...item, colorUnits: 3, attributes: [{ id: "COLOR", value_id: "51994", value_name: "Rosa" }], description: "Organizador giratorio. Color: rosado." },
+      product,
+      { ...facts, sellable: 9 },
+      "c",
+    );
+    expect(pink.publishable).toBe(true);
+    expect(pink.draft!.stockSafetyBuffer).toBe(7);
+    const payload = buildMercadoLibreItemPayload(pink.draft!);
+    expect(payload.available_quantity).toBe(2);
+    expect(payload.attributes).toEqual(expect.arrayContaining([{ id: "COLOR", value_id: "51994", value_name: "Rosa" }]));
+    expect(mercadoLibreListingDescription(pink.draft!)).toBe("Organizador giratorio. Color: rosado.");
+  });
+
+  it("un solo color con 1 unidad, o retenido por Christian, no sale", () => {
+    expect(planWaveItem({ ...item, colorUnits: 1 }, product, { ...facts, sellable: 9 }, "c").reasons).toEqual([
+      "Solo 1 unidad(es) del color publicado: con el colchón de 1 no queda nada para Mercado Libre.",
+    ]);
+    expect(planWaveItem({ ...item, hold: "esperando las unidades rosadas" }, product, facts, "c").reasons).toEqual([
+      "Retenido: esperando las unidades rosadas",
+    ]);
   });
 
   it("la descripción sale limpia y se avisa", () => {

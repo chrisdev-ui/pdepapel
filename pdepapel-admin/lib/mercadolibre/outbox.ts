@@ -28,6 +28,7 @@ import { withMercadoLibrePublicationFailure } from "./listing-metadata";
 import {
   createMercadoLibreItem,
   createMercadoLibreItemDescription,
+  mercadoLibreListingDescription,
   getMarketplaceListingStatusFromRemote,
   MERCADOLIBRE_MAX_LISTING_PICTURES,
   MercadoLibrePublicationError,
@@ -973,7 +974,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           descriptionWarning: await createMercadoLibreItemDescription(
             event.listing!.connectionId,
             created.id,
-            event.listing!.product.description,
+            mercadoLibreListingDescription(event.listing!),
           ),
         };
         await learnFromPublishedListing(event.listing!.id);

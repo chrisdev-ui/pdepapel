@@ -282,6 +282,11 @@ function addProductIdentifiers(
   return result;
 }
 
+/** La descripción que va a Mercado Libre: la propia de la publicación o, sin ella, la de la tienda. */
+export function mercadoLibreListingDescription(listing: { metadata: Prisma.JsonValue | null; product: { description: string } }) {
+  return getMercadoLibreListingMetadata(listing.metadata).descriptionOverride ?? listing.product.description;
+}
+
 /** El cuerpo exacto de `POST /items`; el publicador por tandas lo usa en el ensayo. */
 export function buildMercadoLibreItemPayload(listing: ListingForPublication) {
   return buildItemPayload(listing);
@@ -691,7 +696,7 @@ export async function syncMercadoLibreListingContent(
   await updateItemDescription(
     accessToken,
     listing.externalItemId,
-    listing.product.description,
+    mercadoLibreListingDescription(listing),
     request,
   );
 }
@@ -743,7 +748,7 @@ export async function validateMercadoLibreItemDraft(
   }
   const payload = response.status === 204 ? null : await readJson(response);
   const result = readMercadoLibreValidation(response.status, payload);
-  const descriptionNote = describeMercadoLibreDescriptionIssues(listing.product.description);
+  const descriptionNote = describeMercadoLibreDescriptionIssues(mercadoLibreListingDescription(listing));
   return descriptionNote
     ? { ...result, warnings: [...result.warnings, { field: "description", code: "description_cleaned", message: descriptionNote }] }
     : result;
@@ -867,7 +872,7 @@ export async function publishMercadoLibreListing(
     descriptionWarning: await createMercadoLibreItemDescription(
       listing.connectionId,
       item.id,
-      listing.product.description,
+      mercadoLibreListingDescription(listing),
       request,
     ),
   };
