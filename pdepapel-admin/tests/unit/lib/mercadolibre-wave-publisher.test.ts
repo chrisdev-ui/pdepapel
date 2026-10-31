@@ -132,6 +132,22 @@ describe("publicador por tandas", () => {
     ]);
   });
 
+  it("el título y la marca aprobados en la tanda ganan al nombre del producto y a «Genérica»", () => {
+    const planned = planWaveItem({ ...item, title: "Set Resaltadores Scribe 10 Colores", brandName: "Offi-Esco" }, { ...product, brandRef: null }, facts, "c");
+    const payload = buildMercadoLibreItemPayload(planned.draft!);
+    expect(payload.family_name).toBe("Set Resaltadores Scribe 10 Colores");
+    expect(payload.attributes.filter((attribute) => attribute.id === "BRAND")).toEqual([{ id: "BRAND", value_name: "Offi-Esco" }]);
+    expect(planned.warnings).toContain("Marca «Offi-Esco» de la tanda (el producto no la tiene enlazada).");
+  });
+
+  it("un título de la tanda de más de 60 caracteres frena; el nombre largo del producto solo avisa", () => {
+    const long = "Set de plumones de doble punta pincel y fina en estuche de 24 colores";
+    expect(planWaveItem({ ...item, title: long }, product, facts, "c").reasons).toEqual([`El título tiene ${long.length} caracteres; el máximo es 60.`]);
+    const fromName = planWaveItem(item, { ...product, name: long }, facts, "c");
+    expect(fromName.publishable).toBe(true);
+    expect(fromName.warnings).toContain(`El título tiene ${long.length} caracteres; el máximo es 60.`);
+  });
+
   it("la descripción sale limpia y se avisa", () => {
     const planned = planWaveItem(item, product, facts, "c");
     expect(planned.warnings).toContain("La descripción se envía limpia (sin enlaces, contacto, HTML ni emojis).");

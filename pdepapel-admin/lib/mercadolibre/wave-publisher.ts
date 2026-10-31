@@ -42,6 +42,10 @@ export interface WavePlanItem {
   categoryStatus?: WaveCategoryStatus | null;
   categoryMatchesPredictorTop?: boolean;
   feeSource?: WaveFeeSource | null;
+  /** Título para Mercado Libre (≤ 60), aprobado en la tanda; sin él, el nombre del producto. */
+  title?: string | null;
+  /** Marca para BRAND aprobada en la tanda, cuando el producto no la tiene enlazada. */
+  brandName?: string | null;
   package?: (ProductPackage & { profile?: string }) | null;
   imagePack?: { recipe: string; approved: boolean; flags?: string[]; pictures: WavePlanPicture[] } | null;
 }
@@ -140,15 +144,24 @@ export function planWaveItem(
 
   if (!item.approvedMlPrice || item.approvedMlPrice <= 0) reasons.push("Falta el precio de Mercado Libre aprobado.");
 
-  const familyName = product.name.trim();
-  if (familyName.length > MERCADOLIBRE_TITLE_MAX) warnings.push(`El título tiene ${familyName.length} caracteres; Mercado Libre corta en ${MERCADOLIBRE_TITLE_MAX}.`);
+  const planTitle = item.title?.trim() || null;
+  const familyName = planTitle ?? product.name.trim();
+  if (familyName.length > MERCADOLIBRE_TITLE_MAX) {
+    const message = `El título tiene ${familyName.length} caracteres; el máximo es ${MERCADOLIBRE_TITLE_MAX}.`;
+    if (planTitle) reasons.push(message);
+    else warnings.push(message);
+  }
 
   const description = inspectMercadoLibreDescription(richTextToPlainText(product.description ?? ""));
   if (!description.clean.trim()) warnings.push("Sin descripción: se publica solo con la ficha.");
   else if (description.issues.length) warnings.push("La descripción se envía limpia (sin enlaces, contacto, HTML ni emojis).");
 
   const attributes: MercadoLibreAttribute[] = [];
-  if (!mercadoLibreBrandName(product)) {
+  const planBrand = item.brandName?.trim() || null;
+  if (planBrand) {
+    attributes.push({ id: "BRAND", value_name: planBrand });
+    if (!mercadoLibreBrandName(product)) warnings.push(`Marca «${planBrand}» de la tanda (el producto no la tiene enlazada).`);
+  } else if (!mercadoLibreBrandName(product)) {
     attributes.push({ id: "BRAND", value_name: GENERIC_BRAND });
     warnings.push("Sin marca enlazada: se publica como «Genérica».");
   }

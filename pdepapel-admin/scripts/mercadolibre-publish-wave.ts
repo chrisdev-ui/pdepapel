@@ -113,7 +113,7 @@ async function main() {
       return planWaveItem(item, product as unknown as WaveProduct, {
         sellable: sellable.get(product.id) ?? 0,
         presaleBlocked: blocked.has(product.id),
-        licensed: findLicensedCharacter(product.name, [product.productGroup?.name, product.brandRef?.name ?? product.brand]),
+        licensed: findLicensedCharacter(product.name, [item.title, product.productGroup?.name, item.brandName ?? product.brandRef?.name ?? product.brand]),
         licenseApproved: Boolean(record.mercadoLibreLicenseApprovedAt),
         alreadyListed: listed.has(product.id),
       }, connection.id);
