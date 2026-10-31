@@ -175,6 +175,13 @@ describe("la puerta está en el servidor, no en el menú", () => {
     expect(source).not.toContain("requireStoreRead(");
   });
 
+  it("el estado del ítem en Mercado Libre (verificación de tandas) es solo de la dueña", () => {
+    const source = read("app/api/[storeId]/marketplaces/mercadolibre/listings/[listingId]/remote-status/route.ts");
+    expect(source).toContain("requireStoreOwner(");
+    expect(source).not.toContain("requireStoreRead(");
+    expect(source.indexOf("requireStoreOwner(")).toBeLessThan(source.indexOf("prismadb."));
+  });
+
   it("la entrada del menú sigue marcada como solo de la dueña", () => {
     // La bandera esconde el enlace; ahora además hay algo detrás que cierra.
     const nav = read("lib/admin-navigation.ts");
