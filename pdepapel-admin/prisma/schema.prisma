@@ -489,6 +489,16 @@ model Product {
   gtin                        String?                      @db.VarChar(14)
   mpn                         String?                      @db.VarChar(70)
   hasNoProductIdentifier      Boolean                      @default(false)
+  /// Paquete real, ya empacado (gramos y centímetros). Lo usa Mercado Libre para
+  /// cotizar el envío y publicar; null = sin medir (se supone la caja por defecto).
+  packageWeightGrams          Int?
+  packageHeightCm             Float?
+  packageWidthCm              Float?
+  packageLengthCm             Float?
+  /// Christian revisó el nombre que parecía de personaje con licencia (nivel
+  /// «por revisar») y lo dejó entrar en las tandas de Mercado Libre.
+  mercadoLibreLicenseApprovedAt DateTime?
+  mercadoLibreLicenseApprovedBy String?                    @db.VarChar(191)
   store                       Store                        @relation("StoreToProduct", fields: [storeId], references: [id])
   category                    Category                     @relation("CategoryToProduct", fields: [categoryId], references: [id])
   size                        Size                         @relation(fields: [sizeId], references: [id])
