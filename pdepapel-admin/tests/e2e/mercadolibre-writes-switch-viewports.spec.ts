@@ -96,7 +96,7 @@ test.describe("Mercado Libre: interruptor de escrituras y alertas", () => {
       // Pausar: el diálogo avisa del riesgo de vender sin stock antes de confirmar.
       await card.getByRole("button", { name: "Pausar escrituras" }).click();
       const dialog = page.getByRole("alertdialog");
-      await expect(dialog).toContainText("puede vender unidades que ya no tienes");
+      await expect(dialog).toContainText("Solo saldrán las bajadas de stock");
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-dialogo.png`) });
       await dialog.getByRole("button", { name: "Pausar escrituras" }).click();
       await expect(page.getByTestId("mercadolibre-writes-paused-banner")).toBeVisible({ timeout: 30_000 });

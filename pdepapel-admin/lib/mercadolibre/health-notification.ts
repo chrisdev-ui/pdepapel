@@ -76,6 +76,12 @@ const GROUP_META: Record<
     description:
       "Precio, stock o contenido que se intentó enviar y agotó los reintentos: la publicación puede mostrar datos viejos. Corrige el motivo y vuelve a sincronizar.",
   },
+  writes_paused_stock: {
+    order: 10,
+    title: "Subidas de stock en espera",
+    description:
+      "Las escrituras a Mercado Libre están pausadas: las bajadas de stock salen, las subidas esperan. Reanuda desde Resumen para que Mercado Libre muestre esas unidades.",
+  },
   webhook_failed: {
     order: 9,
     title: "Avisos sin procesar",
@@ -231,6 +237,9 @@ function buildIssueActions(
       break;
     case "webhook_failed":
       actions.push({ label: "Recuperar cola", href: `${dashboardUrl}#mercadolibre-operations`, primary: true });
+      break;
+    case "writes_paused_stock":
+      actions.push({ label: "Ir a Resumen", href: dashboardUrl, primary: true });
       break;
     case "settlement_pending":
       actions.push({

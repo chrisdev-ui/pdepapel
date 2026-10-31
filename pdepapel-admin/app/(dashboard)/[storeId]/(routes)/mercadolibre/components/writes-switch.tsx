@@ -17,7 +17,7 @@ export type MercadoLibreWritesState = { paused: boolean; pausedAt: string | null
 const DATE_TIME = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
 
 const PAUSE_DESCRIPTION =
-  "No saldrá nada hacia Mercado Libre: ni publicaciones nuevas, ni precios, ni stock, ni fotos, ni descripciones, ni condiciones de venta, ni publicidad. Lo pendiente queda guardado y sale al reanudar. Ojo: mientras esté pausado, Mercado Libre no se entera de lo que vendes en la tienda o en persona y puede vender unidades que ya no tienes. Responder preguntas sigue funcionando.";
+  "Solo saldrán las bajadas de stock (y la pausa de lo que quede en cero), para que Mercado Libre no venda de más. Esperan: subidas de stock, precios, activar, publicaciones nuevas, fotos, descripciones, condiciones de venta y publicidad; salen al reanudar. Responder preguntas sigue funcionando.";
 
 export function MercadoLibreWritesPausedBanner({ state }: { state: MercadoLibreWritesState }) {
   if (!state.paused) return null;
@@ -26,8 +26,8 @@ export function MercadoLibreWritesPausedBanner({ state }: { state: MercadoLibreW
       <PauseCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
       <p>
         <strong>Escrituras a Mercado Libre pausadas</strong>
-        {state.pausedAt ? ` (desde ${DATE_TIME.format(new Date(state.pausedAt))})` : ""}: no se envía stock, precio, fotos ni publicaciones. Lo pendiente sale al
-        reanudar desde Resumen.
+        {state.pausedAt ? ` (desde ${DATE_TIME.format(new Date(state.pausedAt))})` : ""}: no se envían precios, subidas de stock, fotos ni publicaciones. Lo pendiente sale al
+        reanudar desde Resumen. Las bajadas de stock sí salen.
       </p>
     </div>
   );
@@ -86,7 +86,7 @@ export function MercadoLibreWritesSwitchCard({ storeId, state }: { storeId: stri
       <CardContent className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         <p className="text-muted-foreground">
           {state.paused
-            ? "Nada sale hacia Mercado Libre. Las ventas y las preguntas siguen llegando al panel."
+            ? "Solo salen las bajadas de stock. Lo demás espera; las ventas y las preguntas siguen llegando al panel."
             : "Publicar, precios, stock, fotos y descripciones salen normalmente."}
         </p>
         <Button

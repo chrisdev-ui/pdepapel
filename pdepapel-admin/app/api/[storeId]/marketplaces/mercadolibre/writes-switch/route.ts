@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { enqueuePendingMarketplaceOutboxEventsForStore } from "@/lib/mercadolibre/outbox";
-import { MERCADOLIBRE_WRITES_PAUSED_MESSAGE } from "@/lib/mercadolibre/writes-switch";
+import { MERCADOLIBRE_PAUSED_STOCK_INCREASE_MESSAGE, MERCADOLIBRE_WRITES_PAUSED_MESSAGE } from "@/lib/mercadolibre/writes-switch";
 import prismadb from "@/lib/prismadb";
 import { requireJsonBody } from "@/lib/request-body";
 import { verifyStoreOwner } from "@/lib/server/utils";
@@ -33,7 +33,7 @@ export async function PUT(request: Request, { params }: { params: { storeId: str
         where: {
           connection: { storeId: params.storeId },
           status: MarketplaceOutboxStatus.RETRY,
-          lastError: MERCADOLIBRE_WRITES_PAUSED_MESSAGE,
+          lastError: { in: [MERCADOLIBRE_WRITES_PAUSED_MESSAGE, MERCADOLIBRE_PAUSED_STOCK_INCREASE_MESSAGE] },
         },
         data: { availableAt: new Date(), lastError: null },
       });

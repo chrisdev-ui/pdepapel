@@ -19,6 +19,7 @@ const LISTING_KINDS = [
   "ml_listing_review",
   "ml_twin_mismatch",
   "ml_unlinked_stock",
+  "writes_paused_stock",
 ];
 const SALES_KINDS = ["inventory_exception", "settlement_pending", "ml_order_missing", "outbox_failed", "webhook_failed"];
 

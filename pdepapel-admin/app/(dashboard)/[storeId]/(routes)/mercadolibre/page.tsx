@@ -61,7 +61,7 @@ export default async function MercadoLibrePage({
         queueConfiguration={getMercadoLibreQueueConfigurationStatus()}
         connection={connection}
         writes={{
-          paused: store?.settings?.mercadoLibreWritesPaused === true,
+          paused: store?.settings ? store.settings.mercadoLibreWritesPaused : true,
           pausedAt: store?.settings?.mercadoLibreWritesPausedAt?.toISOString() ?? null,
         }}
         pricingTargets={

@@ -10,6 +10,13 @@ const pictureChecks = vi.hoisted(() => ({
   ),
 }));
 // Las reglas de fotos (JPG/PNG, ≤10 MB, ≥500 px) tienen su propia prueba; aquí todas pasan salvo que el caso diga otra cosa.
+// El interruptor de escrituras tiene su propia prueba; aquí está apagado.
+vi.mock("@/lib/mercadolibre/writes-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/writes-switch")>()),
+  areMercadoLibreWritesPaused: vi.fn().mockResolvedValue(false),
+  areMercadoLibreWritesPausedForStore: vi.fn().mockResolvedValue(false),
+  assertMercadoLibreWritesAllowed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/mercadolibre/picture-fetch", () => ({ inspectRemotePictures: pictureChecks.inspect }));
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.getMercadoLibreAccessToken,

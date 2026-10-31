@@ -34,6 +34,7 @@ import { isReconcileKind } from "./reconcile";
  * | inventory_exception | venta                         | mensaje de inventario    |
  * | outbox_failed       | tarea de la cola              | mensaje de error         |
  * | webhook_failed      | una por conexión              | —                        |
+ * | writes_paused_stock | una por conexión              | —                        |
  * | settlement_pending  | venta                         | —                        |
  * | question            | pregunta                      | —                        |
  * | shipment            | envío                         | —                        |
@@ -98,6 +99,7 @@ export function getAlertIdentity(issue: MercadoLibreHealthIssue): AlertIdentity 
       parts = [issue.detail];
       break;
     case "webhook_failed":
+    case "writes_paused_stock":
       alertKey = issue.kind;
       break;
     case "question":

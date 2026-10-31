@@ -4,6 +4,7 @@ import {
   MarketplaceInventoryStatus,
   MarketplaceListingStatus,
   MarketplaceOrderStatus,
+  MarketplaceOutboxAction,
   MarketplaceOutboxStatus,
   MarketplaceWebhookEventStatus,
 } from "@prisma/client";
@@ -18,6 +19,7 @@ import {
 import { getMercadoLibreListingImageUrls } from "./listing-metadata";
 import type { ReconcileKind } from "./reconcile";
 import { loadOpenReconcileIssues } from "./reconcile-runner";
+import { MERCADOLIBRE_PAUSED_STOCK_INCREASE_MESSAGE } from "./writes-switch";
 import { getMarketplaceOrderNetProfit } from "./reporting";
 
 export type MercadoLibreHealthIssue = {
@@ -35,6 +37,8 @@ export type MercadoLibreHealthIssue = {
     | "outbox_failed"
     /** Aviso de Mercado Libre que no se pudo procesar tras los reintentos. */
     | "webhook_failed"
+    /** Subidas de stock retenidas por el interruptor «Pausar escrituras». */
+    | "writes_paused_stock"
     /** Venta pagada que sigue sin liquidación pasados SETTLEMENT_PENDING_DAYS. */
     | "settlement_pending"
     /** Hallazgos de la revisión diaria contra Mercado Libre (reconcile.ts). */
@@ -174,6 +178,7 @@ export async function getMercadoLibreHealthSummary(
     failedOutbox,
     failedWebhooks,
     settlementPending,
+    pausedStockIncreases,
   ] = await Promise.all([
       prismadb.marketplaceListing.findMany({
         where: { connectionId },
@@ -316,6 +321,14 @@ export async function getMercadoLibreHealthSummary(
         orderBy: { paidAt: "asc" },
         take: MAX_HEALTH_ISSUES,
       }),
+      prismadb.marketplaceOutboxEvent.count({
+        where: {
+          connectionId,
+          action: MarketplaceOutboxAction.SYNC_STOCK,
+          status: MarketplaceOutboxStatus.RETRY,
+          lastError: MERCADOLIBRE_PAUSED_STOCK_INCREASE_MESSAGE,
+        },
+      }),
     ]);
   // Lo apartado para clientas no se publica: las reglas miran lo disponible.
   const listings = rawListings.map((listing) => ({
@@ -416,6 +429,16 @@ export async function getMercadoLibreHealthSummary(
       productId: event.productId ?? undefined,
       permalink: event.listing?.externalPermalink ?? null,
     })),
+    ...(pausedStockIncreases > 0
+      ? [
+          {
+            kind: "writes_paused_stock" as const,
+            title: `${pausedStockIncreases} ${pausedStockIncreases === 1 ? "subida de stock espera" : "subidas de stock esperan"} por la pausa`,
+            detail:
+              "Las escrituras a Mercado Libre están pausadas: las bajadas de stock sí salen, las subidas esperan. Reanuda desde Resumen cuando quieras que Mercado Libre muestre esas unidades.",
+          },
+        ]
+      : []),
     ...(failedWebhooks > 0
       ? [
           {

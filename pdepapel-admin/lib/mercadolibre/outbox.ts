@@ -35,7 +35,7 @@ import {
   type MercadoLibreCreatedItem,
 } from "./listings";
 import { learnFromPublishedListing } from "./category-learning";
-import { MERCADOLIBRE_WRITE_ACTIONS, MERCADOLIBRE_WRITES_PAUSED_MESSAGE, areMercadoLibreWritesPaused } from "./writes-switch";
+import { MERCADOLIBRE_WRITE_ACTIONS, areMercadoLibreWritesPaused, pausedWriteDecision } from "./writes-switch";
 import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
@@ -512,6 +512,7 @@ async function updateMercadoLibreStock(
   externalItemId: string,
   externalVariationId: string | null,
   targetQuantity: number,
+  allowWhileWritesPaused = false,
 ) {
   const body = externalVariationId
     ? {
@@ -523,7 +524,7 @@ async function updateMercadoLibreStock(
         ],
       }
     : { available_quantity: targetQuantity };
-  await mutateMercadoLibreJson(connectionId, `/items/${encodeURIComponent(externalItemId)}`, { method: "PUT", body });
+  await mutateMercadoLibreJson(connectionId, `/items/${encodeURIComponent(externalItemId)}`, { method: "PUT", body, allowWhileWritesPaused });
 }
 
 async function updateMercadoLibrePrice(
@@ -538,6 +539,7 @@ async function updateMercadoLibreListingStatus(
   connectionId: string,
   externalItemId: string,
   targetStatus: "active" | "paused",
+  allowWhileWritesPaused = false,
 ) {
   // Mercado Libre responde con el ítem: su `status` real manda (puede quedar
   // en revisión aunque se haya pedido activar). Un rechazo llega ya
@@ -545,9 +547,42 @@ async function updateMercadoLibreListingStatus(
   const payload = (await mutateMercadoLibreJson(
     connectionId,
     `/items/${encodeURIComponent(externalItemId)}`,
-    { method: "PUT", body: { status: targetStatus } },
+    { method: "PUT", body: { status: targetStatus }, allowWhileWritesPaused },
   )) as { status?: unknown } | null;
   return typeof payload?.status === "string" ? payload.status : null;
+}
+
+/** Lo que la pausa necesita saber para decidir: la cifra que se enviaría ahora y la última enviada. */
+async function describePausedWrite(event: {
+  action: MarketplaceOutboxAction;
+  payload: Prisma.JsonValue;
+  listing: { stockSafetyBuffer: number; lastSyncedStock: number | null; product: { id: string } } | null;
+}) {
+  if (!event.listing) return { action: event.action };
+  const productId = event.listing.product.id;
+  const sellable = (await loadMercadoLibreSellable(prismadb, [productId])).get(productId);
+  const quantity = sellable === undefined ? null : mercadoLibreQuantity(sellable, event.listing.stockSafetyBuffer);
+  if (event.action === MarketplaceOutboxAction.SYNC_STOCK) {
+    let targetQuantity = quantity;
+    if (targetQuantity === null) {
+      try {
+        targetQuantity = getTargetQuantity(event.payload);
+      } catch {
+        targetQuantity = null;
+      }
+    }
+    return { action: event.action, targetQuantity, lastSyncedStock: event.listing.lastSyncedStock };
+  }
+  if (event.action === MarketplaceOutboxAction.SYNC_LISTING_STATUS) {
+    let targetStatus: "active" | "paused" | null = null;
+    try {
+      targetStatus = getTargetListingStatus(event.payload);
+    } catch {
+      targetStatus = null;
+    }
+    return { action: event.action, targetStatus, sellableQuantity: quantity };
+  }
+  return { action: event.action, sellableQuantity: quantity };
 }
 
 export async function processMarketplaceOutboxEvent(eventId: string) {
@@ -571,6 +606,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           listingType: true,
           marketplacePrice: true,
           stockSafetyBuffer: true,
+          lastSyncedStock: true,
           metadata: true,
           product: {
             select: {
@@ -636,17 +672,23 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   if (!claimed) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
+  // En pausa solo pasan las bajadas de stock y la pausa de lo que quedó en cero; lo demás espera sin gastar intentos.
+  let allowWhileWritesPaused = false;
   if (MERCADOLIBRE_WRITE_ACTIONS.has(event.action) && (await areMercadoLibreWritesPaused(event.connectionId))) {
-    await prismadb.marketplaceOutboxEvent.update({
-      where: { id: event.id },
-      data: {
-        status: MarketplaceOutboxStatus.RETRY,
-        attempts: event.attempts,
-        availableAt: new Date(Date.now() + WRITES_PAUSED_RETRY_DELAY_MS),
-        lastError: MERCADOLIBRE_WRITES_PAUSED_MESSAGE,
-      },
-    });
-    return { processed: false, reason: "writes_paused" as const };
+    const decision = pausedWriteDecision(await describePausedWrite(event));
+    if (!decision.allow) {
+      await prismadb.marketplaceOutboxEvent.update({
+        where: { id: event.id },
+        data: {
+          status: MarketplaceOutboxStatus.RETRY,
+          attempts: event.attempts,
+          availableAt: new Date(Date.now() + WRITES_PAUSED_RETRY_DELAY_MS),
+          lastError: decision.message,
+        },
+      });
+      return { processed: false, reason: "writes_paused" as const };
+    }
+    allowWhileWritesPaused = true;
   }
   const attempts = event.attempts + 1;
 
@@ -823,6 +865,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         event.listing!.externalItemId!,
         event.listing!.externalVariationId,
         targetQuantity,
+        allowWhileWritesPaused,
       );
       syncedQuantity = targetQuantity;
     } else if (event.action === MarketplaceOutboxAction.SYNC_PRICE) {
@@ -852,6 +895,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         event.connectionId,
         event.listing!.externalItemId!,
         targetStatus,
+        allowWhileWritesPaused,
       );
       // Misma tabla de estados que la publicación: lo que Mercado Libre
       // devuelve, no lo que se pidió.
