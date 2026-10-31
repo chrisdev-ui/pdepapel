@@ -2164,10 +2164,10 @@ model StoreSettings {
   /// Interruptor de emergencia de la alerta temprana de redes. Encendida por defecto: cada red
   /// la activa sola al juntar 10 publicaciones con lectura a las 2–6 h; esto solo la pausa sin desplegar.
   socialEarlyAlertEnabled    Boolean   @default(true)
-  /// Interruptor de emergencia de Mercado Libre: encendido, ninguna escritura sale hacia
+  /// Interruptor de emergencia de Mercado Libre (nace en pausa): encendido, ninguna escritura sale hacia
   /// Mercado Libre (publicar, precio, stock, fotos, descripción, condiciones, publicidad).
   /// La cola sigue guardando lo pendiente y lo envía al apagarlo. Responder preguntas no se frena.
-  mercadoLibreWritesPaused   Boolean   @default(false)
+  mercadoLibreWritesPaused   Boolean   @default(true)
   mercadoLibreWritesPausedAt DateTime?
   mercadoLibreWritesPausedBy String?
   /// Quién recibe las alertas de Mercado Libre (uno por línea). Vacía: no se envían por correo
