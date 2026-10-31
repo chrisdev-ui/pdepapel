@@ -501,3 +501,5 @@
 # 2026-10-31T05:23:03.102Z store-product-packages DESHACER UPDATE Product SET packageWeightGrams = NULL, packageHeightCm = NULL, packageWidthCm = NULL, packageLengthCm = NULL WHERE id = '030aba85-8b84-4b97-8557-516c759dee3e';
 2026-10-31T05:23:09.632Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/store-product-packages.ts@b4fc39205ab6465a | estado=ok | exit=0 | rows=10 | "Paquetes reales de la tanda ola-1 (Product.package*)"
 2026-10-31T06:52:07.675Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/mercadolibre-publish-wave.ts@b6206725561faf9f | estado=error | exit=1 | rows=? | "Tanda ola-1 de Mercado Libre (MarketplaceListing + PUBLISH_LISTING, 9 productos)"
+# 2026-10-31T06:56:47.531Z mercadolibre-publish-wave ola-1 DESHACER (si no salió) DELETE FROM MarketplaceListing WHERE id = 'd3589b0f-3ba6-4a44-99c5-b89fa88cffe1' AND externalItemId IS NULL;
+2026-10-31T06:56:48.106Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/mercadolibre-publish-wave.ts@5d834929539240ab | estado=error | exit=1 | rows=? | "Tanda ola-1 de Mercado Libre (MarketplaceListing + PUBLISH_LISTING, 9 productos)"

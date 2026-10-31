@@ -276,3 +276,45 @@ export function isBlockedLedgerOperation({ model, operation, reason }) {
   if (!GUARDED_OPERATIONS.has(operation)) return false;
   return !reasonNamesModel(reason, model);
 }
+
+/**
+ * Los modelos que un guion declara que escribe, en una línea de su cabecera:
+ *   // prod-write-models: MarketplaceListing, MarketplaceOutboxEvent
+ * El envoltorio la lee sin ejecutar el guion y, antes de arrancarlo, exige
+ * que el motivo aprobado nombre cada modelo del libro mayor de la lista: si
+ * no, se niega con la aprobación intacta (2026-10-31 se gastaron dos
+ * aprobaciones en corridas que el guardián cortó a medias).
+ */
+export function declaredWriteModels(scriptText) {
+  const match = /prod-write-models:\s*([^\n*]+)/.exec(String(scriptText ?? ""));
+  if (!match) return null;
+  return match[1]
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/** El problema, si el motivo no nombra algún modelo del libro mayor declarado; null si alcanza. */
+export function declaredModelsProblem(models, reason) {
+  if (!models) return null;
+  const missing = models.filter((model) => LEDGER_MODELS.has(model) && !reasonNamesModel(reason, model));
+  if (missing.length === 0) return null;
+  return `el motivo no nombra ${missing.join(", ")}, que el guion declara que escribe (modelos del libro mayor); pide una aprobación cuyo motivo lo nombre.`;
+}
+
+/** Saca `--dry-run` y `--reason <texto>` (o `--reason=<texto>`) de los argumentos del envoltorio. */
+export function extractDryRunArgs(args) {
+  const rest = [];
+  let dryRun = false;
+  let reason = null;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--dry-run") dryRun = true;
+    else if (arg === "--reason") {
+      reason = args[index + 1] ?? null;
+      index += 1;
+    } else if (arg.startsWith("--reason=")) reason = arg.slice("--reason=".length);
+    else rest.push(arg);
+  }
+  return { dryRun, reason, rest };
+}

@@ -14,6 +14,14 @@
  *   npm run prod:approve -- "Tanda ola-1 de Mercado Libre (MarketplaceListing + PUBLISH_LISTING)"
  *   npm run prod:write -- scripts/mercadolibre-publish-wave.ts --plan … --publish --approve-wave=ola-1 --expect new
  * Nunca publica una preventa: se excluye aquí y otra vez en el trabajador.
+ *
+ * Ensayo por el mismo cargador que la corrida real (sin gastar aprobación):
+ *   npm run prod:write -- --dry-run scripts/mercadolibre-publish-wave.ts --plan … --approve-wave=ola-1 --reason "…" --expect new
+ * Cada producto es una transacción (borrador + evento): si algo falla, no queda
+ * nada a medias. Un borrador propio de una tanda anterior que no llegó a salir
+ * (sin externalItemId, metadata.source.kind = "wave") se reutiliza.
+ *
+ * prod-write-models: MarketplaceListing, MarketplaceOutboxEvent
  */
 import "./lib/allow-server-only.cjs";
 
@@ -104,9 +112,15 @@ async function main() {
     const ids = products.map((product) => product.id);
     const blocked = await loadMercadoLibrePresaleBlocked(db, ids);
     const sellable = await loadMercadoLibreSellable(db, ids, blocked);
-    const listed = new Set(
-      (await db.marketplaceListing.findMany({ where: { connectionId: connection.id, productId: { in: ids } }, select: { productId: true } })).map((row) => row.productId),
-    );
+    const existing = await db.marketplaceListing.findMany({
+      where: { connectionId: connection.id, productId: { in: ids } },
+      select: { id: true, productId: true, externalItemId: true, metadata: true },
+    });
+    // Un borrador propio de una tanda que no llegó a Mercado Libre se reutiliza; cualquier otra publicación cuenta como «ya publicado».
+    const isOwnWaveDraft = (row: (typeof existing)[number]) =>
+      !row.externalItemId && (row.metadata as { source?: { kind?: string } } | null)?.source?.kind === "wave";
+    const adoptable = new Map(existing.filter(isOwnWaveDraft).map((row) => [row.productId, row.id]));
+    const listed = new Set(existing.filter((row) => !isOwnWaveDraft(row)).map((row) => row.productId));
 
     const planned = plan.items.map((item) => {
       const product = products.find((row) => row.sku === item.sku) ?? null;
@@ -131,9 +145,11 @@ async function main() {
           payloadError = error instanceof Error ? error.message : String(error);
         }
       }
+      const product = products.find((row) => row.sku === item.sku);
       return {
         rank: item.rank,
         sku: item.sku,
+        reutilizaBorrador: product ? adoptable.get(product.id) ?? null : null,
         publishable: item.publishable && !payloadError,
         reasons: payloadError ? [...item.reasons, payloadError] : item.reasons,
         warnings: item.warnings,
@@ -159,7 +175,7 @@ async function main() {
     for (const row of report) {
       const body = row.payload as { price?: number; listing_type_id?: string; available_quantity?: number; pictures?: unknown[]; shipping?: { dimensions?: string } } | null;
       console.log(
-        `#${row.rank} ${row.sku} | ${row.publishable ? "lista" : "fuera"} | ${body ? `${body.price} ${body.listing_type_id} stock ${body.available_quantity} fotos ${body.pictures?.length} paquete ${body.shipping?.dimensions} (${row.packageSource})` : "sin cuerpo"}${row.reasons.length ? ` | motivos: ${row.reasons.join(" ")}` : ""}${row.warnings.length ? ` | avisos: ${row.warnings.join(" ")}` : ""}`,
+        `#${row.rank} ${row.sku} | ${row.publishable ? "lista" : "fuera"}${row.reutilizaBorrador ? ` (reutiliza borrador ${row.reutilizaBorrador})` : ""} | ${body ? `${body.price} ${body.listing_type_id} stock ${body.available_quantity} fotos ${body.pictures?.length} paquete ${body.shipping?.dimensions} (${row.packageSource})` : "sin cuerpo"}${row.reasons.length ? ` | motivos: ${row.reasons.join(" ")}` : ""}${row.warnings.length ? ` | avisos: ${row.warnings.join(" ")}` : ""}`,
       );
     }
     if (outPath) writeFileSync(resolve(process.cwd(), outPath), JSON.stringify({ summary, items: report }, null, 1));
@@ -178,22 +194,28 @@ async function main() {
     if (held.length) console.log(`Retenidos (no se publican en esta corrida): ${held.map((item) => `#${item.rank} ${item.sku}`).join(", ")}`);
     for (const item of wavePublishItems(planned)) {
       const draft = item.draft!;
-      const listing = await db.marketplaceListing.create({
-        data: {
-          connectionId: connection.id,
-          productId: draft.product.id,
-          status: MarketplaceListingStatus.DRAFT,
-          categoryId: draft.categoryId,
-          listingType: draft.listingType,
-          marketplacePrice: draft.marketplacePrice,
-          stockSafetyBuffer: draft.stockSafetyBuffer,
-          syncStock: true,
-          metadata: item.metadata ?? undefined,
-        },
-        select: { id: true },
+      const data = {
+        status: MarketplaceListingStatus.DRAFT,
+        categoryId: draft.categoryId,
+        listingType: draft.listingType,
+        marketplacePrice: draft.marketplacePrice,
+        stockSafetyBuffer: draft.stockSafetyBuffer,
+        syncStock: true,
+        metadata: item.metadata ?? undefined,
+      };
+      const adoptId = adoptable.get(draft.product.id) ?? null;
+      const listingId = await db.$transaction(async (tx) => {
+        const listing = adoptId
+          ? await tx.marketplaceListing.update({ where: { id: adoptId }, data, select: { id: true } })
+          : await tx.marketplaceListing.create({ data: { ...data, connectionId: connection.id, productId: draft.product.id }, select: { id: true } });
+        await queueMarketplaceListingPublicationEvent(tx, { connectionId: connection.id, listingId: listing.id, productId: draft.product.id });
+        return listing.id;
       });
-      appendFileSync(resolve(process.cwd(), "ops/prod-writes.log"), `# ${at} mercadolibre-publish-wave ${plan.waveId} DESHACER (si no salió) DELETE FROM MarketplaceListing WHERE id = '${listing.id}' AND externalItemId IS NULL;\n`);
-      await queueMarketplaceListingPublicationEvent(db, { connectionId: connection.id, listingId: listing.id, productId: draft.product.id });
+      appendFileSync(
+        resolve(process.cwd(), "ops/prod-writes.log"),
+        `# ${at} mercadolibre-publish-wave ${plan.waveId} ${adoptId ? "reutiliza borrador" : "crea borrador"} ${listingId} · DESHACER (si no salió) DELETE FROM MarketplaceOutboxEvent WHERE listingId = '${listingId}' AND status = 'PENDING'; DELETE FROM MarketplaceListing WHERE id = '${listingId}' AND externalItemId IS NULL;\n`,
+      );
+      console.log(`#${item.rank} ${item.sku}: ${adoptId ? "borrador reutilizado" : "borrador creado"} ${listingId} y encolado`);
       written += 1;
     }
     await enqueuePendingMarketplaceOutboxEventsForStore(storeId);

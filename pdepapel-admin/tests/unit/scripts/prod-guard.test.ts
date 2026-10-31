@@ -9,6 +9,9 @@ import {
   buildApproval,
   classifyDatabaseIdentity,
   databaseIdentityProblem,
+  declaredModelsProblem,
+  declaredWriteModels,
+  extractDryRunArgs,
   describeDatabaseAlias,
   describeDatabaseUrl,
   extractExpectArg,
@@ -246,6 +249,57 @@ describe("prod-write wrapper", () => {
    * `--expect new|old`, pregunta a la base cuál es y se niega antes de gastar
    * la aprobación si no coincide.
    */
+  /**
+   * 2026-10-31: dos aprobaciones gastadas en corridas que fallaron al cargar
+   * (server-only) o que el guardián cortó a medias (MarketplaceOutboxEvent sin
+   * nombrar en el motivo). El ensayo va por el mismo ejecutor sin aprobación, y
+   * los modelos declarados se comprueban antes de arrancar.
+   */
+  describe("--dry-run y modelos declarados", () => {
+    const withReadOnlyEnv = (project: ReturnType<typeof fakeProject>) =>
+      writeFileSync(join(project.root, ".env"), "DATABASE_URL=mysql://pdepapel_ro:falso@prueba.proxy.rlwy.net:1/railway\n");
+
+    it("--dry-run corre el guion por el mismo ejecutor, sin aprobación, sin gastarla y sin registro", () => {
+      const project = fakeProject();
+      withReadOnlyEnv(project);
+      writeFileSync(
+        join(project.root, "scripts/ensayo.ts"),
+        "console.log(`aprobado=${process.env.PROD_WRITE_APPROVED || 'no'} ensayo=${process.env.PROD_WRITE_DRY_RUN} url=${process.env.DATABASE_URL?.split('@')[0].split('//')[1].split(':')[0]}`);\n",
+      );
+      const result = project.run("scripts/ensayo.ts", ["--dry-run", "--reason", "motivo de prueba", "--expect", "new"]);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("(con tsx)");
+      expect(result.stdout).toContain("aprobado=no ensayo=1 url=pdepapel_ro");
+      expect(result.stdout).toContain('Pide: npm run prod:approve -- "motivo de prueba"');
+      expect(project.approvalUsed()).toBe(false);
+      expect(project.log()).toBe("");
+    });
+
+    it("--dry-run falla si el guion no carga, igual que fallaría la corrida real", () => {
+      const project = fakeProject();
+      withReadOnlyEnv(project);
+      writeFileSync(join(project.root, "scripts/no-carga.mjs"), "throw new Error('server-only');\n");
+      const result = project.run("scripts/no-carga.mjs", ["--dry-run", "--reason", "motivo de prueba", "--expect", "new"]);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/el ensayo falló/);
+      expect(project.approvalUsed()).toBe(false);
+    });
+
+    it("con un motivo que no nombra un modelo del libro mayor declarado: el ensayo lo dice y la corrida real se niega sin gastar la aprobación", () => {
+      const project = fakeProject();
+      withReadOnlyEnv(project);
+      writeFileSync(join(project.root, "scripts/encola.mjs"), "// prod-write-models: MarketplaceListing, MarketplaceOutboxEvent\nconsole.log('nunca');\n");
+      const dry = project.run("scripts/encola.mjs", ["--dry-run", "--reason", "Tanda (MarketplaceListing + PUBLISH_LISTING)", "--expect", "new"]);
+      expect(dry.status).toBe(2);
+      expect(dry.stderr).toMatch(/no nombra MarketplaceOutboxEvent/);
+      const real = project.run("scripts/encola.mjs");
+      expect(real.status).toBe(2);
+      expect(real.stderr).toMatch(/no nombra MarketplaceOutboxEvent.*la aprobación sigue válida/);
+      expect(real.stdout).not.toContain("nunca");
+      expect(project.approvalUsed()).toBe(false);
+    });
+  });
+
   describe("--expect new|old", () => {
     it("refuses without --expect and keeps the approval", () => {
       const project = fakeProject();
@@ -365,5 +419,24 @@ describe("extractExpectArg / prodWriteEnvFileFor / databaseIdentityProblem", () 
     expect(classifyDatabaseIdentity({ markerVisible: false, globalSelect: false })).toBe("unknown");
     expect(databaseIdentityProblem("old", "unknown")).toMatch(/no puede ver la marca/);
     expect(databaseIdentityProblem("new", "unknown")).toMatch(/no puede ver la marca/);
+  });
+});
+
+describe("declaredWriteModels / declaredModelsProblem / extractDryRunArgs", () => {
+  it("lee la línea de modelos declarados de la cabecera", () => {
+    expect(declaredWriteModels("/**\n * prod-write-models: MarketplaceListing, MarketplaceOutboxEvent\n */")).toEqual(["MarketplaceListing", "MarketplaceOutboxEvent"]);
+    expect(declaredWriteModels("console.log(1)")).toBeNull();
+  });
+
+  it("solo exige nombrar los modelos del libro mayor", () => {
+    expect(declaredModelsProblem(["MarketplaceListing"], "cualquier cosa")).toBeNull();
+    expect(declaredModelsProblem(["MarketplaceListing", "MarketplaceOutboxEvent"], "Tanda (MarketplaceListing + PUBLISH_LISTING)")).toMatch(/MarketplaceOutboxEvent/);
+    expect(declaredModelsProblem(["MarketplaceListing", "MarketplaceOutboxEvent"], "Tanda ola-1 (MarketplaceListing + MarketplaceOutboxEvent PUBLISH_LISTING)")).toBeNull();
+    expect(declaredModelsProblem(null, "x")).toBeNull();
+  });
+
+  it("saca --dry-run y --reason en sus dos formas y deja el resto", () => {
+    expect(extractDryRunArgs(["--dry-run", "scripts/a.ts", "--reason", "un motivo", "--plan", "p.json"])).toEqual({ dryRun: true, reason: "un motivo", rest: ["scripts/a.ts", "--plan", "p.json"] });
+    expect(extractDryRunArgs(["scripts/a.ts", "--reason=otro"])).toEqual({ dryRun: false, reason: "otro", rest: ["scripts/a.ts"] });
   });
 });

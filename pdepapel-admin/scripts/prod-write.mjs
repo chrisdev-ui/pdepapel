@@ -31,8 +31,11 @@ import {
   APPROVAL_FILE,
   approvalProblem,
   databaseIdentityProblem,
+  declaredModelsProblem,
+  declaredWriteModels,
   describeDatabaseAlias,
   describeDatabaseUrl,
+  extractDryRunArgs,
   extractExpectArg,
   formatLogLine,
   hashFile,
@@ -52,9 +55,46 @@ const fail = (message) => {
   process.exit(2);
 };
 
-const { expect, rest: wrapperArgs, problem: expectProblem } = extractExpectArg(process.argv.slice(2));
+const { dryRun, reason: dryRunReason, rest: argsWithoutDryRun } = extractDryRunArgs(process.argv.slice(2));
+const { expect, rest: wrapperArgs, problem: expectProblem } = extractExpectArg(argsWithoutDryRun);
 const [scriptPath, ...scriptArgs] = wrapperArgs;
 if (!scriptPath) fail("indica el guion a ejecutar: npm run prod:write -- scripts/<guion>.mjs --expect new|old");
+
+/**
+ * `--dry-run`: el mismo guion, por el mismo ejecutor y con las mismas variables
+ * que la corrida real, pero con el usuario de solo lectura de `.env`, sin
+ * PROD_WRITE_APPROVED (el guion toma su camino de ensayo) y sin pedir ni gastar
+ * aprobación. Con `--reason "<motivo>"` comprueba además que ese motivo alcanza
+ * para los modelos que el guion declara. No escribe en ops/prod-writes.log.
+ */
+if (dryRun) {
+  if (expectProblem) fail(expectProblem);
+  if (!dryRunReason) fail('--dry-run necesita --reason "<el motivo que pedirás en prod:approve>".');
+  const extraRootsDry = [process.env.PROD_WRITE_EXTRA_ROOT, process.env.CLAUDE_SCRATCHPAD_DIR].filter(Boolean);
+  if (!isAllowedScriptPath(scriptPath, { projectRoot, extraRoots: extraRootsDry })) fail(`el guion debe estar en scripts/ del proyecto o en el borrador de la sesión: ${scriptPath}`);
+  const absoluteDry = resolve(projectRoot, scriptPath);
+  if (!existsSync(absoluteDry)) fail(`no existe ${absoluteDry}`);
+  const runnerDry = runnerFor(scriptPath, { projectRoot });
+  if (!runnerDry) fail(`no sé ejecutar ${scriptPath}: usa .mjs/.js (Node) o .ts (tsx).`);
+  const models = declaredWriteModels(readFileSync(absoluteDry, "utf8"));
+  const modelsProblem = declaredModelsProblem(models, dryRunReason);
+  if (modelsProblem) fail(modelsProblem);
+  const readOnlyEnv = resolve(projectRoot, ".env");
+  const readOnlyUrl = existsSync(readOnlyEnv)
+    ? readFileSync(readOnlyEnv, "utf8").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("DATABASE_URL=")).map((line) => line.slice("DATABASE_URL=".length).replace(/^["']|["']$/g, "")).at(-1)
+    : null;
+  if (!readOnlyUrl) fail("--dry-run lee la base con la DATABASE_URL de .env (el usuario de solo lectura) y no la encontró.");
+  console.log(`prod-write: ENSAYO ${scriptPath} (con ${runnerDry.runner}) · modelos declarados: ${models ? models.join(", ") : "ninguno (el guion no los declara)"} · motivo «${dryRunReason}» alcanza.`);
+  const dry = spawnSync(runnerDry.command, [...runnerDry.args, absoluteDry, ...scriptArgs], {
+    cwd: projectRoot,
+    env: { ...process.env, DATABASE_URL: readOnlyUrl, PROD_WRITE_DRY_RUN: "1", PROD_WRITE_REASON: dryRunReason, PROD_WRITE_EXPECT: expect, PROD_WRITE_APPROVED: "" },
+    stdio: "inherit",
+  });
+  if (dry.error) fail(`el ensayo no arrancó (${dry.error.message}).`);
+  if (dry.status === 0) console.log(`prod-write: ensayo bien. Pide: npm run prod:approve -- "${dryRunReason}"`);
+  else console.error(`prod-write: el ensayo falló (salida ${dry.status}); no pidas la aprobación todavía.`);
+  process.exit(dry.status ?? 1);
+}
 
 const envFileName = prodWriteEnvFileFor(expect, existsSync(resolve(projectRoot, PROD_WRITE_OLD_DB_ENV_FILE)));
 const envFile = resolve(projectRoot, envFileName);
@@ -113,6 +153,12 @@ try {
 }
 const identityProblem = databaseIdentityProblem(expect, identity);
 if (identityProblem) fail(identityProblem);
+
+// Antes de arrancar: el motivo aprobado debe nombrar cada modelo del libro
+// mayor que el guion declara. Si no, se niega y la aprobación sigue válida.
+const declaredModels = declaredWriteModels(readFileSync(absoluteScript, "utf8"));
+const declaredProblem = declaredModelsProblem(declaredModels, approval.reason);
+if (declaredProblem) fail(`${declaredProblem} No se ejecutó nada; la aprobación sigue válida.`);
 
 const target = `${describeDatabaseUrl(writeUrl)} [base ${identity === "new" ? "nueva" : "vieja"}]`;
 const loggedTarget = describeDatabaseAlias(identity);
