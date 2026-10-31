@@ -15,6 +15,8 @@
  *   npm run prod:write -- scripts/mercadolibre-publish-wave.ts --plan … --publish --approve-wave=ola-1 --expect new
  * Nunca publica una preventa: se excluye aquí y otra vez en el trabajador.
  */
+import "./lib/allow-server-only.cjs";
+
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
