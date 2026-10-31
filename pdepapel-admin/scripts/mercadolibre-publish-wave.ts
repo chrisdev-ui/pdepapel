@@ -24,7 +24,7 @@ import { MERCADOLIBRE_BRAND_SELECT } from "@/lib/mercadolibre/brand";
 import { findLicensedCharacter } from "@/lib/mercadolibre/licensed-characters";
 import { buildMercadoLibreItemPayload } from "@/lib/mercadolibre/listings";
 import { loadMercadoLibrePresaleBlocked, loadMercadoLibreSellable } from "@/lib/mercadolibre/available-quantity";
-import { type WavePlan, type WaveProduct, planWaveItem, wavePublishBlockers } from "@/lib/mercadolibre/wave-publisher";
+import { type WavePlan, type WaveProduct, isHeldWaveItem, planWaveItem, wavePublishBlockers, wavePublishItems } from "@/lib/mercadolibre/wave-publisher";
 import { areMercadoLibreWritesPausedForStore } from "@/lib/mercadolibre/writes-switch";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 
@@ -149,6 +149,7 @@ async function main() {
       escriturasEnPausa: writesPaused,
       columnasMigracion20261111: withPackage && withLicenseApproval,
       publicables: report.filter((row) => row.publishable).length,
+      retenidos: planned.filter(isHeldWaveItem).map((item) => `#${item.rank} ${item.sku}`),
       total: report.length,
       bloqueosDePublicacion: blockers,
     };
@@ -171,7 +172,9 @@ async function main() {
     const { enqueuePendingMarketplaceOutboxEventsForStore, queueMarketplaceListingPublicationEvent } = await import("@/lib/mercadolibre/outbox");
     const at = new Date().toISOString();
     let written = 0;
-    for (const item of planned) {
+    const held = planned.filter(isHeldWaveItem);
+    if (held.length) console.log(`Retenidos (no se publican en esta corrida): ${held.map((item) => `#${item.rank} ${item.sku}`).join(", ")}`);
+    for (const item of wavePublishItems(planned)) {
       const draft = item.draft!;
       const listing = await db.marketplaceListing.create({
         data: {

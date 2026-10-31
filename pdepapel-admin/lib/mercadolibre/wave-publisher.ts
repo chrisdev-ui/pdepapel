@@ -250,10 +250,18 @@ export function planWaveItem(
   };
 }
 
+const HOLD_PREFIX = "Retenido:";
+
+/** Retenido por Christian: se salta en esta corrida (sale cuando él lo suelte), sin frenar a los demás. */
+export const isHeldWaveItem = (item: WaveItemPlan) => item.reasons.some((reason) => reason.startsWith(HOLD_PREFIX));
+
+/** Lo que sí se publica en esta corrida: publicable y no retenido. */
+export const wavePublishItems = (items: readonly WaveItemPlan[]) => items.filter((item) => item.publishable && !isHeldWaveItem(item));
+
 /**
  * Candado de la publicación real: interruptor apagado, bandera igual a la
- * tanda del plan, todo publicable y la hoja de contacto aprobada. Devuelve
- * por qué no; vacío = puede salir.
+ * tanda del plan, todo lo no retenido publicable y la hoja de contacto
+ * aprobada. Un producto retenido se salta. Devuelve por qué no; vacío = puede salir.
  */
 export function wavePublishBlockers(input: {
   writesPaused: boolean;
@@ -266,7 +274,8 @@ export function wavePublishBlockers(input: {
   if (!input.approveWaveFlag) blockers.push(`Falta --approve-wave=${input.plan.waveId}.`);
   else if (input.approveWaveFlag !== input.plan.waveId) blockers.push(`--approve-wave=${input.approveWaveFlag} no es la tanda del plan (${input.plan.waveId}).`);
   for (const item of input.items) {
-    if (!item.publishable) blockers.push(`#${item.rank} ${item.sku}: ${item.reasons.join(" ")}`);
+    if (!item.publishable && !isHeldWaveItem(item)) blockers.push(`#${item.rank} ${item.sku}: ${item.reasons.join(" ")}`);
   }
+  if (wavePublishItems(input.items).length === 0) blockers.push("No queda ningún producto para publicar en esta corrida.");
   return blockers;
 }

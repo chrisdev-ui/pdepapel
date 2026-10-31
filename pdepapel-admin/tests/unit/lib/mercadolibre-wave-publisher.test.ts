@@ -9,6 +9,7 @@ import {
   type WaveProductFacts,
   planWaveItem,
   wavePublishBlockers,
+  wavePublishItems,
 } from "@/lib/mercadolibre/wave-publisher";
 
 const PACK = "https://res.cloudinary.com/demo/image/upload/e_background_removal/e_trim/c_pad,w_1080,h_1080,b_white/c_lpad,w_1200,h_1200,b_white/f_jpg,q_auto:good/v1/a.jpg";
@@ -197,6 +198,24 @@ describe("publicador por tandas", () => {
       const withPresale = [planWaveItem(item, product, { ...facts, presaleBlocked: true }, "conn-1")];
       expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: withPresale })).toEqual([
         "#3 RES-1: Está en preventa: las preventas no van a Mercado Libre.",
+        "No queda ningún producto para publicar en esta corrida.",
+      ]);
+    });
+
+    it("un producto retenido se salta sin frenar a los demás, y no entra en lo que se publica", () => {
+      const heldItem = planWaveItem({ ...item, rank: 11, sku: "ORG-1", hold: "esperando las rosadas" }, product, facts, "conn-1");
+      const items = [...ready, heldItem];
+      expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items })).toEqual([]);
+      expect(wavePublishItems(items).map((row) => row.sku)).toEqual(["RES-1"]);
+      expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: [heldItem] })).toEqual([
+        "No queda ningún producto para publicar en esta corrida.",
+      ]);
+    });
+
+    it("un producto fuera por otra razón (no retenido) sigue frenando la tanda", () => {
+      const out = planWaveItem({ ...item, rank: 12, sku: "X-1" }, product, { ...facts, sellable: 1 }, "conn-1");
+      expect(wavePublishBlockers({ writesPaused: false, approveWaveFlag: "ola-1", plan, items: [...ready, out] })).toEqual([
+        "#12 X-1: Solo 1 unidad(es) vendible(s): las tandas excluyen productos de una sola unidad.",
       ]);
     });
 
