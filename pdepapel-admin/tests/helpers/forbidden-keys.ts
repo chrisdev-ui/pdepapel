@@ -24,7 +24,7 @@ const SECRET_KEYS = [
   "raw",
 ];
 
-const VIEWER_KEYS = [
+export const VIEWER_KEYS = [
   // Costos, proveedor y señales internas del producto.
   "acqPrice",
   "transportationCost",

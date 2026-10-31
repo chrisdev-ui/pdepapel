@@ -181,6 +181,8 @@ export const INTERNAL_PRODUCT_FIELDS = [
   "storeId",
   // Quién marcó «Precio bajo a propósito»: un id de Clerk. El motivo sí se puede ver.
   "marginExceptionBy",
+  // Quién aprobó un nombre «por revisar» de licencia para Mercado Libre: otro id de Clerk.
+  "mercadoLibreLicenseApprovedBy",
 ] as const;
 
 /**
