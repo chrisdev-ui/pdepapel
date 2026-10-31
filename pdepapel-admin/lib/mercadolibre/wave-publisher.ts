@@ -13,7 +13,7 @@ import { inspectMercadoLibreDescription } from "@/lib/mercadolibre/description-r
 import type { MercadoLibreAttribute, MercadoLibrePackageDimensions } from "@/lib/mercadolibre/listing-metadata";
 import type { ListingForPublication } from "@/lib/mercadolibre/listings";
 import type { LicensedMatch } from "@/lib/mercadolibre/licensed-characters";
-import { waveItemReadiness } from "@/lib/mercadolibre/wave-readiness";
+import { type WaveCategoryStatus, type WaveFeeSource, waveItemReadiness } from "@/lib/mercadolibre/wave-readiness";
 import { type ProductPackage, productPackageOf } from "@/lib/product-package";
 import { richTextToPlainText } from "@/lib/rich-text";
 
@@ -38,6 +38,10 @@ export interface WavePlanItem {
   sku: string;
   categoryId: string;
   approvedMlPrice: number;
+  /** Lo que dejó la validación de la tanda; sin dato, el producto no sale. */
+  categoryStatus?: WaveCategoryStatus | null;
+  categoryMatchesPredictorTop?: boolean;
+  feeSource?: WaveFeeSource | null;
   package?: (ProductPackage & { profile?: string }) | null;
   imagePack?: { recipe: string; approved: boolean; flags?: string[]; pictures: WavePlanPicture[] } | null;
 }
@@ -114,9 +118,9 @@ export function planWaveItem(
   // La hoja de contacto es la aprobación de la tanda: sin ella nada sale.
   const pack = item.imagePack ?? null;
   const readiness = waveItemReadiness({
-    categoryStatus: "validada",
-    categoryMatchesPredictorTop: true,
-    feeSource: "real",
+    categoryStatus: item.categoryStatus ?? null,
+    categoryMatchesPredictorTop: item.categoryMatchesPredictorTop ?? false,
+    feeSource: item.feeSource ?? "pendiente",
     photoStatus: pack && pack.pictures.length > 0 && pack.pictures.every((picture) => picture.ok) ? "apta" : "revisar",
     contactSheetApproved: Boolean(pack?.approved),
     presaleBlocked: facts.presaleBlocked,

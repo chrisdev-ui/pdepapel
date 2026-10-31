@@ -19,6 +19,9 @@ const item: WavePlanItem = {
   sku: "RES-1",
   categoryId: "MCO172631",
   approvedMlPrice: 51900,
+  categoryStatus: "validada",
+  categoryMatchesPredictorTop: true,
+  feeSource: "real",
   package: { profile: "Empaque ML pequeño", lengthCm: 25, widthCm: 20, heightCm: 8, weightGrams: 1000 },
   imagePack: {
     recipe: "mlp2",
@@ -115,6 +118,18 @@ describe("publicador por tandas", () => {
       "La portada está por revisar en la hoja de contacto.",
     ]);
     expect(planWaveItem(item, null, null, "c").reasons).toEqual(["El SKU no existe en la tienda."]);
+  });
+
+  it("sin categoría validada o sin comisión real no sale: el plan debe traer esos datos", () => {
+    const { categoryStatus: _status, categoryMatchesPredictorTop: _top, feeSource: _fee, ...bare } = item;
+    expect(planWaveItem(bare, product, facts, "c").reasons).toEqual([
+      "Falta validar la categoría de Mercado Libre.",
+      "Falta cotizar la comisión real en esa categoría.",
+    ]);
+    expect(planWaveItem({ ...item, categoryStatus: "por confirmar" }, product, facts, "c").publishable).toBe(false);
+    expect(planWaveItem({ ...item, categoryStatus: "corregida", categoryMatchesPredictorTop: false }, product, facts, "c").reasons).toEqual([
+      "La categoría no es la primera del predictor de Mercado Libre: queda por confirmar.",
+    ]);
   });
 
   it("la descripción sale limpia y se avisa", () => {
