@@ -57,8 +57,8 @@ import {
   type SaleFeeSource,
 } from "@/lib/pricing/mercadolibre-fees";
 import {
-  LICENSED_EXCLUSION_REASON,
   findLicensedCharacter,
+  licensedReason,
 } from "@/lib/mercadolibre/licensed-characters";
 import { useCoverCheck } from "./use-cover-check";
 import { usePictureChecks } from "./use-picture-checks";
@@ -783,8 +783,10 @@ export function ListingPublicationWizard({
         >
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <p>
-            {LICENSED_EXCLUSION_REASON(licensedCharacter.label)} No entra en las
-            tandas automáticas; publicarla a mano es decisión tuya.
+            {licensedReason(licensedCharacter)}{" "}
+            {licensedCharacter.tier === "excluded"
+              ? "No entra en las tandas automáticas; publicarla a mano es decisión tuya."
+              : "Publicarla a mano es decisión tuya."}
           </p>
         </div>
       ) : null}

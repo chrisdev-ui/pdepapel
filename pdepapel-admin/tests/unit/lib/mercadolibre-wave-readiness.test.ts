@@ -10,6 +10,7 @@ const ready: WaveItemFacts = {
   contactSheetApproved: true,
   presaleBlocked: false,
   licensed: null,
+  licenseApproved: false,
 };
 
 /** Una tanda solo publica lo que tiene categoría validada (o la primera del predictor), comisión real, foto apta, hoja aprobada, sin preventa ni licencia. */
@@ -32,11 +33,22 @@ describe("listo para una tanda de Mercado Libre", () => {
     ]);
   });
 
-  it("un personaje con licencia nunca entra, aunque todo lo demás esté listo", () => {
-    expect(waveItemReadiness({ ...ready, licensed: { label: "Hello Kitty" } })).toEqual({
+  it("un personaje con licencia «excluido» nunca entra, ni aprobado", () => {
+    const licensed = { label: "Hello Kitty", matched: "hello kitty", tier: "excluded" as const };
+    expect(waveItemReadiness({ ...ready, licensed })).toEqual({
       publishable: false,
       reasons: ["Personaje con licencia (Hello Kitty): excluido de Mercado Libre."],
     });
+    expect(waveItemReadiness({ ...ready, licensed, licenseApproved: true }).publishable).toBe(false);
+  });
+
+  it("uno «por revisar» queda fuera hasta que Christian lo aprueba", () => {
+    const licensed = { label: "Disney (por revisar)", matched: "sirenita", tier: "review" as const };
+    expect(waveItemReadiness({ ...ready, licensed })).toEqual({
+      publishable: false,
+      reasons: ["Posible personaje con licencia (Disney, «sirenita»): por revisar. No entra en las tandas hasta que lo apruebes."],
+    });
+    expect(waveItemReadiness({ ...ready, licensed, licenseApproved: true })).toEqual({ publishable: true, reasons: [] });
   });
 
   it("sin categoría validada no se publica", () => {

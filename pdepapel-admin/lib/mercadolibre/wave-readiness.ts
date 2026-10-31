@@ -3,7 +3,7 @@
  * publicador por tandas (B2) antes de crear nada y el informe de cada tanda.
  * Todas las condiciones son obligatorias; ninguna se da por buena sin dato.
  */
-import { LICENSED_EXCLUSION_REASON } from "@/lib/mercadolibre/licensed-characters";
+import { type LicensedMatch, licensedReason } from "@/lib/mercadolibre/licensed-characters";
 
 export type WaveCategoryStatus = "validada" | "corregida" | "por confirmar";
 export type WaveFeeSource = "real" | "estimado" | "pendiente";
@@ -23,14 +23,18 @@ export interface WaveItemFacts {
   contactSheetApproved: boolean;
   /** Regla permanente: las preventas quedan fuera de Mercado Libre. */
   presaleBlocked: boolean;
-  /** Personaje con licencia (`findLicensedCharacter`): nunca entra en una tanda. */
-  licensed: { label: string } | null;
+  /**
+   * Personaje con licencia (`findLicensedCharacter`). «excluido» nunca entra en una tanda;
+   * «por revisar» entra solo con `licenseApproved` (Christian lo aprobó para ese producto).
+   */
+  licensed: LicensedMatch | null;
+  licenseApproved: boolean;
 }
 
 export function waveItemReadiness(facts: WaveItemFacts): { publishable: boolean; reasons: string[] } {
   const reasons: string[] = [];
   if (facts.presaleBlocked) reasons.push("Está en preventa: las preventas no van a Mercado Libre.");
-  if (facts.licensed) reasons.push(LICENSED_EXCLUSION_REASON(facts.licensed.label));
+  if (facts.licensed && (facts.licensed.tier === "excluded" || !facts.licenseApproved)) reasons.push(licensedReason(facts.licensed));
   if (facts.categoryStatus === "corregida") {
     if (!facts.categoryMatchesPredictorTop) {
       reasons.push("La categoría no es la primera del predictor de Mercado Libre: queda por confirmar.");

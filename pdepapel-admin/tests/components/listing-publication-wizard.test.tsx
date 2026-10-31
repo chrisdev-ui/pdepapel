@@ -356,6 +356,14 @@ describe("ListingPublicationWizard", () => {
     await vi.waitFor(() => expect(onPersistStep).toHaveBeenCalled());
   });
 
+  it("un nombre «por revisar» lleva su aviso propio, sin decir que está excluido", () => {
+    render(<WizardHarness onPublish={async () => undefined} productName="Lápiz infinito sirenita" />);
+    expect(
+      screen.getByText(/Posible personaje con licencia \(Disney, «sirenita»\): por revisar\. No entra en las tandas hasta que lo apruebes\. Publicarla a mano es decisión tuya\./),
+    ).toBeVisible();
+    expect(screen.queryByText(/excluido de Mercado Libre/)).not.toBeInTheDocument();
+  });
+
   it("sin personaje con licencia no hay aviso", () => {
     render(<WizardHarness onPublish={async () => undefined} />);
     expect(screen.queryByText(/Personaje con licencia/)).not.toBeInTheDocument();
