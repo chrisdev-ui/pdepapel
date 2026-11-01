@@ -137,10 +137,13 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
     const { buildCopilotTools, COPILOT_TOOL_NAMES } = await import("@/lib/copiloto/tools");
     const tools = buildCopilotTools(fixture!.store.id);
     const now = new Date();
+    // El mes de las herramientas es el de Bogotá (UTC−5): entre las 00:00 y las 05:00 UTC del día 1 el
+    // mes UTC ya cambió y el pedido sembrado «ahora» quedaba fuera (falló en CI el 2026-11-01 01:52 UTC).
+    const bogota = new Date(now.getTime() - 5 * 60 * 60 * 1000);
     const inputs: Record<string, unknown> = {
       resumenDeHoy: {},
-      resumenFinancieroMes: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
-      compararMeses: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
+      resumenFinancieroMes: { anio: bogota.getUTCFullYear(), mes: bogota.getUTCMonth() + 1 },
+      compararMeses: { anio: bogota.getUTCFullYear(), mes: bogota.getUTCMonth() + 1 },
       // El día de Colombia, no el de UTC: entre las 7 p. m. y la medianoche ya son días distintos.
       ventasDelDiaPuntoDeVenta: { fecha: now.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) },
       buscarProductos: { texto: "componente" },
