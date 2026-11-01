@@ -77,7 +77,7 @@ describe("parseHomeContentBody", () => {
     });
     expect(input.productIds).toHaveLength(3);
     expect(() => parseHomeContentBody({ ...base, placement: "CAMPAIGN", campaignType: "SEASON", productIds: ["a"] })).toThrow(
-      "Solo un banner de cargamento muestra productos",
+      "Solo un banner de cargamento o de preventa lleva productos",
     );
   });
 

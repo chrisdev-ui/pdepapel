@@ -1,5 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
-import type { HomeCampaignType, HomeContentPlacement, Prisma } from "@prisma/client";
+import type { HomeCampaignType, HomeContentPlacement, PresalePaymentMode, Prisma } from "@prisma/client";
 import { z } from "zod";
 
 // Contenido de portada: hero y banner de campaña con vigencia. La tienda muestra
@@ -15,6 +15,7 @@ export const HOME_CAMPAIGN_TYPES: { id: HomeCampaignType; label: string; descrip
   { id: "SHIPMENT", label: "Cargamento nuevo", description: "Muestra hasta 3 productos «Próximamente» y pide el correo para el acceso anticipado." },
   { id: "COLLECTION", label: "Colección", description: "Una licencia o línea nueva, con foto y un botón." },
   { id: "OFFER", label: "Oferta", description: "Una promoción con fecha de fin, con foto y un botón." },
+  { id: "PRESALE", label: "Preventa", description: "Un producto en preventa: precio, anticipo y abono mínimo salen de la preventa. Se oculta sola si la preventa se cierra o el producto se archiva." },
 ];
 
 export const HOME_CONTENT_LIMITS = {
@@ -25,7 +26,11 @@ export const HOME_CONTENT_LIMITS = {
   url: 500,
   imageAlt: 160,
   teaserProducts: 3,
+  promotionId: 80,
 } as const;
+
+/** Botón de un banner de preventa cuando Paula no escribe otro. */
+export const PRESALE_CAMPAIGN_DEFAULT_LABEL = "Separar el mío";
 
 // Colombia no tiene horario de verano.
 const BOGOTA_OFFSET = "-05:00";
@@ -61,7 +66,7 @@ const optionalText = (max: number) => z.string().trim().max(max).optional().null
 export const homeContentSchema = z
   .object({
     placement: z.enum(["HERO", "CAMPAIGN"]),
-    campaignType: z.enum(["SEASON", "SHIPMENT", "COLLECTION", "OFFER"]).optional().nullable(),
+    campaignType: z.enum(["SEASON", "SHIPMENT", "COLLECTION", "OFFER", "PRESALE"]).optional().nullable(),
     eyebrow: optionalText(HOME_CONTENT_LIMITS.eyebrow),
     title: z.string().trim().min(3, "El título es obligatorio").max(HOME_CONTENT_LIMITS.title),
     subtitle: optionalText(HOME_CONTENT_LIMITS.subtitle),
@@ -70,7 +75,15 @@ export const homeContentSchema = z
     secondaryLabel: optionalText(HOME_CONTENT_LIMITS.buttonLabel),
     secondaryUrl: urlSchema.optional().nullable(),
     imageUrl: optionalText(HOME_CONTENT_LIMITS.url),
+    mobileImageUrl: optionalText(HOME_CONTENT_LIMITS.url),
     imageAlt: optionalText(HOME_CONTENT_LIMITS.imageAlt),
+    promotionId: z
+      .string()
+      .trim()
+      .max(HOME_CONTENT_LIMITS.promotionId)
+      .regex(/^$|^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Usa minúsculas, números y guiones (por ejemplo kiut-adviento-2026)")
+      .optional()
+      .nullable(),
     isActive: z.boolean().optional().default(true),
     startsAt: z.string().regex(DATE_INPUT, "Fecha de inicio inválida"),
     endsAt: z.string().regex(DATE_INPUT, "Fecha de fin inválida").optional().nullable().or(z.literal("")),
@@ -83,7 +96,8 @@ export const homeContentSchema = z
     if (value.placement === "HERO" && !value.imageUrl) {
       ctx.addIssue({ code: "custom", path: ["imageUrl"], message: "El hero necesita una imagen" });
     }
-    if (value.placement === "CAMPAIGN" && value.campaignType !== "SHIPMENT" && !value.imageUrl) {
+    // La preventa puede usar la foto del producto.
+    if (value.placement === "CAMPAIGN" && value.campaignType !== "SHIPMENT" && value.campaignType !== "PRESALE" && !value.imageUrl) {
       ctx.addIssue({ code: "custom", path: ["imageUrl"], message: "Este banner necesita una imagen" });
     }
     if (value.primaryLabel && !value.primaryUrl) {
@@ -95,8 +109,11 @@ export const homeContentSchema = z
     if (value.endsAt && value.endsAt < value.startsAt) {
       ctx.addIssue({ code: "custom", path: ["endsAt"], message: "La fecha de fin debe ser igual o posterior al inicio" });
     }
-    if (value.productIds.length > 0 && value.campaignType !== "SHIPMENT") {
-      ctx.addIssue({ code: "custom", path: ["productIds"], message: "Solo un banner de cargamento muestra productos" });
+    if (value.campaignType === "PRESALE" && value.productIds.length !== 1) {
+      ctx.addIssue({ code: "custom", path: ["productIds"], message: "Elige el producto en preventa (uno solo)" });
+    }
+    if (value.productIds.length > 0 && value.campaignType !== "SHIPMENT" && value.campaignType !== "PRESALE") {
+      ctx.addIssue({ code: "custom", path: ["productIds"], message: "Solo un banner de cargamento o de preventa lleva productos" });
     }
   });
 
@@ -128,7 +145,9 @@ export function homeContentDataFromInput(input: HomeContentInput) {
     secondaryLabel: emptyToNull(input.secondaryLabel),
     secondaryUrl: emptyToNull(input.secondaryUrl),
     imageUrl: emptyToNull(input.imageUrl),
+    mobileImageUrl: isCampaign ? emptyToNull(input.mobileImageUrl) : null,
     imageAlt: emptyToNull(input.imageAlt),
+    promotionId: isCampaign ? emptyToNull(input.promotionId) : null,
     isActive: input.isActive ?? true,
     startsAt: dateInputToBogotaStart(input.startsAt),
     endsAt: input.endsAt ? dateInputToBogotaEnd(input.endsAt) : null,
@@ -195,7 +214,9 @@ export const HOME_CONTENT_ADMIN_SELECT = {
   secondaryLabel: true,
   secondaryUrl: true,
   imageUrl: true,
+  mobileImageUrl: true,
   imageAlt: true,
+  promotionId: true,
   isActive: true,
   startsAt: true,
   endsAt: true,
@@ -225,7 +246,25 @@ export const HOME_CONTENT_ADMIN_SELECT = {
 
 export const HOME_CONTENT_REVALIDATION = { scope: { paths: ["/"], tags: ["home-content"] } };
 
-export function toPublicHomeContent(entry: Prisma.HomeContentGetPayload<{ select: typeof HOME_CONTENT_ADMIN_SELECT }>) {
+export type HomeContentRow = Prisma.HomeContentGetPayload<{ select: typeof HOME_CONTENT_ADMIN_SELECT }>;
+
+/** Lo que muestra un banner de preventa; lo arma `lib/home-content-presale.ts` con las reglas del checkout. */
+export interface PresaleCampaignOffer {
+  productId: string;
+  slug: string;
+  name: string;
+  price: number;
+  paymentMode: PresalePaymentMode;
+  depositPerUnit: number;
+  minInstallment: number | null;
+  imageUrl: string | null;
+}
+
+/** Null: la campaña de preventa no debe verse (cerrada, llena o producto archivado). */
+export type PresaleOfferFor = (entry: HomeContentRow) => PresaleCampaignOffer | null;
+
+export function toPublicHomeContent(entry: HomeContentRow, offerFor?: PresaleOfferFor) {
+  const presale = entry.campaignType === "PRESALE" && offerFor ? offerFor(entry) : null;
   return {
     id: entry.id,
     placement: entry.placement,
@@ -233,12 +272,16 @@ export function toPublicHomeContent(entry: Prisma.HomeContentGetPayload<{ select
     eyebrow: entry.eyebrow,
     title: entry.title,
     subtitle: entry.subtitle,
-    primaryLabel: entry.primaryLabel,
-    primaryUrl: entry.primaryUrl,
+    // Sin botón propio, una preventa lleva a su ficha: ahí están el precio completo y las condiciones.
+    primaryLabel: entry.primaryLabel ?? (presale ? PRESALE_CAMPAIGN_DEFAULT_LABEL : null),
+    primaryUrl: entry.primaryUrl ?? (presale ? `/producto/${presale.slug}` : null),
     secondaryLabel: entry.secondaryLabel,
     secondaryUrl: entry.secondaryUrl,
-    imageUrl: entry.imageUrl,
-    imageAlt: entry.imageAlt,
+    imageUrl: entry.imageUrl ?? presale?.imageUrl ?? null,
+    mobileImageUrl: entry.mobileImageUrl,
+    imageAlt: entry.imageAlt ?? (presale ? presale.name : null),
+    promotionId: entry.promotionId ?? entry.id,
+    presale,
     startsAt: entry.startsAt,
     endsAt: entry.endsAt,
     products: entry.products
@@ -256,14 +299,29 @@ export function toPublicHomeContent(entry: Prisma.HomeContentGetPayload<{ select
 
 export type PublicHomeContent = ReturnType<typeof toPublicHomeContent>;
 
+/** Productos de las campañas de preventa: el GET público les carga la preventa activa antes de elegir. */
+export function presaleCampaignProductIds(entries: HomeContentRow[]): string[] {
+  return entries
+    .filter((entry) => entry.placement === "CAMPAIGN" && entry.campaignType === "PRESALE")
+    .flatMap((entry) => entry.products.map((item) => item.product.id));
+}
+
 export function selectLiveHomeContent(
-  entries: Prisma.HomeContentGetPayload<{ select: typeof HOME_CONTENT_ADMIN_SELECT }>[],
+  entries: HomeContentRow[],
   now: Date = new Date(),
+  offerFor: PresaleOfferFor = () => null,
 ): { hero: PublicHomeContent | null; campaign: PublicHomeContent | null } {
   const hero = pickLiveHomeContent(entries.filter((entry) => entry.placement === "HERO"), now);
-  const campaign = pickLiveHomeContent(entries.filter((entry) => entry.placement === "CAMPAIGN"), now);
+  // Una preventa cerrada, llena o de un producto archivado se descarta antes de
+  // elegir, para que otra campaña vigente pueda ocupar el lugar.
+  const campaign = pickLiveHomeContent(
+    entries.filter(
+      (entry) => entry.placement === "CAMPAIGN" && (entry.campaignType !== "PRESALE" || offerFor(entry) !== null),
+    ),
+    now,
+  );
   return {
-    hero: hero ? toPublicHomeContent(hero) : null,
-    campaign: campaign ? toPublicHomeContent(campaign) : null,
+    hero: hero ? toPublicHomeContent(hero, offerFor) : null,
+    campaign: campaign ? toPublicHomeContent(campaign, offerFor) : null,
   };
 }

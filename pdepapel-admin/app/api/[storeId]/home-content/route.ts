@@ -15,6 +15,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { assertProductsBelongToStore } from "@/lib/home-content-server";
+import { loadPresaleOffers } from "@/lib/home-content-presale";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
@@ -31,7 +32,8 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
         where: liveHomeContentWhere(params.storeId, now),
         select: HOME_CONTENT_ADMIN_SELECT,
       });
-      return NextResponse.json(selectLiveHomeContent(entries, now), { headers: CACHE_HEADERS.NO_CACHE });
+      const offerFor = await loadPresaleOffers(params.storeId, entries, now);
+      return NextResponse.json(selectLiveHomeContent(entries, now, offerFor), { headers: CACHE_HEADERS.NO_CACHE });
     }
 
     await requireStoreRead(params.storeId);

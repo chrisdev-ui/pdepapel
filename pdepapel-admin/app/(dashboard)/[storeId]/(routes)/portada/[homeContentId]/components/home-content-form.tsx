@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, Eraser, Loader2, Mail, PackageCheck, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -49,6 +49,7 @@ import {
   HOME_CAMPAIGN_TYPES,
   HOME_CONTENT_LIMITS,
   HOME_CONTENT_PLACEMENTS,
+  PRESALE_CAMPAIGN_DEFAULT_LABEL,
   dateToBogotaInput,
   homeContentSchema,
 } from "@/lib/home-content";
@@ -89,7 +90,9 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
             secondaryLabel: initialData.secondaryLabel ?? "",
             secondaryUrl: initialData.secondaryUrl ?? "",
             imageUrl: initialData.imageUrl ?? "",
+            mobileImageUrl: initialData.mobileImageUrl ?? "",
             imageAlt: initialData.imageAlt ?? "",
+            promotionId: initialData.promotionId ?? "",
             isActive: initialData.isActive,
             startsAt: dateToBogotaInput(initialData.startsAt),
             endsAt: dateToBogotaInput(initialData.endsAt),
@@ -106,7 +109,9 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
             secondaryLabel: "",
             secondaryUrl: "",
             imageUrl: "",
+            mobileImageUrl: "",
             imageAlt: "",
+            promotionId: "",
             isActive: true,
             startsAt: dateToBogotaInput(new Date()),
             endsAt: "",
@@ -126,6 +131,16 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
   const campaignType = form.watch("campaignType");
   const isCampaign = placement === "CAMPAIGN";
   const isShipment = isCampaign && campaignType === "SHIPMENT";
+  const isPresale = isCampaign && campaignType === "PRESALE";
+
+  // Al pasar a preventa, el botón por defecto lleva a la ficha del producto (donde están las condiciones).
+  useEffect(() => {
+    if (!isPresale) return;
+    if (form.getValues("primaryLabel") === "Ver la tienda" && form.getValues("primaryUrl") === "/tienda") {
+      form.setValue("primaryLabel", PRESALE_CAMPAIGN_DEFAULT_LABEL, { shouldDirty: true });
+      form.setValue("primaryUrl", "", { shouldDirty: true });
+    }
+  }, [isPresale, form]);
   const productIds = form.watch("productIds") ?? [];
 
   const onSubmit = async (values: FormValues) => {
@@ -434,6 +449,30 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
             )}
           </section>
 
+          {isPresale ? (
+            <section className="grid gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-primary">Producto en preventa</h2>
+                <p className="text-sm text-muted-foreground">
+                  El precio, el anticipo y el abono mínimo salen de su preventa, igual que en el checkout. El banner se oculta solo si la preventa se cierra, se llena o el producto se archiva. Sin enlace propio, el botón lleva a la ficha del producto.
+                </p>
+              </div>
+              <div className="flex min-w-0 items-start gap-2 md:max-w-md">
+                <div className="min-w-0 flex-1">
+                  <AsyncProductSelect
+                    disabled={loading}
+                    value={productIds[0] ?? ""}
+                    onChange={(value) => form.setValue("productIds", value ? [value] : [], { shouldDirty: true })}
+                    placeholder="Producto en preventa"
+                    ariaLabel="Producto en preventa"
+                  />
+                </div>
+                <ProductScanButton compact label="Escanear el producto en preventa" onFound={(product) => form.setValue("productIds", [product.id], { shouldDirty: true })} />
+              </div>
+              <FormField control={form.control} name="productIds" render={() => <FormMessage />} />
+            </section>
+          ) : null}
+
           {isShipment ? (
             <section className="grid gap-4">
               <div>
@@ -488,7 +527,7 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
               name="imageUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired={!isShipment}>Imagen</FormLabel>
+                  <FormLabel isRequired={!isShipment && !isPresale}>Imagen</FormLabel>
                   <FormControl>
                     <ImageUpload
                       value={field.value ? [{ url: field.value, isMain: true }] : []}
@@ -502,12 +541,35 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
                       ? "Horizontal, mínimo 1280 × 800 px (8:5). Sin texto dentro de la imagen."
                       : isShipment
                         ? "Opcional: si eliges productos, la portada los muestra en lugar de la foto."
-                        : "Horizontal, mínimo 1040 × 600 px. Sin texto dentro de la imagen."}
+                        : isPresale
+                          ? "Opcional: sin foto se usa la principal del producto. Sin texto dentro de la imagen."
+                          : "Horizontal, mínimo 1040 × 600 px. Sin texto dentro de la imagen."}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {isCampaign && (
+              <FormField
+                control={form.control}
+                name="mobileImageUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Imagen para el teléfono</FormLabel>
+                    <FormControl>
+                      <ImageUpload
+                        value={field.value ? [{ url: field.value, isMain: true }] : []}
+                        disabled={loading}
+                        onChange={(images) => field.onChange(images.length > 0 ? images[0].url : "")}
+                        onRemove={() => field.onChange("")}
+                      />
+                    </FormControl>
+                    <FormDescription>Opcional, vertical o cuadrada. Sin ella el teléfono usa la imagen de arriba.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="imageAlt"
@@ -522,6 +584,22 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
                 </FormItem>
               )}
             />
+            {isCampaign && (
+              <FormField
+                control={form.control}
+                name="promotionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Identificador para Google Analytics</FormLabel>
+                    <FormControl>
+                      <Input disabled={loading} maxLength={HOME_CONTENT_LIMITS.promotionId} placeholder="kiut-adviento-2026" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormDescription>Opcional. Así aparece la campaña en los informes de promociones; sin él se usa un código interno.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </section>
 
           <section className="grid gap-6 md:grid-cols-3">

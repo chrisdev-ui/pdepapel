@@ -449,89 +449,89 @@ model ProductGroup {
 }
 
 model Product {
-  id                          String                       @id @default(uuid())
-  storeId                     String
-  categoryId                  String
-  name                        String
-  slug                        String                       @default("")
-  description                 String                       @db.Text
-  stock                       Int                          @default(0)
+  id                            String                       @id @default(uuid())
+  storeId                       String
+  categoryId                    String
+  name                          String
+  slug                          String                       @default("")
+  description                   String                       @db.Text
+  stock                         Int                          @default(0)
   /// Unidades apartadas para una clienta (ver StockReservation): no salen del
   /// stock físico ni del kardex, pero no se pueden vender. Lo disponible es
   /// `stock - reservedUnits` (lib/available-stock.ts). En un kit se deriva de
   /// sus componentes en `recalculateKitStock`.
-  reservedUnits               Int                          @default(0)
-  price                       Float                        @default(0)
-  acqPrice                    Float?                       @default(0)
+  reservedUnits                 Int                          @default(0)
+  price                         Float                        @default(0)
+  acqPrice                      Float?                       @default(0)
   /// Envío y otros gastos por unidad. Entra en el precio sugerido de Productos y en el piso de precio de Mercado Libre.
-  transportationCost          Float?
-  isFeatured                  Boolean                      @default(false)
-  isArchived                  Boolean                      @default(false)
-  availableAt                 DateTime?
+  transportationCost            Float?
+  isFeatured                    Boolean                      @default(false)
+  isArchived                    Boolean                      @default(false)
+  availableAt                   DateTime?
   /// Margen bajo a propósito (precio competitivo): sale de «Margen bajo» y el
   /// formulario no lo advierte. Null = sin excepción.
-  marginExceptionReason       String?                      @db.VarChar(255)
-  marginExceptionAt           DateTime?
-  marginExceptionBy           String?                      @db.VarChar(191)
-  soldCount                   Int                          @default(0)
-  sizeId                      String
-  shippingProfileId           String?
-  colorId                     String
-  designId                    String
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @updatedAt
-  sku                         String                       @unique
+  marginExceptionReason         String?                      @db.VarChar(255)
+  marginExceptionAt             DateTime?
+  marginExceptionBy             String?                      @db.VarChar(191)
+  soldCount                     Int                          @default(0)
+  sizeId                        String
+  shippingProfileId             String?
+  colorId                       String
+  designId                      String
+  createdAt                     DateTime                     @default(now())
+  updatedAt                     DateTime                     @updatedAt
+  sku                           String                       @unique
   /// Texto libre anterior a Brand: ya no se escribe; se lee solo como respaldo de Mercado Libre hasta verificar la migración de datos.
-  brand                       String?                      @db.VarChar(120)
+  brand                         String?                      @db.VarChar(120)
   /// Marca (fabricante). En un grupo, siempre igual a la del grupo.
-  brandId                     String?
-  brandRef                    Brand?                       @relation(fields: [brandId], references: [id], onDelete: Restrict)
-  gtin                        String?                      @db.VarChar(14)
-  mpn                         String?                      @db.VarChar(70)
-  hasNoProductIdentifier      Boolean                      @default(false)
+  brandId                       String?
+  brandRef                      Brand?                       @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  gtin                          String?                      @db.VarChar(14)
+  mpn                           String?                      @db.VarChar(70)
+  hasNoProductIdentifier        Boolean                      @default(false)
   /// Paquete real, ya empacado (gramos y centímetros). Lo usa Mercado Libre para
   /// cotizar el envío y publicar; null = sin medir (se supone la caja por defecto).
-  packageWeightGrams          Int?
-  packageHeightCm             Float?
-  packageWidthCm              Float?
-  packageLengthCm             Float?
+  packageWeightGrams            Int?
+  packageHeightCm               Float?
+  packageWidthCm                Float?
+  packageLengthCm               Float?
   /// Christian revisó el nombre que parecía de personaje con licencia (nivel
   /// «por revisar») y lo dejó entrar en las tandas de Mercado Libre.
   mercadoLibreLicenseApprovedAt DateTime?
-  mercadoLibreLicenseApprovedBy String?                    @db.VarChar(191)
-  store                       Store                        @relation("StoreToProduct", fields: [storeId], references: [id])
-  category                    Category                     @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  size                        Size                         @relation(fields: [sizeId], references: [id])
-  shippingProfile             ShippingProfile?             @relation(fields: [shippingProfileId], references: [id])
-  color                       Color                        @relation(fields: [colorId], references: [id])
-  design                      Design                       @relation(fields: [designId], references: [id])
-  images                      Image[]
-  orderItems                  OrderItem[]
-  reviews                     Review[]
-  customerWishlistItems       CustomerWishlistItem[]
-  supplierId                  String?
-  supplier                    Supplier?                    @relation(fields: [supplierId], references: [id])
-  productGroupId              String?
-  productGroup                ProductGroup?                @relation(fields: [productGroupId], references: [id])
-  offers                      OfferProduct[]
-  inventoryMovements          InventoryMovement[]
-  restockOrderItems           RestockOrderItem[]
-  slugAliases                 ProductSlugAlias[]
-  fairInventoryItems          FairEventInventoryItem[]
-  fairCapsules                FairCapsule[]
-  marketplaceListings         MarketplaceListing[]
-  marketplaceOrderItems       MarketplaceOrderItem[]
-  marketplaceOutboxEvents     MarketplaceOutboxEvent[]
-  marketplaceQuestions        MarketplaceQuestion[]
-  videos                      ProductVideo[]
-  growthCampaignProducts      GrowthCampaignProduct[]
-  catalogOptionValues         ProductCatalogOptionValue[]
-  catalogMigrationSuggestions CatalogMigrationSuggestion[]
-  homeContents                HomeContentProduct[]
-  presales                    ProductPresale[]
-  preorderWaitlist            PreorderWaitlistEntry[]
-  stockReservations           StockReservation[]
-  stockReservationItems       StockReservationItem[]
+  mercadoLibreLicenseApprovedBy String?                      @db.VarChar(191)
+  store                         Store                        @relation("StoreToProduct", fields: [storeId], references: [id])
+  category                      Category                     @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size                          Size                         @relation(fields: [sizeId], references: [id])
+  shippingProfile               ShippingProfile?             @relation(fields: [shippingProfileId], references: [id])
+  color                         Color                        @relation(fields: [colorId], references: [id])
+  design                        Design                       @relation(fields: [designId], references: [id])
+  images                        Image[]
+  orderItems                    OrderItem[]
+  reviews                       Review[]
+  customerWishlistItems         CustomerWishlistItem[]
+  supplierId                    String?
+  supplier                      Supplier?                    @relation(fields: [supplierId], references: [id])
+  productGroupId                String?
+  productGroup                  ProductGroup?                @relation(fields: [productGroupId], references: [id])
+  offers                        OfferProduct[]
+  inventoryMovements            InventoryMovement[]
+  restockOrderItems             RestockOrderItem[]
+  slugAliases                   ProductSlugAlias[]
+  fairInventoryItems            FairEventInventoryItem[]
+  fairCapsules                  FairCapsule[]
+  marketplaceListings           MarketplaceListing[]
+  marketplaceOrderItems         MarketplaceOrderItem[]
+  marketplaceOutboxEvents       MarketplaceOutboxEvent[]
+  marketplaceQuestions          MarketplaceQuestion[]
+  videos                        ProductVideo[]
+  growthCampaignProducts        GrowthCampaignProduct[]
+  catalogOptionValues           ProductCatalogOptionValue[]
+  catalogMigrationSuggestions   CatalogMigrationSuggestion[]
+  homeContents                  HomeContentProduct[]
+  presales                      ProductPresale[]
+  preorderWaitlist              PreorderWaitlistEntry[]
+  stockReservations             StockReservation[]
+  stockReservationItems         StockReservationItem[]
 
   // -- CÁPSULAS SORPRESA --
   /// Lotes empacados de este producto cápsula (la cápsula es un producto normal).
@@ -1628,6 +1628,8 @@ enum HomeCampaignType {
   SHIPMENT
   COLLECTION
   OFFER
+  /// Preventa de un solo producto: precio, anticipo y abono mínimo salen de la preventa activa.
+  PRESALE
 }
 
 /// Hero y banner de campaña de la portada, con vigencia.
@@ -1644,7 +1646,11 @@ model HomeContent {
   secondaryLabel    String?              @db.VarChar(40)
   secondaryUrl      String?              @db.VarChar(500)
   imageUrl          String?              @db.VarChar(500)
+  /// Foto para el teléfono (opcional); sin ella se usa `imageUrl`.
+  mobileImageUrl    String?              @db.VarChar(500)
   imageAlt          String?              @db.VarChar(160)
+  /// `promotion_id` de GA4 (view_promotion / select_promotion); sin él, el id del contenido.
+  promotionId       String?              @db.VarChar(80)
   isActive          Boolean              @default(true)
   startsAt          DateTime             @default(now())
   endsAt            DateTime?
