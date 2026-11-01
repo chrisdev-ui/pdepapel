@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DateField } from "@/components/ui/date-field";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 afterEach(cleanup);
 
@@ -52,5 +53,23 @@ describe("DateField", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Quitar fecha" }));
     expect(onChange).toHaveBeenCalledWith("");
+  });
+
+  it("dentro de un diálogo no salta el foco a un día al abrir (Safari lo cerraba en el acto)", async () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Nueva feria</DialogTitle>
+          <DateField id="startsAt" name="startsAt" aria-label="Empieza" presets={false} />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Empieza" }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    expect(document.activeElement?.getAttribute("name")).not.toBe("day");
+    expect(document.activeElement?.getAttribute("role")).not.toBe("gridcell");
   });
 });

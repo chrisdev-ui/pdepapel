@@ -43,5 +43,17 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    // Los calendarios con el dedo: Safari de iPhone (donde se rompieron el
+    // 2026-10-31) y Chrome de Android, a 390×844 y táctil.
+    {
+      name: "movil-webkit",
+      testMatch: /date-pickers-touch\.spec\.ts/,
+      use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+    {
+      name: "movil-chromium",
+      testMatch: /date-pickers-touch\.spec\.ts/,
+      use: { ...devices["Pixel 5"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
   ],
 });

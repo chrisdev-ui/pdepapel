@@ -139,13 +139,14 @@ export function DateField({
                 ))}
             </div>
           )}
+          {/* Sin `initialFocus`: ese segundo salto de foco a un día cerraba el
+              calendario dentro de un diálogo en Safari de iPhone (2026-10-31). */}
           <Calendar
             mode="single"
             selected={date}
             defaultMonth={date ?? minDate}
             onSelect={commit}
             disabled={disabledDays}
-            initialFocus
           />
         </PopoverContent>
       </Popover>

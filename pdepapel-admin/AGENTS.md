@@ -72,6 +72,7 @@ CI (`.github/workflows/quality.yml`) runs `prisma generate`, `tsc --noEmit`, `te
 
 **Testing rules that matter:**
 
+- **Calendars on a phone.** `tests/e2e/date-pickers-touch.spec.ts` lists every `DateField`/`DateRangePicker` (`DATE_PICKER_USAGES`) and opens it with a tap on the `movil-webkit` (iPhone, 390×844) and `movil-chromium` projects, plus the desktop `chromium` one, to check the picked day sticks. A new date field, above all one inside a `Dialog`/`AlertDialog`, goes in that list. WebKit needs `npx playwright install webkit`. Never pass `initialFocus` to a `Calendar` inside a `Popover`: in Safari a tap leaves focus on the dialog, and the second focus jump to a day closed the calendar the instant it opened (2026-10-31). The contract test is in `tests/components/date-field.test.tsx`.
 - Integration tests and `prisma db push` use the local Docker MySQL. `TEST_DATABASE_URL` must be local and end in `pdepapel_test`; the harness rejects anything else. **Never point a test at Railway or production.**
 - **Tests never inherit the local `.env` production URL (2026-10-15).** Every path to a database goes through `scripts/lib/test-database.mjs`, which accepts only `127.0.0.1`/`localhost`/`::1` + `pdepapel_test` and rejects the production host, the `pdepapel_ro` user (also through a local tunnel), and a missing URL. It throws (`TestDatabaseGuardError`) and never skips. Wired into:
   - `tests/setup.ts` (unit; `vitest.config.mts` pins `DATABASE_URL` from `.env.test` instead of wrapping, because `with-test-env` forces `NODE_ENV=development`);
