@@ -1,9 +1,12 @@
 /**
  * Conteo físico de un producto: deja el stock en lo que se contó, por el mismo
  * camino del ajuste del panel (`createInventoryMovement`, MANUAL_ADJUSTMENT):
- * escribe el movimiento en el kardex, encola la sincronización de stock de
- * Mercado Libre si hay publicaciones y refresca la tienda después del commit.
- * Nunca un UPDATE directo.
+ * escribe el movimiento en el kardex y encola la sincronización de stock de
+ * Mercado Libre si hay publicaciones. Nunca un UPDATE directo. No llama a la
+ * revalidación de la tienda: desde la máquina local no tiene el secreto y
+ * dejaba «storefront-revalidation» en falla en Sistemas (2026-11-01); la
+ * página del producto se renueva sola en ≤ 5 min (ISR) y el checkout valida
+ * el stock en vivo.
  *
  * Ensayo (por defecto; no escribe nada; corre con pdepapel_ro):
  *   npm run prod:write -- --dry-run scripts/inventory-physical-count.ts --sku <SKU> --count <N> --motivo "<texto>" --reason "<motivo de la aprobación>" --expect new
@@ -24,7 +27,6 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 import { createInventoryMovement } from "@/lib/inventory";
-import { invalidateStoreProductsCache } from "@/lib/cache";
 
 import { createProdClient } from "./lib/prod-client.mjs";
 
@@ -123,7 +125,6 @@ async function main() {
       resolve(process.cwd(), "ops/prod-writes.log"),
       `# ${new Date().toISOString()} inventory-physical-count ${sku} ${product.stock} → ${count} · movimiento ${movement.id} · DESHACER con otro ajuste de ${-delta} desde el panel (Inventario), nunca borrando el movimiento.\n`,
     );
-    await invalidateStoreProductsCache(storeId, product.id);
     console.log(`Ajustado: ${sku} ${product.stock} → ${count} (movimiento ${movement.id}).`);
     console.log("PROD_WRITE_ROWS=1");
   } finally {
