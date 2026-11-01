@@ -230,7 +230,7 @@ export interface Image {
 }
 
 export type HomeContentPlacement = "HERO" | "CAMPAIGN";
-export type HomeCampaignType = "SEASON" | "SHIPMENT" | "COLLECTION" | "OFFER";
+export type HomeCampaignType = "SEASON" | "SHIPMENT" | "COLLECTION" | "OFFER" | "PRESALE";
 
 export interface HomeContentProduct {
   id: string;
@@ -238,6 +238,18 @@ export interface HomeContentProduct {
   slug: string;
   price: number;
   stock: number;
+  imageUrl: string | null;
+}
+
+/** Números del banner de preventa: los arma el panel con las reglas del checkout; aquí solo se formatean. */
+export interface HomePresaleOffer {
+  productId: string;
+  slug: string;
+  name: string;
+  price: number;
+  paymentMode: "FULL" | "DEPOSIT";
+  depositPerUnit: number;
+  minInstallment: number | null;
   imageUrl: string | null;
 }
 
@@ -253,7 +265,10 @@ export interface HomeContent {
   secondaryLabel: string | null;
   secondaryUrl: string | null;
   imageUrl: string | null;
+  mobileImageUrl?: string | null;
   imageAlt: string | null;
+  promotionId?: string;
+  presale?: HomePresaleOffer | null;
   startsAt: string;
   endsAt: string | null;
   products: HomeContentProduct[];

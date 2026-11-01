@@ -213,6 +213,7 @@ When a change touches authentication or authorization, verify that route list **
 
 ### Analytics and privacy
 
+- **Campaign banner promotions (2026-11-01).** `components/home/campaign-promotion-tracking.tsx` sends GA4 `view_promotion` once (half the banner visible) and `select_promotion` on a link click, through `trackGoogleEvent` (consent-gated). Params: `promotion_id` (`HomeContent.promotionId`, else its id), `promotion_name`, `creative_slot: "home_campaign"`, `items` for a presale; never the reserved campaign keys. A `PRESALE` campaign renders the admin's `presale` numbers (`depositPerUnit`, `minInstallment`) with `formatCop` only, each amount `whitespace-nowrap`; the store never recomputes them.
 - GA4 and Microsoft Clarity load **only after explicit, revocable browser consent**. Preferences are versioned in local storage and mirrored into a cookie set by `POST /api/consent`; bump `ANALYTICS_CONSENT_VERSION` (storage key and cookie name together) whenever the consent scope changes.
 - **Consent v3 (2026-10-26): two purposes, `{ analytics, marketing }`.** Banner: one line («Usamos cookies para analizar la tienda y medir nuestros anuncios.»), «Solo necesarias» and «Aceptar todo» the same size, «Configurar» opens the dialog with «Analítica» and «Publicidad» switches, both off by default, and «Guardar». A v2 «sí» never carries over to advertising. Withdrawing either reloads the page so loaded scripts stop. `hasMarketingConsent()` is the only gate for advertising.
 - **TikTok Pixel (2026-10-26)**, `lib/analytics/tiktok.ts`:
