@@ -115,6 +115,12 @@ describe("formulario: reglas de la preventa", () => {
     expect(parseHomeContentBody({ ...body, productIds: ["kiut"] }).productIds).toEqual(["kiut"]);
   });
 
+  it("con el botón por defecto del formulario («Separar el mío», sin enlace) se guarda; otros tipos siguen pidiendo enlace", () => {
+    const presale = parseHomeContentBody({ ...body, productIds: ["kiut"], primaryLabel: "Separar el mío", primaryUrl: "" });
+    expect(presale.primaryLabel).toBe("Separar el mío");
+    expect(() => parseHomeContentBody({ ...body, campaignType: "SEASON", imageUrl: "https://x/y.jpg", primaryLabel: "Ver", primaryUrl: "" })).toThrow("El botón principal necesita un enlace");
+  });
+
   it("el id de GA4 va en minúsculas con guiones", () => {
     expect(() => parseHomeContentBody({ ...body, productIds: ["kiut"], promotionId: "Kiut Adviento" })).toThrow(/minúsculas/);
     expect(parseHomeContentBody({ ...body, productIds: ["kiut"], promotionId: "kiut-adviento-2026" }).promotionId).toBe("kiut-adviento-2026");

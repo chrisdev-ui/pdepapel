@@ -100,7 +100,8 @@ export const homeContentSchema = z
     if (value.placement === "CAMPAIGN" && value.campaignType !== "SHIPMENT" && value.campaignType !== "PRESALE" && !value.imageUrl) {
       ctx.addIssue({ code: "custom", path: ["imageUrl"], message: "Este banner necesita una imagen" });
     }
-    if (value.primaryLabel && !value.primaryUrl) {
+    // En una preventa el botón sin enlace lleva a la ficha del producto.
+    if (value.primaryLabel && !value.primaryUrl && value.campaignType !== "PRESALE") {
       ctx.addIssue({ code: "custom", path: ["primaryUrl"], message: "El botón principal necesita un enlace" });
     }
     if (value.secondaryLabel && !value.secondaryUrl) {
