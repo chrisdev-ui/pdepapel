@@ -1,0 +1,11 @@
+{
+  "_comment": "Events that distort week-over-week comparisons. Add one line per event; local, untracked additions go in output/monitoreo/eventos.json with the same shape.",
+  "events": [
+    { "start": "2026-10-26", "end": "2026-10-26", "label": "Píxel de TikTok en vivo (ac00704c): TikTok solo mide a quien acepta «Publicidad»." },
+    { "start": "2026-10-27", "end": "2026-10-27", "label": "Consentimiento v3: todos los visitantes vuelven a decidir; GA4, Clarity y TikTok solo cuentan a quien acepta." },
+    { "start": "2026-10-26", "end": "2026-10-26", "label": "Checkout: ciudad y cédula (941f48a5); parámetro «source» de GA4 renombrado, baja el «Unassigned»." },
+    { "start": "2026-10-31", "end": null, "label": "Mercado Libre ola 1 publicada (6 publicaciones activas)." },
+    { "start": "2026-10-31", "end": null, "label": "Banner de preventa Kiut (calendario de adviento) en la portada." },
+    { "start": "2026-11-01", "end": "2026-11-01", "label": "Feria Villaterra Halloween (ventas en papel, no pasan por la tienda ni el panel)." }
+  ]
+}

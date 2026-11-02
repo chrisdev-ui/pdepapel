@@ -17,6 +17,8 @@ outputs/
 
 # PDF generados por scripts/generate-mercadolibre-guide-pdf.py
 output/
+# Informes, historial y registros del monitoreo (docs/monitoreo.md); ya cubierto por output/, explícito a propósito.
+output/monitoreo/
 
 # Local agent/tool scratch at the repo root (never commit)
 /Claude outputs/

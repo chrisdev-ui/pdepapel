@@ -172,6 +172,21 @@ Compiling locally is not done. For production-impacting work:
 7. The user has explicitly approved any push.
 8. Post-deploy webhook, OAuth, cache or smoke verification is completed or clearly handed to the owner.
 
+## Monitoreo
+
+A local, scheduled, **read-only** monitor of the public store runs on Christian's Mac (full runbook: `docs/monitoreo.md`).
+
+- **Layer 2, daily at 07:17 (Bogotá):** `pdepapel-store/scripts/monitoring/daily-check.mjs`, plain Playwright, no Claude. It checks HTTP, console, JSON-LD, add-to-cart, checkout step 1 (never submits), consent in a clean browser, and lab LCP/CLS at 390 and 1280. It alerts only on a failure or a regression against a rolling median, at most once per issue per day.
+- **Alerts:** macOS notifications plus the owner's Web Push through `POST /api/[storeId]/monitoring/alert`. That route is authorized by `MONITOREO_PUSH_SECRET`, an admin Production variable that equals `MONITOREO_PUSH_TOKEN` in the local `.env`, and answers 404 without it.
+- **Layer 1, Tuesdays at 07:17:** `run-weekly.sh` runs Layer 2 first, then headless `claude -p --chrome --model sonnet "/monitoreo-semanal"` (`--opus` by hand) (`.claude/commands/monitoreo-semanal.md`). The review covers GA4, Clarity, Search Console, Merchant Center, TikTok, Vercel, PageSpeed and the admin, all read-only. It then runs the deterministic compiler `weekly-report.mjs`, which writes `output/monitoreo/<date>.md` and appends `history.json`.
+- **Output:** everything lands in the main checkout's `output/monitoreo/` (gitignored), never in a worktree and never under `~/.claude`. Claude Code denies headless writes there.
+- **Rules for changes:**
+  - Every non-GET request in the daily check is aborted, except `/api/consent` and the store's read-only Server Actions. A new `"use server"` file fails `tests/unit/monitoring` until it is reviewed.
+  - Analytics requests are aborted, so the monitor never inflates GA4, Clarity, TikTok or Vercel Analytics.
+  - Metric keys in `lib/metrics-schema.mjs` are stable: add keys, never rename them.
+  - The headless review may write only under `output/monitoreo/`, through `save-raw.mjs`. `run-weekly.sh` alerts if `git status` changes during a run.
+- **Headless Chrome needs:** Chrome running (the wrapper opens it in the background), the Claude extension connected, and the Mac awake. launchd runs a missed slot at the next wake, and skips it if the Mac was shut down.
+
 ## Agent skills
 
 ### Issue tracker

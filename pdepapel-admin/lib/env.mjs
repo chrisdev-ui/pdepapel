@@ -116,6 +116,10 @@ export const env = createEnv({
     WEB_PUSH_VAPID_PRIVATE_KEY: z.string().min(1).optional(),
     // mailto:… o https://…; otro valor cuenta como «no configurado», no tumba el build.
     WEB_PUSH_VAPID_SUBJECT: z.string().optional(),
+    // Autoriza al monitoreo local a mandar el aviso push de la dueña
+    // (app/api/[storeId]/monitoring/alert, docs/monitoreo.md). Opcional: sin
+    // ella esa ruta responde 404.
+    MONITOREO_PUSH_SECRET: z.string().min(32).optional(),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

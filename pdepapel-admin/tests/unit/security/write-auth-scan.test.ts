@@ -44,6 +44,8 @@ const ALLOWED_WITHOUT_OWNER_GUARD: Record<string, string> = {
   "products/[productId]/reviews/[reviewId]/route.ts":
     "la autora edita la suya; borrar lo permite la autora o la dueña, comprobado en línea",
   "shipment/quote/route.ts": "cotización de envío desde la tienda",
+  "monitoring/alert/route.ts":
+    "aviso del monitoreo local (guion sin sesión): secreto propio MONITOREO_PUSH_SECRET, solo manda el push a los aparatos de la dueña con un enlace fijo al panel",
   // POST que no escribe: consulta el precio de unas líneas. Es POST porque
   // recibe una lista, no porque cambie algo. Verificado abajo, no de palabra.
   "point-of-sale/price/route.ts": "consulta de precio sin escritura, con requireStoreRead",

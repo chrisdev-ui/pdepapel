@@ -132,6 +132,8 @@ export const ABSENT_IN_TESTS = Object.freeze([
   "NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY",
   "WEB_PUSH_VAPID_PRIVATE_KEY",
   "WEB_PUSH_VAPID_SUBJECT",
+  // Aviso del monitoreo local: sin ella la ruta monitoring/alert responde 404, que es lo que se prueba por defecto.
+  "MONITOREO_PUSH_SECRET",
 ]);
 
 /** Lo que pone el arnés de pruebas (la base local) o el proceso, nunca un secreto. */
