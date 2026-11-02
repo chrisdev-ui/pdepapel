@@ -1,10 +1,11 @@
-import { MarketplaceConnectionStatus, MarketplaceListingStatus, MarketplaceProvider } from "@prisma/client";
+import { MarketplaceConnectionStatus, MarketplaceListingStatus, MarketplaceProvider, PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { queueMarketplaceListingPublicationEvent } from "@/lib/mercadolibre/outbox";
 
 import { createProdClient, ProdWriteBlockedError } from "../../scripts/lib/prod-client.mjs";
+import { assertTestDatabaseEnv } from "../../scripts/lib/test-database.mjs";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
 /**
@@ -59,5 +60,12 @@ describe("cliente de prod:write dentro de una transacción", () => {
     const db = createProdClient({ reason: "Tanda (MarketplaceListing + MarketplaceOutboxEvent PUBLISH_LISTING)", client: testPrisma }) as unknown as typeof testPrisma;
     const listingId = await draftAndQueue(db);
     await expect(testPrisma.marketplaceOutboxEvent.count({ where: { listingId } })).resolves.toBe(1);
+  });
+
+  it("un cliente sin opciones propias corre $transaction(fn) y se desconecta a través del envoltorio", async () => {
+    vi.stubEnv("PROD_WRITE_APPROVED", "1");
+    const db = createProdClient({ reason: "x", client: new PrismaClient({ datasourceUrl: assertTestDatabaseEnv(process.env, "prod-client-desconexión") }) }) as unknown as typeof testPrisma;
+    await expect(db.$transaction(async (tx) => tx.store.count({ where: { id: f.store.id } }))).resolves.toBe(1);
+    await expect(db.$disconnect()).resolves.toBeUndefined();
   });
 });

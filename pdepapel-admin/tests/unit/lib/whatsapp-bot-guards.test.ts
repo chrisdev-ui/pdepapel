@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Los frenos que el bot mira justo antes de cada envío. El detector de lo que
@@ -84,6 +84,11 @@ beforeEach(() => {
 });
 
 describe("findPendingCustomerActivity", () => {
+  // `findPendingCustomerActivity` importa conversation-sync al vuelo; en frío, con la suite completa, esa carga pasaba de los 5 s de la primera prueba.
+  beforeAll(async () => {
+    await import("@/lib/whatsapp/conversation-sync");
+  }, 30_000);
+
   it("busca solo eventos de WhatsApp sin procesar que llegaron después de este", async () => {
     await findPendingCustomerActivity(query);
     expect(mocks.events).toHaveBeenCalledWith(

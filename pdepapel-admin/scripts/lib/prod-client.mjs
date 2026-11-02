@@ -12,7 +12,7 @@
  *   await db.product.deleteMany({ where: { id: { in: ids } } });        // pasa
  *   await db.inventoryMovement.deleteMany({ where: { productId } });     // sólo si el motivo dice «kardex» o «InventoryMovement»
  */
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 import { GUARDED_OPERATIONS, isBlockedLedgerOperation, LEDGER_MODELS } from "./prod-guard.mjs";
 
@@ -25,11 +25,28 @@ export class ProdWriteBlockedError extends Error {
   }
 }
 
+// Las de `lib/prismadb.ts` (un test las ata a `constants/`): con los 5 s de Prisma un `$transaction(fn)` se agota desde fuera de Vercel (2026-11-01).
+export const PROD_TRANSACTION_OPTIONS = Object.freeze({
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  maxWait: 30_000,
+  timeout: 60_000,
+});
+
+function withPanelTransactionDefaults(client) {
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property !== "$transaction") return Reflect.get(target, property, receiver);
+      return (input, options) =>
+        typeof input === "function" ? target.$transaction(input, { ...PROD_TRANSACTION_OPTIONS, ...options }) : target.$transaction(input, options);
+    },
+  });
+}
+
 export function createProdClient({ reason = process.env.PROD_WRITE_REASON, client = new PrismaClient() } = {}) {
   if (process.env.PROD_WRITE_APPROVED !== "1") {
     throw new Error("prod-client: ejecuta el guion con `npm run prod:write -- <guion>`; sin aprobación no hay cliente de escritura.");
   }
-  return client.$extends({
+  return withPanelTransactionDefaults(client.$extends({
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
@@ -40,7 +57,7 @@ export function createProdClient({ reason = process.env.PROD_WRITE_REASON, clien
         },
       },
     },
-  });
+  }));
 }
 
 export { GUARDED_OPERATIONS, LEDGER_MODELS };

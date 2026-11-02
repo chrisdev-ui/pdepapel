@@ -35,13 +35,14 @@ describe("palabras simples en las respuestas", () => {
     expect(toPlainWords(text)).toBe(text);
   });
 
+  // Importa todo el grafo de herramientas: ~3,5 s en frío, y con la suite completa pasaba de 5 s.
   it("cubre todas las herramientas del copiloto", async () => {
     const { COPILOT_TOOL_NAMES } = await import("@/lib/copiloto/tools");
     for (const name of [...COPILOT_TOOL_NAMES, ...SKILL_TOOL_NAMES, "cargarHabilidad"]) {
       expect(INTERNAL_WORDS, name).toContain(name);
       expect(toPlainWords(`usé ${name}.`), name).not.toContain(name);
     }
-  });
+  }, 30_000);
 
   it("en el flujo: un nombre partido entre dos pedazos también cambia, y no se pierde texto", async () => {
     const text = await run([
