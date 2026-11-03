@@ -38,8 +38,8 @@ const REASONS = {
 } as const;
 type Channel = keyof typeof REASONS;
 
-/** [SKU, cantidad, canal, lo que escribió Paula] */
-const PLAN: [string, number, Channel, string][] = [
+/** [SKU, cantidad, canal, lo que escribió Paula, nota para el motivo] */
+const PLAN: [string, number, Channel, string, string?][] = [
   ["POR-ANI-BLA-XS-L-8224", 1, "capsulas", "portacarnet Bob Esponja"],
   ["POR-CIN-AZU-S-L-7503", 1, "capsulas", "portacarnet Cinnamoroll"],
   ["POR-ANI-BLA-XS-L-4493", 1, "capsulas", "portacarnet Dragon Ball"],
@@ -83,6 +83,16 @@ const PLAN: [string, number, Channel, string][] = [
   ["CAR-AES-ROS-S-L-9090", 1, "capsulas", "cartuchera wisdom rosada"],
   ["LLA-ANI-AMA-XS-P-1590", 1, "individual", "llavero peluche abejita"],
   ["LIB-ANI-ROS-L-L-EOI7NN", 1, "individual", "rollo de colorear 3 m unicornio"],
+  // Segunda parte: respuestas de Paula del 2026-11-03 a las 7 líneas que quedaron pendientes.
+  ["LEG-ARM-MUL-S-L-8116", 1, "capsulas", "bloques tigre (Winnie Pooh y sus amigos)"],
+  ["LLA-SUP-NEG-XS-P-6273", 1, "capsulas", "llavero Spiderman (Llaveros Super heroes)"],
+  ["LIB-CAP-MUL-XS-P-5778", 1, "capsulas", "mini libreta capibara sencilla", "la hoja decía 3 mini libretas; Paula confirma 2 (1 sencilla + 1 argollada)"],
+  ["LIB-CAP-AMA-XS-L-2615", 1, "capsulas", "mini libreta capibara argollada", "la hoja decía 3 mini libretas; Paula confirma 2 (1 sencilla + 1 argollada)"],
+  ["MON-CAP-MUL-S-L-1587", 1, "capsulas", "monedero capibara multicolor"],
+  ["MON-CAP-CAF-M-L-4302", 1, "capsulas", "monedero capibara café"],
+  ["PLU-CLS-MUL-S-P-3614", 1, "capsulas", "set plumones punta cónica (Primavera)"],
+  ["KIT-KAW-ROS-XS-P-4017", 1, "capsulas", "vasito kawaii x7 rosa"],
+  ["SOB-GRY-MUL-M-L-9288", 1, "capsulas", "carpeta Harry carta (Mundo Harry Potter #3 Gryffindor)"],
 ];
 
 /**
@@ -93,15 +103,7 @@ const RECOUNT: Record<string, number> = { "LEG-ANI-NEG-XS-L-4163": 1 };
 const RECOUNT_REASON = (n: number) => `Conteo físico: había ${n} sin registrar`;
 
 /** Respuestas que todavía no señalan un solo producto: no se ejecutan. */
-const PENDING: [string, number, string][] = [
-  ["bloques tigre", 1, "no hay «Bloques tigre»; ¿es «Bloques Winnie Pooh y sus amigos» (Tigger), stock 2?"],
-  ["llavero Spiderman", 1, "no hay llavero Spiderman; ¿es «Llaveros Super heroes» (stock 3)?"],
-  ["mini libreta capibara", 3, "«1+2 argolladas, sencilla»: ¿2 argolladas + 1 sencilla o 1 + 2? El stock (5 y 4) no lo decide"],
-  ["monedero capibara", 1, "dos productos: Multicolor $7.000 (stock 2) y Café $16.000 (stock 1)"],
-  ["set plumones punta cónica", 1, "dos sets de 12: Primavera $13.000 y KIUT $19.200 (stock 3 cada uno)"],
-  ["vasito kawaii x7", 1, "seis colores (lila, negro, azul, rosa, verde, amarillo), stock 5 cada uno"],
-  ["carpeta plástica Harry (carta)", 1, "dos tamaño carta con stock: «Mundo Harry Potter #2» y «#3 Gryffindor» (stock 1 cada una)"],
-];
+const PENDING: [string, number, string][] = [];
 
 const INCOME = {
   amount: 493_500,
@@ -154,7 +156,7 @@ async function main() {
     );
     const pendingRecount = (sku: string) => (recountDone.has(`${REFERENCE}:${sku}:conteo`) ? 0 : RECOUNT[sku] ?? 0);
 
-    const rows = PLAN.map(([sku, qty, channel, paula]) => {
+    const rows = PLAN.map(([sku, qty, channel, paula, note]) => {
       const p = bySku.get(sku);
       const reserved = Math.max(0, p?.reservedUnits ?? 0);
       const recount = pendingRecount(sku);
@@ -170,7 +172,7 @@ async function main() {
                 ? `faltante: stock ${p.stock}${reserved ? ` (apartado ${reserved})` : ""}, se piden ${qty}`
                 : null;
       return {
-        sku, qty, channel, paula,
+        sku, qty, channel, paula, note,
         nombre: p?.name ?? null,
         antes: p?.stock ?? null,
         conteo: recount || undefined,
@@ -227,7 +229,7 @@ async function main() {
           productId: p.id,
           type: "MANUAL_ADJUSTMENT",
           quantity: -row.qty,
-          reason: REASONS[row.channel],
+          reason: row.note ? `${REASONS[row.channel]}: ${row.note}` : REASONS[row.channel],
           description: `Feria Villaterra Halloween 2026-11-01, venta anotada en papel: ${row.paula}.`,
           referenceId: `${REFERENCE}:${row.sku}`,
           createdBy: "SYSTEM",
