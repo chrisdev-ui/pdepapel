@@ -143,7 +143,10 @@ describe("detalle de una reserva", () => {
     render(<ReservationDetail storeId="store-1" detail={detail()} defaultDays={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Convertir en pedido" }));
     await screen.findByTestId("convert-summary");
+    expect(screen.getByRole("button", { name: "Crear el pedido" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: "WhatsApp" }));
     fireEvent.click(screen.getByRole("button", { name: "Crear el pedido" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/store-1/pedidos/o-5"));
+    expect(mocks.post).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1/convert", { salesChannel: "WHATSAPP" });
   });
 });

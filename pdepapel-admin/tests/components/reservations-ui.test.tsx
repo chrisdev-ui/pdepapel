@@ -337,9 +337,11 @@ describe("Pantalla Reservas", () => {
     expect(mocks.get).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1/convert");
     expect(summary).toHaveTextContent("2 × Sobre de manila");
     expect(mocks.post).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Crear el pedido" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: "WhatsApp" }));
     fireEvent.click(screen.getByRole("button", { name: "Crear el pedido" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/store-1/pedidos/o-9"));
-    expect(mocks.post).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1/convert");
+    expect(mocks.post).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1/convert", { salesChannel: "WHATSAPP" });
   });
 
   it("una reserva sin respaldo lo dice y una convertida enlaza su pedido", () => {
@@ -419,6 +421,7 @@ describe("Pantalla Reservas · al instante", () => {
     screenWith([hold()]);
     fireEvent.click(screen.getByRole("button", { name: "Convertir" }));
     await screen.findByTestId("convert-summary");
+    fireEvent.click(screen.getByRole("radio", { name: "WhatsApp" }));
     const create = screen.getByRole("button", { name: "Crear el pedido" });
     fireEvent.click(create);
     fireEvent.click(create);
