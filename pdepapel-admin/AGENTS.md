@@ -1160,6 +1160,23 @@ One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`)
 - **Weight:** the row keeps the weight it is looked up by.
 - **Index name:** the old unique index was the truncated `ShippingQuote_storeId_originDaneCode_destDaneCode_weight_dec_key`. The new one is named `ShippingQuote_quote_cache_key`.
 
+### Logs carry no customer data (2026-11-03)
+
+On 2026-11-03 an EnvioClick guide failure wrote the recipient's name, email, phone and address into Vercel's runtime logs. The log written before each guide did the same on every guide, including successful ones.
+
+- **What a log may carry:** ids, order references, amounts, DANE codes and the error's code or reason. Never a request, response, order, customer or destination object.
+- **Logging an error:** use `safeError(error)` from `lib/log-redaction.ts`. It keeps name, cleaned message, code, status and the top stack frames. Never pass the error object itself: `console.error(err)` also prints its properties (`originalError`, `requestParams`, `response.data`).
+- **Free text** (provider messages, a customer's WhatsApp query): use `redactLogText`. It replaces emails, phones, addresses and documents with `[correo]`, `[número]`, `[dirección]`, `[documento]`, and keeps order references, ids and timestamps.
+- **EnvioClick:** log a guide request only through `shipmentLogSummary`, which keeps the rate, packages and DANE codes.
+- **Prisma:**
+  - A `PrismaClientValidationError` copies the query's values into its message. `handleErrorResponse` logs and returns only its first line plus the reason.
+  - Both Prisma clients emit `error` as an event, written by `logPrismaErrorEvent`. Prisma's own `error` channel prints the values too (verified against MySQL).
+- **Guard:** `tests/unit/security/no-personal-data-in-logs.test.ts` fails if a `console.*` call in `lib/` or `app/` passes a request, a response or a customer object. Fix the call; don't widen the allowlist.
+- **EnvioClick out of credit:**
+  - The client marks the error with `reason: "insufficient_credit"` before cleaning its message.
+  - `createGuideForOrder` then sends the owner one Web Push per store per Bogotá day, «EnvioClick sin saldo», naming only the order reference (`lib/envioclick-credit-alert.ts`).
+  - EnvioClick publishes no balance endpoint, so there is no warning before the credit runs out.
+
 ### Documentation duties
 
 When a module's behaviour or copy changes, update **both** the Spanish guide `docs/guia-panel-administracion.md` and the in-dashboard manual (`content/manual/manual.html`, served at `/manual` behind auth) in the same commit. Manual screenshots come from the test store, never from production data.

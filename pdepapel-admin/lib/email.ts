@@ -55,6 +55,7 @@ import prismadb from "@/lib/prismadb";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import type { ShipmentMilestone } from "@/lib/shipment-milestones";
 import { socialLinksText, withSocialLinks } from "@/lib/social-links";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * Lo que necesita un correo de pedido, en UNA sola consulta.
@@ -308,7 +309,7 @@ async function sendGiftNotification(
         .join("\n\n"),
     });
   } catch (error) {
-    console.error("[EMAIL] Error sending gift notification:", error);
+    console.error("[EMAIL] Error sending gift notification:", safeError(error));
     await recordFailedNotification({
       storeId: order.storeId,
       channel: "EMAIL",
@@ -698,7 +699,7 @@ export const sendOrderEmail = async (
   } catch (error) {
     // Algo falló antes de mandar (leer la base, armar el correo): no salió
     // ninguno de los dos.
-    console.error("Error sending email:", error);
+    console.error("Error sending email:", safeError(error));
     if (options?.recordFailures !== false) {
       for (const role of roles) {
         if (role === "admin" && options?.notifyAdmin === false) continue;
@@ -871,7 +872,7 @@ export const sendShippingEmail = async (
     return outcomes;
   } catch (error) {
     // Antes solo iba a console.error y no quedaba rastro de un aviso de envío perdido.
-    console.error("[EMAIL] Error sending shipping email:", error);
+    console.error("[EMAIL] Error sending shipping email:", safeError(error));
     if (options?.recordFailures !== false) {
       for (const role of roles) {
         if (role === "customer" && order && (!order.email || isPlaceholderEmail(order.email))) continue;
@@ -1144,7 +1145,7 @@ async function sendPreorderCustomerEmail(orderId: string, kind: string, build: (
       kind,
     });
   } catch (error) {
-    console.error(`[EMAIL] Error sending ${kind} email:`, error);
+    console.error(`[EMAIL] Error sending ${kind} email:`, safeError(error));
     await recordFailedNotification({ storeId: null, channel: "EMAIL", kind, recipient: "customer", orderId, error });
     return failedOutcomes(["customer"], error);
   }
@@ -1175,7 +1176,7 @@ export const sendPaymentDeclinedEmail = async (orderId: string): Promise<Deliver
       kind,
     });
   } catch (error) {
-    console.error("[EMAIL] Error sending payment-declined email:", error);
+    console.error("[EMAIL] Error sending payment-declined email:", safeError(error));
     await recordFailedNotification({ storeId: null, channel: "EMAIL", kind, recipient: "customer", orderId, error });
     return failedOutcomes(["customer"], error);
   }

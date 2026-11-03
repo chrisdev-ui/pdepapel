@@ -95,6 +95,7 @@ import {
 } from "@/lib/presale-cancel-settlement";
 import { parseNotifyCustomer } from "@/lib/silent-status-change";
 import { recordSilentStatusChanges } from "@/lib/silent-status-change-server";
+import { safeError } from "@/lib/log-redaction";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -1040,7 +1041,7 @@ export async function PATCH(
           console.log("[ORDER_UPDATE] Guide created automatically");
         } catch (error: any) {
           guideCreation.error = error?.message || "No se pudo crear la guía";
-          console.error("[ORDER_UPDATE] Failed to create guide:", error);
+          console.error("[ORDER_UPDATE] Failed to create guide:", safeError(error));
           // Guide creation failed, but order update should still succeed.
           // El motivo se guarda en el envío: el toast se va, y la siguiente
           // persona que abra el pedido debe ver por qué sigue sin guía.
@@ -1270,7 +1271,7 @@ export async function PATCH(
           await invalidateStoreProductsCache(params.storeId, { productIds: adoptedGuide.stockProductIds });
         }
       } catch (adoptError) {
-        console.error("[ORDER_PATCH] No se pudo adoptar la guía de EnvioClick:", adoptError);
+        console.error("[ORDER_PATCH] No se pudo adoptar la guía de EnvioClick:", safeError(adoptError));
       }
     }
 

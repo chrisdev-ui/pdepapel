@@ -28,7 +28,7 @@ describe("runInBackground", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     runInBackground("falla", () => Promise.reject(new Error("boom")));
     await expect(mocks.waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
-    expect(error).toHaveBeenCalledWith(expect.stringContaining("falla"), expect.any(Error));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("falla"), expect.objectContaining({ name: "Error", message: "boom" }));
     error.mockRestore();
   });
 });

@@ -8,6 +8,8 @@ import {
   truncateField,
 } from "@/constants/shipping";
 import { capsulePackageFor } from "@/lib/capsule-quote";
+import { alertIfInsufficientCredit } from "@/lib/envioclick-credit-alert";
+import { redactLogText, shipmentLogSummary } from "@/lib/log-redaction";
 import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import { PRESALE_HOLD_GUIDE_MESSAGE, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 import prismadb from "@/lib/prismadb";
@@ -350,25 +352,20 @@ export async function createGuideForOrder(
       }),
     };
 
-    console.log(
-      "[ORDER_SHIPPING_CREATE_GUIDE] Attempting to create guide with params:",
-      {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        idRate: shipmentParams.idRate,
-        origin: shipmentParams.origin,
-        destination: shipmentParams.destination,
-        packages: shipmentParams.packages,
-      },
-    );
+    console.log("[ORDER_SHIPPING_CREATE_GUIDE] Attempting to create guide:", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      ...shipmentLogSummary(shipmentParams),
+    });
 
     result = await envioClickClient.createShipment(shipmentParams);
   } catch (error: any) {
+    alertIfInsufficientCredit(error, { storeId, orderId: order.id, orderNumber: order.orderNumber ?? null });
     // Check if error is due to invalid/expired idRate
-    const errorMessage =
-      error?.response?.data?.status_messages?.[0]?.request ||
-      error?.message ||
-      "";
+    const errorMessage = redactLogText(
+      error?.response?.data?.status_messages?.[0]?.request || error?.message || "",
+      1_500,
+    );
 
     if (errorMessage.includes(COD_RATE_MISMATCH)) {
       throw ErrorFactory.InvalidRequest(COD_RATE_MISMATCH_MESSAGE);

@@ -22,10 +22,7 @@ export const makeApiCall = async <T>(
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
-      console.error(
-        "API call failed:",
-        axiosError.response?.data || axiosError.message,
-      );
+      console.error("API call failed:", axiosError.response?.status ?? null, axiosError.message);
     } else {
       console.error("An unexpected error occurred:", error);
     }

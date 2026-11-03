@@ -104,6 +104,7 @@ import { orderLegalConsentData } from "@/lib/legal-consent";
 import { orderWhatsAppOptInData } from "@/lib/whatsapp-opt-in";
 import { queueShipmentMilestone, queueShipmentStatusChange } from "@/lib/shipment-notifications";
 import { linkOrphanGuide } from "@/lib/orphan-guides";
+import { safeError } from "@/lib/log-redaction";
 
 type StoreFreight = {
   idRate: number;
@@ -1020,7 +1021,7 @@ async function createOrder(
         guideCreationResult.error = error.message || "Unknown error";
         console.error(
           `[ADMIN_ORDER_CREATE] Failed to create guide for order ${order.orderNumber}:`,
-          error,
+          safeError(error),
         );
       }
     }

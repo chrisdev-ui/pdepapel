@@ -1,4 +1,5 @@
 import { GENERIC_ERROR } from "@/constants";
+import { safeError, summarizePrismaValidationMessage } from "@/lib/log-redaction";
 import { Prisma } from "@prisma/client";
 import axios from "axios";
 import { NextResponse } from "next/server";
@@ -168,7 +169,8 @@ export const handleErrorResponse = (
       ...options.logMetadata,
     });
   } else {
-    console.error(`Error in [${context}]:`, error);
+    // Nunca el objeto entero: un error de validación de Prisma lleva los datos de la clienta (lib/log-redaction.ts).
+    console.error(`Error in [${context}]:`, safeError(error));
   }
 
   // Handle Prisma Known Request Errors
@@ -272,12 +274,13 @@ export const handleErrorResponse = (
 
   // Handle Prisma Validation Errors (e.g. Invalid Enum Value)
   if (error instanceof Prisma.PrismaClientValidationError) {
-    console.error("Prisma Validation Error:", error.message);
-    // In development/admin, we want to see the real error
+    // El mensaje completo repite los argumentos de la consulta con sus valores; queda solo el motivo.
+    const reason = summarizePrismaValidationMessage(error.message);
+    console.error("Prisma Validation Error:", reason);
     return NextResponse.json(
       {
         error: "Error de validación de base de datos",
-        details: { message: error.message },
+        details: { message: reason },
       },
       { status: 400, headers: options.headers },
     );

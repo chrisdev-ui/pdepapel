@@ -1,4 +1,5 @@
 import { waitUntil } from "@vercel/functions";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * Trabajo que no debe retrasar la respuesta (correos, guías de EnvioClick)
@@ -21,11 +22,11 @@ export function runInBackground(label: string, task: () => Promise<unknown>): vo
   const promise = Promise.resolve()
     .then(task)
     .catch((error) => {
-      console.error(`[BACKGROUND] ${label} falló:`, error);
+      console.error(`[BACKGROUND] ${label} falló:`, safeError(error));
     });
   try {
     waitUntil(promise);
   } catch (error) {
-    console.error(`[BACKGROUND] ${label}: waitUntil no disponible`, error);
+    console.error(`[BACKGROUND] ${label}: waitUntil no disponible`, safeError(error));
   }
 }

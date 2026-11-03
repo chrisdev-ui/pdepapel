@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { captureLogs, fixtureCustomer, personalValues } from "@/tests/helpers/log-capture";
+
 const mocks = vi.hoisted(() => ({
   createGuideForOrder: vi.fn(),
   shippingUpdateMany: vi.fn(),
@@ -76,5 +78,27 @@ describe("guide creation in the background", () => {
     await expect(createGuideRecordingFailure({ orderId: "o1", storeId: "s1", source: "x" })).resolves.toBe(true);
     expect(mocks.record).not.toHaveBeenCalled();
     expect(mocks.shippingUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("guía fallida: el registro no lleva datos de la clienta", () => {
+  it("escribe el motivo limpio, no el error con la petición pegada", async () => {
+    const customer = fixtureCustomer();
+    mocks.shippingUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.openIssues.mockResolvedValue(0);
+    mocks.pendingCapsuleDraws.mockResolvedValue([]);
+    mocks.createGuideForOrder.mockRejectedValue(
+      Object.assign(new Error(`EnvioClick API Error: NOT OK. Details: ${customer.email}`), {
+        requestParams: { destination: { phone: customer.phone, address: customer.address } },
+      }),
+    );
+    const logs = captureLogs();
+    try {
+      await expect(createGuideRecordingFailure({ orderId: "o1", storeId: "s1", source: "webhook de Bold" })).resolves.toBe(false);
+      expect(logs.text()).toContain("no se pudo crear la guía del pedido o1");
+      for (const value of personalValues(customer)) expect(logs.text()).not.toContain(value);
+    } finally {
+      logs.restore();
+    }
   });
 });

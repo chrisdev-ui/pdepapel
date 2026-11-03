@@ -3,6 +3,7 @@ import { codShippingInvoiceLines, INVOICE_COD_FEE_LINES_ENABLED } from "./shippi
 import { DianStatus, InvoiceStatus } from "@prisma/client";
 import { InvoiceProvider, InvoiceRequest } from "./types";
 import { StubProvider } from "./providers/stub-provider";
+import { safeError } from "@/lib/log-redaction";
 
 export class InvoiceService {
   private provider: InvoiceProvider;
@@ -106,7 +107,7 @@ export class InvoiceService {
         });
       }
     } catch (error: any) {
-      console.error("[INVOICE_SERVICE_ERROR]", error);
+      console.error("[INVOICE_SERVICE_ERROR]", safeError(error));
       return await prismadb.invoice.update({
         where: { id: invoice.id },
         data: {

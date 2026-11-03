@@ -26,6 +26,7 @@ import {
   recordPaymentWebhookReceived,
   WOMPI_INVALID_CHECKSUM_ERROR,
 } from "@/lib/payment-webhook-events";
+import { safeError } from "@/lib/log-redaction";
 
 const HASH_ALGORITHM = "sha256";
 
@@ -98,7 +99,7 @@ async function handleWompiWebhook(
       );
     }
   } catch (error: any) {
-    console.error("[WOMPI_WEBHOOK] Error procesando el webhook:", error);
+    console.error("[WOMPI_WEBHOOK] Error procesando el webhook:", safeError(error));
     return NextResponse.json(
       {
         error: `Internal server error processing webhook: ${

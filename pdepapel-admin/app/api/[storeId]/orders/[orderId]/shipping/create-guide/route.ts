@@ -7,6 +7,7 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { ResourceBusyError, withResourceLock } from "@/lib/resource-lock";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { queueShipmentMilestone } from "@/lib/shipment-notifications";
+import { safeError } from "@/lib/log-redaction";
 
 export async function POST(
   req: Request,
@@ -106,7 +107,7 @@ export async function POST(
       { status: 200 },
     );
   } catch (error: any) {
-    console.error("[ORDER_SHIPPING_CREATE_GUIDE]", error);
+    console.error("[ORDER_SHIPPING_CREATE_GUIDE]", safeError(error));
     const status =
       error instanceof ResourceBusyError ? 409 : error.statusCode || 500;
     return NextResponse.json(

@@ -52,6 +52,7 @@ import {
 import { createAiProviders, getAiRoutingStore } from "@/lib/ai-model-providers";
 import { classifyModelError, runStructured } from "@/lib/ai-provider";
 import type { Prisma } from "@prisma/client";
+import { redactLogText } from "@/lib/log-redaction";
 
 export type { ProductNoMatchReason } from "@/lib/whatsapp/search-intent";
 
@@ -2296,7 +2297,7 @@ export async function answerProductQuestionDetailed(
     if (consulta) {
       console.info("[WHATSAPP_BOT] Sin ranuras; se busca el mensaje en crudo", {
         storeId,
-        consulta,
+        consulta: redactLogText(consulta, 120),
       });
     }
   }
@@ -2315,7 +2316,7 @@ export async function answerProductQuestionDetailed(
     if (tokens.length > 0) {
       console.info("[WHATSAPP_BOT] Pregunta demasiado vaga; no se adivina", {
         storeId,
-        consulta,
+        consulta: redactLogText(consulta, 120),
       });
     }
     return { answer: null, reason: "few_tokens" };

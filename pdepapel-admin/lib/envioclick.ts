@@ -4,6 +4,8 @@
  */
 
 import { env } from "./env.mjs";
+import { hasInsufficientCreditReason, INSUFFICIENT_CREDIT_REASON, mentionsInsufficientCredit } from "./envioclick-errors";
+import { redactLogText, safeError, shipmentLogSummary } from "./log-redaction";
 
 // ============================================================================
 // TYPES
@@ -254,14 +256,8 @@ export class EnvioClickClient {
    * Manejo de errores de la API
    */
   private handleApiError(error: any, method: string): never {
-    // Log full error details for debugging
-    console.error(`[EnvioClick] Error in ${method}:`, {
-      message: error?.message,
-      response: error?.response?.data,
-      status: error?.response?.status,
-      stack: error?.stack,
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
-    });
+    // Sin la respuesta ni la petición: ahí van el remitente y el destinatario (lib/log-redaction.ts).
+    console.error(`[EnvioClick] Error in ${method}:`, safeError(error));
 
     // Handle Fetch Network Errors
     if (error instanceof TypeError && error.message === "Failed to fetch") {
@@ -276,9 +272,11 @@ export class EnvioClickClient {
     const friendlyMessage = this.getFriendlyErrorMessage(
       error?.message || String(error),
     );
-    const customError: any = new Error(friendlyMessage);
-    customError.originalError = error;
+    const customError: any = new Error(redactLogText(friendlyMessage, 2_000));
+    // No enumerable: un `console.error(err)` más arriba no vuelve a imprimir el error de EnvioClick.
+    Object.defineProperty(customError, "originalError", { value: error, enumerable: false });
     customError.code = "ENVIOCLICK_API_ERROR";
+    if (hasInsufficientCreditReason(error)) customError.reason = INSUFFICIENT_CREDIT_REASON;
     throw customError;
   }
 
@@ -337,10 +335,7 @@ export class EnvioClickClient {
 
       const body = JSON.stringify(params);
 
-      console.log(
-        "[EnvioClick] Creating shipment with params:",
-        JSON.stringify(params, null, 2),
-      );
+      console.log("[EnvioClick] Creating shipment:", shipmentLogSummary(params));
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -350,7 +345,12 @@ export class EnvioClickClient {
 
       const data = await response.json();
 
-      console.log("[EnvioClick] API Response:", JSON.stringify(data, null, 2));
+      // La respuesta repite origen, destinatario y la guía en PDF: solo el estado y los ids.
+      console.log("[EnvioClick] Shipment response:", {
+        status: data?.status ?? null,
+        idOrder: data?.data?.idOrder ?? null,
+        tracker: data?.data?.tracker ?? null,
+      });
 
       if (data.status !== "OK") {
         // Extract detailed error information
@@ -363,17 +363,19 @@ export class EnvioClickClient {
               .join(", ")
           : String(statusMessages);
 
-        const errorMsg = `EnvioClick API Error: ${data.status || "FAILED"}. Details: ${errorDetails}`;
+        const details = redactLogText(errorDetails, 1_500);
+        const errorMsg = `EnvioClick API Error: ${data.status || "FAILED"}. Details: ${details}`;
 
         console.error("[EnvioClick] Shipment creation failed:", {
-          status: data.status,
-          statusCodes: data.status_codes,
-          statusMessages: data.status_messages,
-          data: data.data,
-          requestParams: params,
+          status: data.status ?? null,
+          statusCodes: data.status_codes ?? null,
+          messages: details,
+          request: shipmentLogSummary(params),
         });
 
-        throw new Error(errorMsg);
+        const failure: Error & { reason?: string } = new Error(errorMsg);
+        if (mentionsInsufficientCredit(errorDetails)) failure.reason = INSUFFICIENT_CREDIT_REASON;
+        throw failure;
       }
 
       return data;

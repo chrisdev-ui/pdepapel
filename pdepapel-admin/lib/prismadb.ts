@@ -3,18 +3,35 @@ import "server-only";
 import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 import { Prisma, PrismaClient } from "@prisma/client";
 
+import { logPrismaErrorEvent } from "@/lib/log-redaction";
+
 declare global {
   var prisma: PrismaClient | undefined;
 }
 
-/** `PRISMA_LOG=quiet` calla las consultas fuera de producción (guiones que solo imprimen su resumen). */
+/**
+ * `PRISMA_LOG=quiet` calla las consultas fuera de producción (guiones que solo imprimen su resumen).
+ * `error` va como evento: Prisma copia en él los argumentos de la consulta con sus valores, y
+ * `logPrismaErrorEvent` lo escribe sin datos de clientas.
+ */
 export function getPrismaLogLevels(
   environment = process.env.NODE_ENV,
   quiet = process.env.PRISMA_LOG === "quiet",
-): Prisma.LogLevel[] {
-  return environment === "production" || quiet
-    ? ["warn", "error"]
-    : ["query", "info", "warn", "error"];
+): Prisma.LogDefinition[] {
+  const levels: Prisma.LogLevel[] =
+    environment === "production" || quiet ? ["warn"] : ["query", "info", "warn"];
+  return [
+    ...levels.map((level) => ({ level, emit: "stdout" as const })),
+    { level: "error", emit: "event" },
+  ];
+}
+
+function withRedactedErrorLog<T extends PrismaClient>(client: T): T {
+  (client as unknown as { $on: (event: "error", callback: (e: { message: string }) => void) => void }).$on(
+    "error",
+    logPrismaErrorEvent,
+  );
+  return client;
 }
 
 /**
@@ -93,15 +110,17 @@ if (process.env.NODE_ENV === "production" && !globalThis.prisma) {
 
 const prismadb =
   globalThis.prisma ||
-  new PrismaClient({
-    log: getPrismaLogLevels(),
-    ...(datasourceUrl ? { datasourceUrl } : {}),
-    transactionOptions: {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      maxWait: MAX_WAIT_TIME,
-      timeout: TIMEOUT_TIME,
-    },
-  });
+  withRedactedErrorLog(
+    new PrismaClient({
+      log: getPrismaLogLevels(),
+      ...(datasourceUrl ? { datasourceUrl } : {}),
+      transactionOptions: {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: MAX_WAIT_TIME,
+        timeout: TIMEOUT_TIME,
+      },
+    }),
+  );
 
 if (process.env.NODE_ENV !== "production") globalThis.prisma = prismadb;
 

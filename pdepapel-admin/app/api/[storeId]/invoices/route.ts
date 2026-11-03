@@ -5,6 +5,7 @@ import { invoiceCustomerFromOrder } from "@/lib/invoicing/invoice-customer";
 import { SimuladoProvider } from "@/lib/invoicing/providers/simulado";
 import { InvoiceStatus, DianStatus } from "@prisma/client";
 import { checkIfStoreOwner } from "@/lib/server/utils";
+import { safeError } from "@/lib/log-redaction";
 
 const provider = new SimuladoProvider();
 
@@ -45,7 +46,7 @@ export async function GET(
 
     return NextResponse.json(invoices);
   } catch (error) {
-    console.error("[INVOICES_GET]", error);
+    console.error("[INVOICES_GET]", safeError(error));
     return new NextResponse("Internal error", { status: 500 });
   }
 }
@@ -186,7 +187,7 @@ export async function POST(
 
     return NextResponse.json(invoice);
   } catch (error) {
-    console.error("[INVOICES_POST]", error);
+    console.error("[INVOICES_POST]", safeError(error));
     return new NextResponse("Internal error", { status: 500 });
   }
 }

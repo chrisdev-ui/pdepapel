@@ -4,6 +4,7 @@ import { recordFailedNotification } from "@/lib/notification-failures";
 import prismadb from "@/lib/prismadb";
 import { currencyFormatter } from "@/lib/utils";
 import { socialLinksText } from "@/lib/social-links";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * Manda el correo con el código de una tarjeta recién emitida o reemitida.
@@ -30,7 +31,7 @@ export async function deliverGiftCard(
 
   if (process.env.NODE_ENV === "development") {
     console.log(
-      `[EMAIL] Skipping gift card delivery in development for card ****${card.codeLast4} to ${deliverTo}`,
+      `[EMAIL] Skipping gift card delivery in development for card ****${card.codeLast4}`,
     );
     return true;
   }
@@ -74,7 +75,7 @@ export async function deliverGiftCard(
     });
     return true;
   } catch (error) {
-    console.error("[EMAIL] Error delivering gift card:", error);
+    console.error("[EMAIL] Error delivering gift card:", safeError(error));
     await recordFailedNotification({
       storeId: card.storeId,
       channel: "EMAIL",

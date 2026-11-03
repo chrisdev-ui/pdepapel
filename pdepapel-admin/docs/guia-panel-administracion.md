@@ -243,6 +243,11 @@ Vistas: Por despachar, Despachados hoy, En camino, Con novedad, Entregados.
 
 Revisa «Con novedad» a diario.
 
+Si llega el aviso «EnvioClick sin saldo», la cuenta de EnvioClick se quedó sin
+crédito y la guía del pedido que nombra no se creó. Recarga la cuenta; después
+abre el pedido, «Cotizar de nuevo» si la tarifa venció y «Crear guía». El aviso
+llega una vez al día, con el primer pedido que falla.
+
 ## 9. Clientes y reseñas (`/clientes`)
 
 Aquí no hay una tabla de clientes: **cada persona se arma agrupando los pedidos

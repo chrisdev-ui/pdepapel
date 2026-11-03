@@ -17,6 +17,7 @@ import { runInBackground } from "@/lib/background";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { socialLinksText, withSocialLinks } from "@/lib/social-links";
+import { safeError } from "@/lib/log-redaction";
 
 export const NEWSLETTER_CONSENT_VERSION = "2026-09-01";
 export const NEWSLETTER_CONSENT_TEXT =
@@ -362,7 +363,7 @@ export async function confirmNewsletterSubscription(
     try {
       coupon = await issueWelcomeCoupon(subscriber.storeId, subscriber.id);
     } catch (error) {
-      console.error("[NEWSLETTER_WELCOME_COUPON]", error);
+      console.error("[NEWSLETTER_WELCOME_COUPON]", safeError(error));
     }
   }
 
@@ -378,7 +379,7 @@ export async function confirmNewsletterSubscription(
       where: { id: subscriber.id, lastWelcomeSentAt: confirmedAt },
       data: { lastWelcomeSentAt: null },
     });
-    console.error("[NEWSLETTER_WELCOME_EMAIL]", error);
+    console.error("[NEWSLETTER_WELCOME_EMAIL]", safeError(error));
   }
 
   return { status: "confirmed" as const };
@@ -517,7 +518,7 @@ export function subscribeFromStoreOrder(input: {
     try {
       await requestNewsletterSubscription({ storeId: input.storeId, email: email.data, source: "/finalizar-compra" });
     } catch (error) {
-      console.error("[NEWSLETTER] Alta desde el pago falló:", error);
+      console.error("[NEWSLETTER] Alta desde el pago falló:", safeError(error));
     }
   });
   return true;

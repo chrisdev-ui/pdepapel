@@ -2,22 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import { describeConnectionPool, getPrismaLogLevels, POOL_CONNECTION_LIMIT, withConnectionPoolParams } from "@/lib/prismadb";
 
+const levels = (definitions: { level: string; emit: string }[]) => definitions.map(({ level, emit }) => `${level}:${emit}`);
+
 describe("Prisma production logging", () => {
   it("does not serialize every database query in production", () => {
-    expect(getPrismaLogLevels("production")).toEqual(["warn", "error"]);
+    expect(levels(getPrismaLogLevels("production"))).toEqual(["warn:stdout", "error:event"]);
   });
 
   it("un guion puede callar las consultas fuera de producción", () => {
-    expect(getPrismaLogLevels("development", true)).toEqual(["warn", "error"]);
+    expect(levels(getPrismaLogLevels("development", true))).toEqual(["warn:stdout", "error:event"]);
   });
 
   it("keeps detailed logs available during local development", () => {
-    expect(getPrismaLogLevels("development", false)).toEqual([
-      "query",
-      "info",
-      "warn",
-      "error",
-    ]);
+    expect(levels(getPrismaLogLevels("development", false))).toEqual(["query:stdout", "info:stdout", "warn:stdout", "error:event"]);
+  });
+
+  it("los errores de Prisma van como evento en todos los entornos: Prisma copia ahí los valores de la consulta", () => {
+    for (const definitions of [getPrismaLogLevels("production"), getPrismaLogLevels("development", false)]) {
+      expect(definitions.filter((definition) => definition.level === "error")).toEqual([{ level: "error", emit: "event" }]);
+    }
   });
 });
 

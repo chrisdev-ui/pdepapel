@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * Lo que el handler va descubriendo mientras procesa —qué pedido era, qué
@@ -61,7 +62,7 @@ export async function recordPaymentWebhookReceived(options: {
   } catch (error) {
     console.error(
       `[PAYMENT_WEBHOOK] No se pudo registrar el evento de ${options.provider}:`,
-      error,
+      safeError(error),
     );
     return null;
   }
@@ -141,7 +142,7 @@ export async function completePaymentWebhookEvent(
   } catch (error) {
     console.error(
       `[PAYMENT_WEBHOOK] No se pudo cerrar el evento ${eventId}:`,
-      error,
+      safeError(error),
     );
   }
 }
@@ -170,7 +171,7 @@ export async function completePaymentWebhookEventWithError(
   } catch (updateError) {
     console.error(
       `[PAYMENT_WEBHOOK] No se pudo marcar como fallido el evento ${eventId}:`,
-      updateError,
+      safeError(updateError),
     );
   }
 }

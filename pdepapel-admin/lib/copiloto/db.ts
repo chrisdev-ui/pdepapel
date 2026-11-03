@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
 import { isCopilotConfigured } from "@/lib/copiloto/config";
+import { logPrismaErrorEvent } from "@/lib/log-redaction";
 
 /**
  * Cliente propio del copiloto, con el usuario `copilot_ro`: solo puede leer
@@ -30,10 +31,15 @@ export function copilotDatabaseUrl(raw: string): string {
 export function getCopilotDb(): PrismaClient {
   if (!isCopilotConfigured()) throw new CopilotNotConfiguredError();
   if (!globalThis.copilotPrisma) {
-    globalThis.copilotPrisma = new PrismaClient({
+    const client = new PrismaClient({
       datasourceUrl: copilotDatabaseUrl(process.env.COPILOT_DATABASE_URL as string),
-      log: ["warn", "error"],
+      log: [
+        { level: "warn", emit: "stdout" },
+        { level: "error", emit: "event" },
+      ],
     });
+    client.$on("error", logPrismaErrorEvent);
+    globalThis.copilotPrisma = client;
   }
   return globalThis.copilotPrisma;
 }

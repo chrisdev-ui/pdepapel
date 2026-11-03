@@ -26,6 +26,7 @@ import {
   PaymentWebhookContext,
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * La fila se escribe antes de mirar la firma y se cierra con lo que respondió
@@ -155,7 +156,7 @@ async function handleBoldWebhook(
         );
     }
   } catch (error: any) {
-    console.error("Bold Webhook error:", error);
+    console.error("Bold Webhook error:", safeError(error));
     return NextResponse.json(
       { error: `Error interno procesando webhook de Bold: ${error?.message}` },
       { status: 500 },

@@ -5,6 +5,7 @@ import { CAPSULE_DRAW_PENDING_MESSAGE, ordersWithPendingCapsuleDraw } from "@/li
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { notifyShipmentMilestone } from "@/lib/shipment-notifications";
+import { safeError } from "@/lib/log-redaction";
 
 /**
  * Crea la guía de EnvioClick sin retrasar la respuesta (pago confirmado por
@@ -58,21 +59,21 @@ export async function createGuideRecordingFailure(params: { orderId: string; sto
   try {
     await createGuideForOrder(params.orderId, params.storeId);
     await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: params.source }).catch((error) =>
-      console.error(`[GUIDE] ${params.source}: guía creada pero el aviso falló (pedido ${params.orderId}):`, error),
+      console.error(`[GUIDE] ${params.source}: guía creada pero el aviso falló (pedido ${params.orderId}):`, safeError(error)),
     );
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Otra petición ya la creó (webhook repetido): no es un fallo.
     if (/Guide already exists/i.test(message)) return true;
-    console.error(`[GUIDE] ${params.source}: no se pudo crear la guía del pedido ${params.orderId}:`, error);
+    console.error(`[GUIDE] ${params.source}: no se pudo crear la guía del pedido ${params.orderId}:`, safeError(error));
     try {
       await prismadb.shipping.updateMany({
         where: { orderId: params.orderId, storeId: params.storeId, envioClickIdOrder: null },
         data: { guideError: `${params.source}: ${message}`.slice(0, 2_000), guideAttemptedAt: new Date() },
       });
     } catch (updateError) {
-      console.error("[GUIDE] No se pudo guardar el motivo en el envío:", updateError);
+      console.error("[GUIDE] No se pudo guardar el motivo en el envío:", safeError(updateError));
     }
     await recordFailedNotification({
       storeId: params.storeId,
