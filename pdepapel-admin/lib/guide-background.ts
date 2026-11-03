@@ -57,7 +57,9 @@ export async function createGuideRecordingFailure(params: { orderId: string; sto
     return false;
   }
   try {
-    await createGuideForOrder(params.orderId, params.storeId);
+    const guide = await createGuideForOrder(params.orderId, params.storeId);
+    // Otra petición ya la había creado: el aviso a la clienta ya salió con ella.
+    if (guide.alreadyExisted) return true;
     await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: params.source }).catch((error) =>
       console.error(`[GUIDE] ${params.source}: guía creada pero el aviso falló (pedido ${params.orderId}):`, safeError(error)),
     );

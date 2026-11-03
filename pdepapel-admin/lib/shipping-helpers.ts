@@ -9,7 +9,8 @@ import {
 } from "@/constants/shipping";
 import { capsulePackageFor } from "@/lib/capsule-quote";
 import { alertIfInsufficientCredit } from "@/lib/envioclick-credit-alert";
-import { redactLogText, shipmentLogSummary } from "@/lib/log-redaction";
+import { claimGuideCreation, existingGuide, GUIDE_IN_PROGRESS_MESSAGE, releaseGuideClaim } from "@/lib/guide-claim";
+import { redactLogText, safeError, shipmentLogSummary } from "@/lib/log-redaction";
 import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import { PRESALE_HOLD_GUIDE_MESSAGE, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 import prismadb from "@/lib/prismadb";
@@ -112,8 +113,9 @@ export async function createGuideForOrder(
     throw ErrorFactory.NotFound("Order or shipping not found");
   }
 
+  // Ya tiene guía: se devuelve la que hay, sin volver a pagar otra.
   if (order.shipping.envioClickIdOrder) {
-    throw ErrorFactory.InvalidRequest("Guide already exists");
+    return existingGuide(order.shipping);
   }
 
   if (!order.shipping.envioClickIdRate) {
@@ -290,7 +292,17 @@ export async function createGuideForOrder(
     }
   }
 
-  // 4. Crear guía (with error handling for expired rates)
+  // 4. Reservar la creación (lib/guide-claim.ts): una sola petición llega a EnvioClick.
+  if (!(await claimGuideCreation(db, order.shipping.id))) {
+    const current = await db.shipping.findUnique({
+      where: { id: order.shipping.id },
+      select: { envioClickIdOrder: true, trackingCode: true, guideUrl: true },
+    });
+    if (current?.envioClickIdOrder) return existingGuide(current);
+    throw ErrorFactory.Conflict(GUIDE_IN_PROGRESS_MESSAGE);
+  }
+
+  // 5. Crear guía (with error handling for expired rates)
   let result;
   try {
     const shipmentParams = {
@@ -360,6 +372,9 @@ export async function createGuideForOrder(
 
     result = await envioClickClient.createShipment(shipmentParams);
   } catch (error: any) {
+    await releaseGuideClaim(db, order.shipping.id, error).catch((releaseError: unknown) =>
+      console.error("[ORDER_SHIPPING_CREATE_GUIDE] No se pudo liberar la reserva de la guía:", safeError(releaseError)),
+    );
     alertIfInsufficientCredit(error, { storeId, orderId: order.id, orderNumber: order.orderNumber ?? null });
     // Check if error is due to invalid/expired idRate
     const errorMessage = redactLogText(
@@ -388,7 +403,7 @@ export async function createGuideForOrder(
     throw error;
   }
 
-  // 5. Actualizar shipping
+  // 6. Actualizar shipping
   await db.shipping.update({
     where: { id: order.shipping.id },
     data: {
@@ -408,7 +423,7 @@ export async function createGuideForOrder(
     },
   });
 
-  return result;
+  return { ...result, alreadyExisted: false as const };
 }
 
 export interface RequotedRate {

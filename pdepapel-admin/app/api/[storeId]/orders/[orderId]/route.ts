@@ -554,6 +554,8 @@ export async function PATCH(
     const guideCreation = {
       attempted: false,
       success: false,
+      /** Otra petición ya la había creado: sin segundo aviso a la clienta. */
+      alreadyExisted: false,
       error: null as string | null,
     };
 
@@ -1036,8 +1038,9 @@ export async function PATCH(
             "[ORDER_UPDATE] Attempting to create guide automatically...",
           );
           // Pass the updated order data and transaction client to avoid re-querying and locks
-          await createGuideForOrder(updated.id, params.storeId, updated, tx);
+          const guide = await createGuideForOrder(updated.id, params.storeId, updated, tx);
           guideCreation.success = true;
+          guideCreation.alreadyExisted = guide.alreadyExisted;
           console.log("[ORDER_UPDATE] Guide created automatically");
         } catch (error: any) {
           guideCreation.error = error?.message || "No se pudo crear la guía";
@@ -1305,7 +1308,7 @@ export async function PATCH(
 
         // Guía nueva (automática al pagar, o el número de una transportadora
         // manual escrito a mano): «Tu pedido ya tiene guía de envío», una vez por guía.
-        if (guideCreation.success || (current.shipping?.trackingCode && current.shipping.trackingCode !== originalTrackingCode)) {
+        if ((guideCreation.success && !guideCreation.alreadyExisted) || (current.shipping?.trackingCode && current.shipping.trackingCode !== originalTrackingCode)) {
           await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "pedido del panel", ...(silent ? { silent, createdBy: userId } : {}) });
         }
 

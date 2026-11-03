@@ -10,7 +10,7 @@ import type { OrderStatus } from "@prisma/client";
 import axios from "axios";
 import { Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { ConfirmDialog } from "../confirm-dialog";
 import type { ShippingQuote } from "../schema";
@@ -44,7 +44,41 @@ interface GuidePanelProps {
   quotedAt?: Date | null;
   /** Guarda el pedido con la tarifa elegida antes de pedir la guía. */
   saveForGuide?: () => Promise<boolean>;
+  /** La guía quedó creada (o ya existía): el bloque deja de ofrecer crearla. */
+  onCreated?: (guide: CreatedGuide) => void;
   disabled?: boolean;
+}
+
+export interface CreatedGuide {
+  idOrder: number;
+  tracker: string | null;
+  alreadyCreated: boolean;
+}
+
+/** Lo que se ve en cuanto EnvioClick responde, antes de que la página se refresque. */
+export function GuideCreatedNotice({ storeId, orderId, guide }: { storeId: string; orderId: string; guide: CreatedGuide }) {
+  return (
+    <div
+      role="status"
+      data-testid="guide-created"
+      className="flex flex-col gap-1 rounded-lg border border-[#B8E8C8] bg-tint-mint p-3.5 text-[13px] text-primary"
+    >
+      <span className="text-sm font-bold">
+        {guide.alreadyCreated ? "Este pedido ya tenía guía de EnvioClick" : "Guía de EnvioClick creada"}
+      </span>
+      <span>
+        Número de guía <strong className="break-all">{guide.tracker ?? guide.idOrder}</strong>. El cliente recibe el seguimiento.
+      </span>
+      <a
+        href={`/api/${storeId}/orders/${orderId}/guide`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="min-h-[2.75rem] self-start py-2 font-semibold underline underline-offset-2"
+      >
+        Ver la guía (PDF)
+      </a>
+    </div>
+  );
 }
 
 /**
@@ -66,6 +100,7 @@ export function GuidePanel({
   guideAttemptedAt = null,
   quotedAt = null,
   saveForGuide,
+  onCreated,
   disabled = false,
 }: GuidePanelProps) {
   const { toast } = useToast();
@@ -73,6 +108,8 @@ export function GuidePanel({
   const [open, setOpen] = useState(false);
   const canWrite = useCanWrite();
   const [creating, setCreating] = useState(false);
+  // Dos toques seguidos llegan antes de que `creating` se pinte: el ref frena el segundo.
+  const inFlight = useRef(false);
 
   const payable = canCreateGuide(status, isCOD);
   const saveFirst = !saved && Boolean(saveForGuide);
@@ -99,6 +136,8 @@ export function GuidePanel({
   const showError = Boolean(guideError) && !errorIsOld;
 
   const create = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setCreating(true);
     try {
       if (saveFirst && !(await saveForGuide!())) {
@@ -108,17 +147,25 @@ export function GuidePanel({
       const response = await axios.post(
         `/api/${storeId}/orders/${orderId}/shipping/create-guide`,
       );
-      const tracker = response.data?.data?.tracker;
+      const guide: CreatedGuide = {
+        idOrder: response.data?.data?.idOrder,
+        tracker: response.data?.data?.tracker ?? null,
+        alreadyCreated: Boolean(response.data?.alreadyCreated),
+      };
+      onCreated?.(guide);
       toast({
-        title: "Guía creada",
-        description: tracker ? `Número de guía ${tracker}.` : undefined,
+        title: guide.alreadyCreated ? "Este pedido ya tenía guía" : "Guía creada",
+        description: guide.tracker ? `Número de guía ${guide.tracker}.` : undefined,
         variant: "success",
       });
       setOpen(false);
       router.refresh();
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });
+      // La guía pudo quedar creada aunque la respuesta no llegara: la página muestra lo que hay.
+      router.refresh();
     } finally {
+      inFlight.current = false;
       setCreating(false);
     }
   };

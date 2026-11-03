@@ -36,8 +36,12 @@ export function OrphanGuidesCard({ storeId, guides }: { storeId: string; guides:
   const [busy, setBusy] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [confirmDismiss, setConfirmDismiss] = useState<string | null>(null);
+  // Vinculada u ocultada: sale de la lista al instante, sin esperar a que la página se refresque.
+  const [handled, setHandled] = useState<ReadonlySet<string>>(() => new Set());
+  const markHandled = (idOrder: string) => setHandled((current) => new Set(current).add(idOrder));
+  const pending = guides.filter((guide) => !handled.has(guide.idOrder));
 
-  if (guides.length === 0) return null;
+  if (pending.length === 0) return null;
 
   const dismiss = async (idOrder: string) => {
     setBusy(idOrder);
@@ -45,6 +49,7 @@ export function OrphanGuidesCard({ storeId, guides }: { storeId: string; guides:
       await axios.post(`/api/${storeId}/shipments/orphan-guides/${idOrder}`, { action: "dismiss" });
       toast({ description: "Guía ocultada.", variant: "success" });
       setConfirmDismiss(null);
+      markHandled(idOrder);
       router.refresh();
     } catch (error) {
       toast({ variant: "destructive", description: getErrorMessage(error) });
@@ -58,7 +63,7 @@ export function OrphanGuidesCard({ storeId, guides }: { storeId: string; guides:
       <CardHeader className="space-y-1">
         <CardTitle className="flex items-center gap-2 text-base">
           <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Guías de EnvioClick sin pedido ({guides.length})
+          Guías de EnvioClick sin pedido ({pending.length})
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           Guías hechas directo en EnvioClick que todavía no están en un pedido. Vincúlalas para que la clienta reciba los avisos y la
@@ -67,7 +72,7 @@ export function OrphanGuidesCard({ storeId, guides }: { storeId: string; guides:
       </CardHeader>
       <CardContent>
         <ul className="divide-y rounded-lg border">
-          {guides.map((guide) => (
+          {pending.map((guide) => (
             <li key={guide.idOrder} className="flex flex-col gap-3 p-3" data-testid={`orphan-guide-${guide.idOrder}`}>
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -93,6 +98,7 @@ export function OrphanGuidesCard({ storeId, guides }: { storeId: string; guides:
                   onLinked={(orderNumber, status) => {
                     toast({ description: `Guía vinculada a ${orderNumber}: ${getReadableStatus(status)}.`, variant: "success" });
                     setLinking(null);
+                    markHandled(guide.idOrder);
                     router.refresh();
                   }}
                 />

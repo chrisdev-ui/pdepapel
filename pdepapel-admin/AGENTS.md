@@ -1177,6 +1177,22 @@ On 2026-11-03 an EnvioClick guide failure wrote the recipient's name, email, pho
   - `createGuideForOrder` then sends the owner one Web Push per store per Bogotá day, «EnvioClick sin saldo», naming only the order reference (`lib/envioclick-credit-alert.ts`).
   - EnvioClick publishes no balance endpoint, so there is no warning before the credit runs out.
 
+### One EnvioClick guide per order (2026-11-03)
+
+A guide is charged when it is created. The Redis lock (`withResourceLock`) runs its handler without a lock when Redis fails, so it is only a fast-fail layer. The authority is `lib/guide-claim.ts`, used by `createGuideForOrder`, which every path goes through: the create-guide route, the background guide after a payment, order POST and PATCH, `createGuideWithRate` (requote, WhatsApp `/confirmar`).
+
+- **Claim:** a single conditional `UPDATE Shipping`, because `updateMany` reads and then writes under `relationMode: "prisma"`. It sets `guideAttemptedAt` and clears `guideError` only when the shipping row has no `envioClickIdOrder`, and is either not in flight or holds an expired claim.
+  - A claim is in flight when `guideAttemptedAt` is set, `guideError` is null and there is no `envioClickIdOrder`.
+  - It expires after 5 minutes, above the 60 s function limit.
+  - A failed attempt releases it by writing `guideError`.
+- **Already has a guide:** returns `{ alreadyExisted: true, data }` without calling EnvioClick. The route answers 200 `{ alreadyCreated: true }`. Every caller skips the «guía creada» notice in that case, so the customer never gets a second one.
+- **Another request is creating it:** 409 «Ya se está creando la guía…».
+- **UI:** on a 200, the EnvioClick block shows the guide number and the PDF link (`GuideCreatedNotice`) without waiting for `router.refresh()`. On ORD-1793673348281-170 the refresh fetched the order with its guide (logs), yet the page kept the button. On an error the page refreshes too.
+- **Tests:**
+  - `tests/integration/guide-create-once.test.ts`: concurrent requests, a repeat after success, release on failure, expiry. With the previous helper, two simultaneous requests reached EnvioClick twice.
+  - `tests/components/guide-created-once.test.tsx`.
+  - `tests/e2e/guide-created-viewports.spec.ts` at 390 and 1280.
+
 ### Documentation duties
 
 When a module's behaviour or copy changes, update **both** the Spanish guide `docs/guia-panel-administracion.md` and the in-dashboard manual (`content/manual/manual.html`, served at `/manual` behind auth) in the same commit. Manual screenshots come from the test store, never from production data.

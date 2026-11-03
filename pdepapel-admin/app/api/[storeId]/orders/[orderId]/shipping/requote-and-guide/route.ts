@@ -140,7 +140,7 @@ export async function POST(
 
     return NextResponse.json(
       {
-        outcome: "created",
+        outcome: result.alreadyExisted ? "already_created" : "created",
         carrier: rate.carrier,
         cost: rate.totalCost,
         idOrder: result.data.idOrder,

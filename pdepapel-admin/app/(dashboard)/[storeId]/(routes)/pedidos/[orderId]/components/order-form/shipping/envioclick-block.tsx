@@ -29,7 +29,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import type { GetOrderResult } from "../../../server/get-order";
 import type { OrderFormValues, ShippingQuote } from "../schema";
 import { BoxSelect } from "./box-select";
-import { GuidePanel } from "./guide-panel";
+import { GuideCreatedNotice, GuidePanel, type CreatedGuide } from "./guide-panel";
 import {
   describeRequote,
   formatRemaining,
@@ -101,7 +101,15 @@ export function EnvioClickBlock({
   const savedCost = useWatch({ control: form.control, name: "shipping.cost" });
   const formCodFee = useWatch({ control: form.control, name: "shipping.codFee" });
 
-  const hasGuide = Boolean(initialData?.shipping?.envioClickIdOrder);
+  // La guía recién creada se muestra al instante: no se espera a que la página se refresque
+  // (ORD-1793673348281-170: la guía salió y el botón «Guardar y crear guía» siguió en pantalla).
+  const [createdGuide, setCreatedGuide] = useState<CreatedGuide | null>(null);
+  const serverGuide: CreatedGuide | null = initialData?.shipping?.envioClickIdOrder
+    ? { idOrder: initialData.shipping.envioClickIdOrder, tracker: initialData.shipping.trackingCode ?? null, alreadyCreated: false }
+    : null;
+  // La respuesta recién llegada manda; si la página se remonta con el refresco, la del servidor dice lo mismo.
+  const shownGuide = createdGuide ?? serverGuide;
+  const hasGuide = Boolean(shownGuide);
   const savedRateId = initialData?.shipping?.envioClickIdRate ?? null;
   const [showAllRates, setShowAllRates] = useState(false);
   const [notice, setNotice] = useState<RequoteNotice | null>(null);
@@ -228,6 +236,10 @@ export function EnvioClickBlock({
           </span>
         </div>
       </div>
+
+      {shownGuide && initialData && (
+        <GuideCreatedNotice storeId={storeId} orderId={initialData.id} guide={shownGuide} />
+      )}
 
       {!hasGuide && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -513,6 +525,7 @@ export function EnvioClickBlock({
           guideAttemptedAt={initialData.shipping?.guideAttemptedAt ?? null}
           quotedAt={quotedAt}
           saveForGuide={saveForGuide}
+          onCreated={setCreatedGuide}
           disabled={loading || discarding}
         />
       )}

@@ -1,4 +1,4 @@
-import { ErrorFactory } from "@/lib/api-errors";
+import { existingGuide } from "@/lib/guide-claim";
 import prismadb from "@/lib/prismadb";
 import { withResourceLock } from "@/lib/resource-lock";
 import { queueShipmentMilestone } from "@/lib/shipment-notifications";
@@ -25,8 +25,12 @@ export async function createGuideWithRate(input: { orderId: string; storeId: str
     `guide:${input.orderId}`,
     "Ya se está creando la guía de este pedido. Espera unos segundos y recarga la página.",
     async () => {
-      const fresh = await prismadb.shipping.findUnique({ where: { id: input.shippingId }, select: { envioClickIdOrder: true } });
-      if (fresh?.envioClickIdOrder) throw ErrorFactory.Conflict("La orden ya tiene una guía creada");
+      const fresh = await prismadb.shipping.findUnique({
+        where: { id: input.shippingId },
+        select: { envioClickIdOrder: true, trackingCode: true, guideUrl: true },
+      });
+      // Ya tiene guía: se devuelve sin tocar la tarifa guardada ni pagar otra.
+      if (fresh?.envioClickIdOrder) return existingGuide(fresh);
       await prismadb.shipping.update({
         where: { id: input.shippingId },
         data: {
@@ -42,6 +46,8 @@ export async function createGuideWithRate(input: { orderId: string; storeId: str
       return createGuideForOrder(input.orderId, input.storeId);
     },
   );
-  queueShipmentMilestone({ orderId: input.orderId, storeId: input.storeId, milestone: "guia_creada", source: input.source });
+  if (!result.alreadyExisted) {
+    queueShipmentMilestone({ orderId: input.orderId, storeId: input.storeId, milestone: "guia_creada", source: input.source });
+  }
   return result;
 }

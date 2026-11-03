@@ -5,7 +5,7 @@
  */
 export const COMMAND_USAGE_DAYS = 14;
 
-const OK_OUTCOMES = new Set(["ok", "guide_quoted", "guide_created"]);
+const OK_OUTCOMES = new Set(["ok", "guide_quoted", "guide_created", "guide_already_existed"]);
 
 export const OUTCOME_LABELS: Record<string, string> = {
   missing_contact: "sin celular ni @usuario",

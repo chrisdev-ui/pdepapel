@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({ quoteShipment: vi.fn(), createShipment: vi.fn(
 
 vi.mock("@/lib/prismadb", () => ({
   default: {
+    // La reserva de la guía (lib/guide-claim.ts): 1 fila = reservada.
+    $executeRaw: vi.fn().mockResolvedValue(1),
     product: { findMany: vi.fn().mockResolvedValue([]) },
     box: { findMany: vi.fn().mockResolvedValue([]) },
     capsuleOrder: { findMany: vi.fn().mockResolvedValue([]) },
@@ -77,6 +79,9 @@ describe("crear la guía contra entrega con una tarifa sin recaudo", () => {
         shipping: { id: "ship-1", envioClickIdOrder: null, envioClickIdRate: 2, isCOD: true },
       } as never),
     ).rejects.toThrow(COD_RATE_MISMATCH_MESSAGE);
-    expect(mocks.shippingUpdate).not.toHaveBeenCalled();
+    // No se guarda ninguna guía: solo se libera la reserva con el motivo (lib/guide-claim.ts).
+    expect(mocks.shippingUpdate).toHaveBeenCalledTimes(1);
+    const [{ data }] = mocks.shippingUpdate.mock.calls[0] as [{ data: Record<string, unknown> }];
+    expect(Object.keys(data).sort()).toEqual(["guideAttemptedAt", "guideError"]);
   });
 });

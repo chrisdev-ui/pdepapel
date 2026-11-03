@@ -1010,9 +1010,11 @@ async function createOrder(
     ) {
       guideCreationResult.attempted = true;
       try {
-        await createGuideForOrder(order.id, params.storeId);
+        const guide = await createGuideForOrder(order.id, params.storeId);
         guideCreationResult.success = true;
-        queueShipmentMilestone({ orderId: order.id, storeId: params.storeId, milestone: "guia_creada", source: "pedido nuevo del panel" });
+        if (!guide.alreadyExisted) {
+          queueShipmentMilestone({ orderId: order.id, storeId: params.storeId, milestone: "guia_creada", source: "pedido nuevo del panel" });
+        }
         console.log(
           `[ADMIN_ORDER_CREATE] Guide created for order ${order.orderNumber}`,
         );

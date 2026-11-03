@@ -243,6 +243,10 @@ Vistas: Por despachar, Despachados hoy, En camino, Con novedad, Entregados.
 
 Revisa «Con novedad» a diario.
 
+Al crear la guía en el pedido, el número y el enlace al PDF aparecen en cuanto
+EnvioClick responde. Cada pedido tiene una sola guía: si ya tenía una (creada
+en otra pestaña o por WhatsApp), el panel lo dice y no paga otra.
+
 Si llega el aviso «EnvioClick sin saldo», la cuenta de EnvioClick se quedó sin
 crédito y la guía del pedido que nombra no se creó. Recarga la cuenta; después
 abre el pedido, «Cotizar de nuevo» si la tarifa venció y «Crear guía». El aviso

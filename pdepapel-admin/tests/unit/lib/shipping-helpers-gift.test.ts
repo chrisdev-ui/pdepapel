@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prismadb", () => ({
   default: {
+    // La reserva de la guía (lib/guide-claim.ts): 1 fila = reservada.
+    $executeRaw: vi.fn().mockResolvedValue(1),
     shippingQuote: { findFirst: mocks.findQuote },
     shipping: { update: mocks.shippingUpdate },
     box: { findMany: vi.fn().mockResolvedValue([]) },

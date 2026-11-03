@@ -240,11 +240,14 @@ export async function runGuideConfirm(input: { storeId: string; code: string | n
     }
     const rate = match.quote as unknown as GuideRate;
     const result = await createGuideWithRate({ orderId: order.id, storeId: input.storeId, shippingId: order.shipping!.id, rate, source: "comando de WhatsApp" });
-    await finish("DONE", "guide_created");
+    const outcome = result.alreadyExisted ? "guide_already_existed" : "guide_created";
+    await finish("DONE", outcome);
     return {
       status: "DONE",
-      outcome: "guide_created",
-      reply: `Guía creada para ${order.orderNumber}: ${rate.carrier}, guía ${result.data.tracker ?? result.data.idOrder}.`,
+      outcome,
+      reply: result.alreadyExisted
+        ? `${order.orderNumber} ya tenía guía (${result.data.tracker ?? result.data.idOrder}): no se creó otra.`
+        : `Guía creada para ${order.orderNumber}: ${rate.carrier}, guía ${result.data.tracker ?? result.data.idOrder}.`,
       orderId: order.id,
       url: orderUrl(input.storeId, order.id),
     };
