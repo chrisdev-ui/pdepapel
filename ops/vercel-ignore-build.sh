@@ -23,9 +23,18 @@ if [[ -z "$BASE" ]]; then
   echo "ignore-build: sin despliegue anterior; se compila"
   exit 1
 fi
-git cat-file -e "$BASE^{commit}" 2>/dev/null || git fetch --depth=100 origin "$BASE" 2>/dev/null
+FETCH_ERR=""
+if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+  FETCH_ERR=$(git fetch --depth=100 origin "$BASE" 2>&1 >/dev/null)
+fi
 if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
   echo "ignore-build: no se encontró $BASE; se compila"
+  # Diagnóstico (2026-11-03: el clon superficial no traía el base y el fetch fallaba en silencio).
+  # Solo nombres de remotos y la primera línea del error, sin usuario:clave@ ni cadenas tipo token.
+  echo "ignore-build: remotos: $(git remote 2>/dev/null | tr '\n' ' ')· clon superficial: $(git rev-parse --is-shallow-repository 2>/dev/null) · commits en el clon: $(git rev-list --count HEAD 2>/dev/null)"
+  if [[ -n "$FETCH_ERR" ]]; then
+    echo "ignore-build: fetch: $(printf '%s\n' "$FETCH_ERR" | head -n 1 | sed -E -e 's#([a-z]+://)[^/@[:space:]]*@#\1#g' -e 's#[A-Za-z0-9_-]{30,}#***#g' | cut -c1-200)"
+  fi
   exit 1
 fi
 
