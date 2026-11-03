@@ -112,8 +112,31 @@ describe("origen del pedido (MySQL)", () => {
   it("/orders desde el panel: PANEL y nada de analítica de la dueña, aunque el cuerpo diga otra cosa", async () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;
-    const id = await createOrder("orders", storeBody(fixture, { ...analytics, source: OrderSource.STORE }));
+    const id = await createOrder("orders", storeBody(fixture, { ...analytics, source: OrderSource.STORE, salesChannel: "WHATSAPP" }));
     await expect(stored(id)).resolves.toEqual({ source: OrderSource.PANEL, analyticsClientId: null, analyticsSessionId: null, analyticsConsent: null });
+  });
+
+  it("la dueña sin canal en el cuerpo: 400 y no se crea el pedido", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const { POST } = await import("@/app/api/[storeId]/orders/route");
+    const response = await POST(json(storeBody(fixture)), { params: { storeId: fixture.store.id } });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toMatch(/Elige por dónde llegó/);
+    await expect(testPrisma.order.count({ where: { storeId: fixture.store.id } })).resolves.toBe(0);
+  });
+
+  it("la dueña guarda el canal que eligió", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const id = await createOrder("orders", storeBody(fixture, { salesChannel: "INSTAGRAM" }));
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id }, select: { salesChannel: true } })).resolves.toEqual({ salesChannel: "INSTAGRAM" });
+  });
+
+  it("la tienda no puede fijar el canal: queda null aunque el cuerpo lo traiga", async () => {
+    fixture = await createInventoryFixture();
+    const id = await createOrder("orders", storeBody(fixture, { salesChannel: "TIKTOK" }));
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id }, select: { source: true, salesChannel: true } })).resolves.toEqual({ source: OrderSource.STORE, salesChannel: null });
   });
 
   it("una clienta no puede marcar su pedido como del panel", async () => {
@@ -197,7 +220,7 @@ describe("consentimiento legal del pedido (MySQL)", () => {
     await expect(consent(await create("orders", storeBody(fixture, { legalConsent: { terms: "2030-01-01", privacy: "2026-10-21" } })))).resolves.toEqual(none);
     await expect(consent(await create("checkout", storeBody(fixture, { legalConsent: "sí" })))).resolves.toEqual(none);
     session.userId = fixture.store.userId;
-    await expect(consent(await create("orders", storeBody(fixture, { legalConsent: versions })))).resolves.toEqual(none);
+    await expect(consent(await create("orders", storeBody(fixture, { legalConsent: versions, salesChannel: "WHATSAPP" })))).resolves.toEqual(none);
     await expect(consent(await create("checkout", storeBody(fixture, { legalConsent: versions, guestId: null })))).resolves.toEqual(none);
   });
 

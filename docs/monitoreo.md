@@ -94,6 +94,18 @@ Se propone una cuenta propia, sin la sesión de la dueña, con `{ "role": "viewe
 
 Están permitidos los filtros de vista, los rangos de fecha y «Apply» en filtros de informes y grabaciones (Christian, 2026-11-02). Sigue prohibido guardar segmentos o filtros, cambiar la configuración y borrar cualquier cosa.
 
+## Ventas por canal
+
+Antes de la revisión de Claude, `run-weekly.sh` corre `pdepapel-admin/scripts/monitoring-sales-by-channel.ts` con el `.env` de solo lectura del panel. El script escribe `raw/<fecha>/ventas.json` directamente; los números no pasan por la revisión, y `save-raw` no deja que Claude los sobrescriba.
+
+- **Qué cuenta como venta:** un pedido pagado en la semana, más los contra entrega enviados que todavía no se marcaron pagados.
+- **Qué cuenta:** pedidos y total en pesos por canal.
+- **Cómo se decide el canal:**
+  1. El origen que eligió la dueña.
+  2. Si no hay, lo que implica el sistema que creó el pedido: tienda en línea, WhatsApp, punto de venta o feria.
+  3. Si tampoco, «Sin registrar».
+- **Privacidad:** sin datos de clientas.
+
 ## Costo
 
 La revisión semanal corre con Sonnet. Cada informe anota modelo, costo, minutos y turnos. La primera corrida, con Opus, costó US$10,95 en 18 min.
@@ -110,5 +122,6 @@ La revisión semanal corre con Sonnet. Cada informe anota modelo, costo, minutos
 ## Problemas conocidos
 
 - **TikTok Events Manager, Merchant Center y Search Console:** si la extensión de Chrome no tiene permiso para el dominio, la fuente sale como fallida con el motivo. Hay que dar el permiso en la extensión y volver a correr.
+- **Pantallas de inicio de sesión (2026-11-02):** si una fuente pide iniciar sesión, un código de verificación o un captcha, la revisión no toca nada ni reintenta: anota «<fuente>: sin sesión» y sigue. Los reintentos de la primera corrida dejaron TikTok bloqueado («Maximum number of attempts reached»). Inicia sesión a mano en ese perfil de Chrome y la semana siguiente vuelve a leerse.
 - **Vercel `get_runtime_errors`:** falla con `since: 7d` en esta cuenta; se usa `3d`.
 - **Clarity:** el filtro «Last 7 days» termina hoy, no ayer. La comparación semanal sale de `history.json`.

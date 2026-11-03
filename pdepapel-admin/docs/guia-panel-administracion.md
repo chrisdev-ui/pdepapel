@@ -71,6 +71,14 @@ Vistas: **Por atender** (todo lo que necesita acción hoy), **Por verificar**
 camino**, **Cotizaciones**, **Todos**. La columna Canal distingue Tienda,
 Presencial, Feria, Cotización o Mercado Libre.
 
+La columna y el filtro **Origen** dicen por dónde llegó la clienta: WhatsApp,
+Instagram, TikTok, Presencial, Feria, Otro, Tienda en línea o «Sin registrar».
+Al crear un pedido en el panel (o al convertir una reserva) hay que tocar una de
+esas fichas antes de guardar: no viene ninguna marcada a propósito. Los pedidos
+de WhatsApp, del punto de venta y de las ferias la traen solos. En un pedido
+viejo «Sin registrar» se puede elegir al editarlo. Con esto el informe semanal
+cuenta las ventas por canal.
+
 La lista muestra 25 pedidos por página. El buscador busca en todos los pedidos
 (número, cliente, teléfono, documento o producto, y el total exacto si escribes
 un monto como 45000, 45.000 o $45.000), no solo en la página que se ve, y los

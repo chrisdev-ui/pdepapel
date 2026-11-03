@@ -199,19 +199,41 @@ export async function POST(
       }
     }
 
+    // Contra entrega: el recaudo se calcula sobre el pedido sin envío y, con
+    // envío gratis, sin el flete. Ambos entran en la llave de la caché.
+    const amountBeforeShipping =
+      Number(rawAmountBeforeShipping) > 0 ? Number(rawAmountBeforeShipping) : orderTotal;
+    let codFreeShipping = false;
+    if (isCOD) {
+      const settings = await prismadb.store.findUnique({
+        where: { id: params.storeId },
+        select: { freeShippingThreshold: true },
+      });
+      codFreeShipping = qualifiesForFreeShipping(
+        Number(rawProductSubtotal) > 0 ? Number(rawProductSubtotal) : amountBeforeShipping,
+        settings?.freeShippingThreshold,
+      );
+    }
+
+    // Prepagado: el valor declarado va redondeado a mil (cambia el seguro, no
+    // la tarifa). Contra entrega: exacto, porque el recaudo de cada tarifa
+    // depende del valor exacto y una fila de otro carrito daría otro cobro.
     const cacheKey = {
       storeId: params.storeId,
       originDaneCode: STORE_SHIPPING_ORIGIN.daneCode,
       destDaneCode: destination.daneCode,
       weight: packageDimensions.weight,
-      declaredValue: Math.round(orderTotal / 1000) * 1000,
+      declaredValue: isCOD ? Math.round(orderTotal) : Math.round(orderTotal / 1000) * 1000,
+      isCOD: Boolean(isCOD),
+      codAmount: isCOD ? Math.round(amountBeforeShipping) : 0,
+      codFreeShipping,
     };
 
-    // 5. CACHE: Buscar en caché (si no es forzado y no es COD)
-    if (!forceRefresh && !isCOD) {
+    // 5. CACHE: la dirección no cambia la tarifa; la ciudad, el paquete y los valores sí.
+    if (!forceRefresh) {
       const cached = await prismadb.shippingQuote.findUnique({
         where: {
-          storeId_originDaneCode_destDaneCode_weight_declaredValue: cacheKey,
+          quoteCacheKey: cacheKey,
         },
       });
 
@@ -312,22 +334,12 @@ export async function POST(
     // (lib/cod-fee.ts), el mismo cálculo que hace el pedido al guardarse, para
     // que lo que ve la clienta sea lo que se cobra. Con envío gratis el
     // recaudo se calcula sobre el pedido sin envío.
-    const amountBeforeShipping =
-      Number(rawAmountBeforeShipping) > 0 ? Number(rawAmountBeforeShipping) : orderTotal;
     let quotes: Array<Awaited<ReturnType<typeof runQuote>>[number] & { codFee: number | null }>;
     if (isCOD) {
-      const settings = await prismadb.store.findUnique({
-        where: { id: params.storeId },
-        select: { freeShippingThreshold: true },
-      });
-      const freeShipping = qualifiesForFreeShipping(
-        Number(rawProductSubtotal) > 0 ? Number(rawProductSubtotal) : amountBeforeShipping,
-        settings?.freeShippingThreshold,
-      );
       quotes = await quoteWithCodFees({
         amountBeforeShipping,
         quote: runQuote,
-        shippingOf: (rate) => (freeShipping ? 0 : rate.totalCost),
+        shippingOf: (rate) => (codFreeShipping ? 0 : rate.totalCost),
       });
     } else {
       quotes = (await runQuote(null)).map((quote) => ({ ...quote, codFee: null }));
@@ -343,8 +355,8 @@ export async function POST(
       length: processedPackage.length ?? packageForApi.length,
     };
 
-    // Las cotizaciones contra entrega no se guardan en la caché: sin esta
-    // línea no queda rastro de qué respondió EnvioClick (2026-10-15).
+    // Rastro de qué respondió EnvioClick en una cotización contra entrega
+    // (2026-10-15); solo en las que llegan a EnvioClick, no en las de caché.
     if (isCOD) {
       console.log(
         "[SHIPPING_QUOTE] contra entrega",
@@ -356,31 +368,29 @@ export async function POST(
       );
     }
 
-    if (!isCOD) {
-      await prismadb.shippingQuote.upsert({
-        where: {
-          storeId_originDaneCode_destDaneCode_weight_declaredValue: cacheKey,
-        },
-        create: {
-          ...cacheKey,
-          weight: finalDimensions.weight,
-          height: finalDimensions.height,
-          width: finalDimensions.width,
-          length: finalDimensions.length,
-          quotesData: quotes,
-          expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
-        },
-        update: {
-          weight: finalDimensions.weight,
-          height: finalDimensions.height,
-          width: finalDimensions.width,
-          length: finalDimensions.length,
-          quotesData: quotes,
-          expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
-          hitCount: 0, // Reset hit count on refresh
-        },
-      });
-    }
+    // The row keeps the weight it is looked up by (ours, not EnvioClick's
+    // processed one): storing theirs made the next lookup miss.
+    await prismadb.shippingQuote.upsert({
+      where: {
+        quoteCacheKey: cacheKey,
+      },
+      create: {
+        ...cacheKey,
+        height: finalDimensions.height,
+        width: finalDimensions.width,
+        length: finalDimensions.length,
+        quotesData: quotes,
+        expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
+      },
+      update: {
+        height: finalDimensions.height,
+        width: finalDimensions.width,
+        length: finalDimensions.length,
+        quotesData: quotes,
+        expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
+        hitCount: 0, // Reset hit count on refresh
+      },
+    });
 
     if (Math.random() < SHIPPING_QUOTE_CACHE.AUTO_CLEANUP_PROBABILITY) {
       prismadb.shippingQuote

@@ -71,7 +71,7 @@ describe("order editing guards with MySQL", () => {
     await recalculateKitStock(testPrisma, [fixture.kit.id]); // 6 units / 2 per kit = 3 kits
     const { POST } = await postRoute();
     const response = await POST(
-      json("POST", { ...customer, status: OrderStatus.PAID, type: OrderType.STANDARD, payment: { method: PaymentMethod.CASH }, orderItems: [{ productId: fixture.kit.id, quantity: 1 }], subtotal: 10000, total: 10000 }),
+      json("POST", { ...customer, status: OrderStatus.PAID, type: OrderType.STANDARD, salesChannel: "WHATSAPP", payment: { method: PaymentMethod.CASH }, orderItems: [{ productId: fixture.kit.id, quantity: 1 }], subtotal: 10000, total: 10000 }),
       { params: { storeId: fixture.store.id } },
     );
     expect(response.status).toBe(200);

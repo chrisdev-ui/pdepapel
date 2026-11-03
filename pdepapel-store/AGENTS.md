@@ -238,7 +238,7 @@ When a change touches authentication or authorization, verify that route list **
 
 - Every WhatsApp link goes through `lib/whatsapp-prefill.ts` (`buildWhatsAppUrl`): product (name + SKU, from `hooks/use-whatsapp-context.ts`, set by `ProductInfo`), cart (up to 5 SKUs, then «y más»), order (`getOrderSupportWhatsAppUrl`), and general (footer, Contacto, every other page). Under 200 characters, `encodeURIComponent`, never names, emails, phones, addresses or totals. The policy, bank-transfer and error pages keep their own specific texts.
 - **The admin bot parses these exact texts** (`pdepapel-admin/lib/whatsapp/web-origin.ts`) to greet by page. Changing a text here means changing that parser in the same deploy; the parser also accepts the legacy texts.
-- GA4/Vercel `whatsapp_cta_clicked` carries `page_path`, `placement`, `page_type` and `product_ref` (SKU) only.
+- GA4/Vercel/Clarity `whatsapp_click` (replaced `whatsapp_cta_clicked` on 2026-11-03) fires on every WhatsApp link through one delegated listener (`components/whatsapp-click-tracker.tsx`, `lib/whatsapp-click-tracking.ts`), with consent. It carries `ui_source` (closest `data-ui-source`, else `footer`/`header`, else `page_<type>`) and `page_type`. The floating button and the cart bar send it themselves with `prefill_type` and `product_ref` (SKU), and carry `data-whatsapp-tracked` so the listener skips them. Never a path: order pages have the order id in the URL. Mark `whatsapp_click` as a key event in GA4.
 
 ### Images
 

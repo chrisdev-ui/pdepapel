@@ -74,6 +74,7 @@ describe("point of sale rework with MySQL", () => {
     const sale = await createPointOfSaleSale({ ...base, idempotencyKey: KEY("ref-ok"), transactionId: " NEQUI-778 " });
     expect(sale).toMatchObject({ duplicate: false, pending: false, order: { status: OrderStatus.PAID, payment: { method: PaymentMethod.BankTransfer, transactionId: "NEQUI-778" } } });
     expect(sale.order.paidAt).toBeInstanceOf(Date);
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id }, select: { salesChannel: true } })).resolves.toEqual({ salesChannel: "PRESENCIAL" });
   });
 
   it("charges the live online offer, records the discounted price on the order and keeps the real cost in the kardex", async () => {

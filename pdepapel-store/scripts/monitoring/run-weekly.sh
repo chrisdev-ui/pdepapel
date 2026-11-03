@@ -38,6 +38,14 @@ if [[ ! -f "$OUT/diario/$DATE.json" ]]; then
   wait_for_daily_lock
 fi
 
+# 1b) «Ventas por canal» straight from the database (read-only .env of the admin), before the review reads the raw folder.
+if [[ -f "$REPO/pdepapel-admin/.env" && -x "$REPO/pdepapel-admin/node_modules/.bin/tsx" ]]; then
+  (cd "$REPO/pdepapel-admin" && MONITOREO_DIR="$OUT" "$NODE" --env-file=.env node_modules/.bin/tsx scripts/monitoring-sales-by-channel.ts --date "$DATE") \
+    || echo "ventas por canal: falló (el informe la mostrará como fuente sin recolectar)"
+else
+  echo "ventas por canal: falta pdepapel-admin/.env o tsx en el checkout principal"
+fi
+
 # 2) Chrome must be running with the Claude extension connected; open it in the background if not.
 if ! pgrep -x "Google Chrome" >/dev/null; then
   open -g -a "Google Chrome"

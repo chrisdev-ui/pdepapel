@@ -73,11 +73,18 @@ export function groupShippingQuotes(
   return grouped;
 }
 
-/** Identity of a quote request; when it changes the stored quotes are stale. */
+/**
+ * Identity of a quote request; when it changes the stored quotes are stale.
+ * The price depends on the destination city (DANE), the package (from the
+ * items), the declared value and, for cash on delivery, the amount to collect.
+ * The street address is not part of it: editing «Apto 101» must not wipe the
+ * rate the customer already picked.
+ */
 export function getShippingQuoteKey(input: {
   daneCode: string;
-  address: string;
   orderTotal: number;
+  amountBeforeShipping?: number;
+  isCOD: boolean;
   items: { productId: string; quantity: number }[];
 }): string {
   const items = [...input.items]
@@ -86,8 +93,9 @@ export function getShippingQuoteKey(input: {
     .join(",");
   return [
     input.daneCode.trim(),
-    input.address.trim().toLowerCase(),
     Math.round(input.orderTotal),
+    Math.round(input.amountBeforeShipping ?? input.orderTotal),
+    input.isCOD ? "cod" : "prepaid",
     items,
   ].join("|");
 }

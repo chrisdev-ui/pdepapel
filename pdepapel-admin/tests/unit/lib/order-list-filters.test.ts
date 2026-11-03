@@ -14,11 +14,12 @@ const at = (iso: string) => ({ type: OrderType.POINT_OF_SALE, createdAt: iso });
 
 describe("filtros de la lista de pedidos", () => {
   it("lee canal y fecha de la URL e ignora valores inventados", () => {
-    expect(parseOrderListFilters(new URLSearchParams("canal=presencial&fecha=ayer"))).toEqual({ channel: "presencial", date: { kind: "ayer" } });
-    expect(parseOrderListFilters(new URLSearchParams("canal=marte&fecha=siempre"))).toEqual({ channel: null, date: { kind: "todas" } });
+    expect(parseOrderListFilters(new URLSearchParams("canal=presencial&fecha=ayer"))).toEqual({ channel: "presencial", date: { kind: "ayer" }, origin: null });
+    expect(parseOrderListFilters(new URLSearchParams("canal=marte&fecha=siempre"))).toEqual({ channel: null, date: { kind: "todas" }, origin: null });
     expect(parseOrderListFilters(new URLSearchParams("fecha=rango&desde=2026-10-01&hasta=2026-10-05"))).toEqual({
       channel: null,
       date: { kind: "rango", from: "2026-10-01", to: "2026-10-05" },
+      origin: null,
     });
     expect(parseOrderListFilters(new URLSearchParams("fecha=rango&desde=ayer")).date).toEqual({ kind: "todas" });
   });

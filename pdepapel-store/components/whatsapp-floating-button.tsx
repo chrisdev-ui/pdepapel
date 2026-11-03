@@ -4,6 +4,7 @@ import { WhatsappIcon } from "@/components/icons";
 import { useWhatsAppContext } from "@/hooks/use-whatsapp-context";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { WHATSAPP_TRACKED_ATTRIBUTE, whatsAppPageType } from "@/lib/whatsapp-click-tracking";
 import { buildWhatsAppUrl, whatsAppAnalyticsParams, type WhatsAppPrefill } from "@/lib/whatsapp-prefill";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
@@ -17,12 +18,18 @@ const HIDDEN_ON: string[] = [
   STOREFRONT_ROUTES.cart,
 ];
 
-/** La misma métrica se toque desde donde se toque: página, lugar y tipo de página (sin datos personales). */
+/**
+ * `whatsapp_click` from the links that know more than the generic listener
+ * (lib/whatsapp-click-tracking.ts): the product SKU. Their anchors carry
+ * WHATSAPP_TRACKED_ATTRIBUTE so the listener does not count them again.
+ */
 export function trackWhatsAppClick(placement: string, pagePath: string, prefill: WhatsAppPrefill = { pageType: "general" }): void {
-  trackCustomerEvent("whatsapp_cta_clicked", {
-    page_path: pagePath,
-    placement,
-    ...whatsAppAnalyticsParams(prefill),
+  const { page_type: prefillPageType, product_ref } = whatsAppAnalyticsParams(prefill);
+  trackCustomerEvent("whatsapp_click", {
+    ui_source: placement,
+    page_type: whatsAppPageType(pagePath),
+    prefill_type: prefillPageType,
+    product_ref,
   });
 }
 
@@ -43,6 +50,7 @@ export function WhatsAppFloatingButton() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chatear con Papelería P de Papel por WhatsApp"
+      {...{ [WHATSAPP_TRACKED_ATTRIBUTE]: "1" }}
       className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2 motion-reduce:transform-none md:bottom-6 md:right-6"
       onClick={() => trackWhatsAppClick("floating_button", pathname, prefill)}
     >

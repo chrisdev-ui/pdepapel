@@ -17,6 +17,8 @@ const ORDER_ROW_SELECT = {
   id: true,
   orderNumber: true,
   type: true,
+  salesChannel: true,
+  source: true,
   fullName: true,
   phone: true,
   address: true,

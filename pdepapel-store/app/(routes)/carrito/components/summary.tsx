@@ -263,6 +263,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
             rel="noopener noreferrer"
             tabIndex={stickyVisible ? 0 : -1}
             aria-label="Chatear con Papelería P de Papel por WhatsApp"
+            data-whatsapp-tracked="1"
             onClick={() => trackWhatsAppClick("cart_sticky_bar", pathname, whatsAppPrefill)}
             className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white transition hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2"
           >

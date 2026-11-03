@@ -1133,6 +1133,32 @@ One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`)
 - **Pedidos list is paginated on the server (2026-10-14).** `lib/order-list.ts` reads one light row per matching order (only the queue fields), classifies it with the same pure `order-queues` rules, derives every tab count and the 25 ids of the page, and `pedidos/server/get-orders.ts` then loads only those rows with a slim select (one main image per line). Channel, date and search (`q`: number, customer, phone, document, line or product name) are in the SQL; tab, filters, search and page live in the URL (`vista`, `canal`, `fecha`/`desde`/`hasta`, `q`, `pagina`) and the client changes them with `router.replace`, never `history.replaceState` (that would not re-render the server page). Tab counts are computed in memory from the light rows on purpose: the time-based queue rules (30-day dispatch window, 2-hour stale payment, 5-day stale shipping) would drift if duplicated in SQL. `DataTable` has an opt-in `server` prop for this mode; selection and bulk actions are per page, and `OrderClient` clears the selection on every navigation. Search is narrower than the old in-browser filter on purpose: that one also matched the channel, payment and shipping badge labels and the total as text; channel is now the «Canal» filter and payment/shipping state the tabs. A numeric word («45000», «45.000», «$45.000») also matches the order total exactly (`parseAmount`) and its digits in the order number; the old substring match on the total («45» finding 45.000) is gone. The CSV export maps the slim row through `lib/order-csv.ts` (`orderCsvValues`), so every column of `ModelsColumns[Orders]` is filled without loading more data. Before: 3.7 MB, all 738 orders, 6,931 image rows per load.
 - **Version banner never blocks (2026-10-14).** `components/shell/version-guard.tsx` only shows «Hay una versión nueva del panel» and reloads the page fully on the next pathname change (filters and pages of the same screen do not count) or on «Recargar». It does not intercept axios, `lib/api` or `fetch`; the old dialog held writes until answered and made screens look frozen.
 
+### Sales channel, COD in GA4 and the COD quote cache (2026-11-03, migration `20261113_add_order_sales_channel_and_cod_quote_cache.sql`)
+
+**`Order.salesChannel` (`OrderSalesChannel`)** records where the customer came from: WHATSAPP, INSTAGRAM, TIKTOK, PRESENCIAL, FERIA, OTRO.
+- It is not `source`, which says which system wrote the order. Keep them apart.
+- **Required on panel-created orders, with no default:**
+  - `POST orders` when the caller is the owner. The storefront's value is ignored, so it stays null.
+  - Pedidos form chips (`components/orders/sales-channel-chips.tsx`), gated by the form-only `requireSalesChannel`.
+  - Reservation «Convertir en pedido» (body `{ salesChannel }`).
+- Optional on `PATCH orders/[id]`, so older orders can be filled in.
+- **Set automatically:** WhatsApp cart and draft orders → WHATSAPP, point of sale → PRESENCIAL, fairs → FERIA, waitlist deposits → mapped from `PreorderWaitlistEntry.channel` (WEB → null).
+- **Reporting** uses `reportChannelOf` (`lib/order-sales-channel.ts`): the chosen channel, else STORE→Tienda, WHATSAPP, POS→Presencial, FAIR→Feria, else «Sin registrar».
+- That rule is shared by the Pedidos «Origen» column and filter (`?origen=`, `orderOriginWhere` = in-memory `orderMatchesListFilters`) and by the weekly monitor's `scripts/monitoring-sales-by-channel.ts` (read-only, counts and COP totals only).
+
+**COD in GA4** (`lib/google-analytics.ts`):
+- **Purchase at creation:** a storefront COD order sends `purchase` (`payment_type: "cod"`) when created (`/orders` and `/checkout`, in the background, only with a consented client id). It does not wait for PAID, which COD often never reaches. It claims `analyticsPurchaseTrackedAt` before sending and releases the claim if GA4 fails.
+- **Ids kept until the last event.** For COD, the ids stay after the purchase and are cleared at that order's last event:
+  - **Cancel before delivery:** a `refund` once (`analyticsRefundTrackedAt`) from the single PATCH, the bulk PATCH, or DELETE. DELETE builds the body before the delete and sends it only after the delete commits.
+  - **Payment on delivery:** the paid sender sees the purchase was already sent and only clears the ids.
+- **Revival:** a refunded order that is revived and paid does not send a second purchase.
+- **Bulk «Pagado»** now runs the paid sender too, which closes a gap: it never sent GA4 before.
+
+**COD quote cache.**
+- **Key:** the store quotes COD only, and the quote key (store `getShippingQuoteKey`) no longer contains the street address. The quote route caches COD rows under `quoteCacheKey`, which adds `isCOD`, the exact `declaredValue`, `codAmount` (amount before shipping) and `codFreeShipping`. A cached COD fee can never belong to another cart.
+- **Weight:** the row keeps the weight it is looked up by.
+- **Index name:** the old unique index was the truncated `ShippingQuote_storeId_originDaneCode_destDaneCode_weight_dec_key`. The new one is named `ShippingQuote_quote_cache_key`.
+
 ### Documentation duties
 
 When a module's behaviour or copy changes, update **both** the Spanish guide `docs/guia-panel-administracion.md` and the in-dashboard manual (`content/manual/manual.html`, served at `/manual` behind auth) in the same commit. Manual screenshots come from the test store, never from production data.

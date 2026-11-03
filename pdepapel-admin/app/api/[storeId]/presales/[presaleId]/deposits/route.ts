@@ -24,6 +24,7 @@ import {
   presaleUnitDeposit,
   presaleUnitsForOrder,
 } from "@/lib/presale";
+import { salesChannelFromWaitlist } from "@/lib/order-sales-channel";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { CACHE_HEADERS, generateOrderNumber } from "@/lib/utils";
@@ -135,6 +136,8 @@ export async function POST(
           status: OrderStatus.PENDING,
           type: OrderType.STANDARD,
           source: OrderSource.PANEL,
+          // La lista de espera ya sabe por dónde llegó la persona.
+          salesChannel: salesChannelFromWaitlist(entry.channel),
           createdBy: userId,
           fullName: entry.name,
           phone: normalizePhone(entry.phone ?? "") ?? entry.phone ?? "",

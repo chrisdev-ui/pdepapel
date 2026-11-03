@@ -2,8 +2,9 @@ import { getProductUnitShipping } from "@/lib/financial";
 import { owedPresaleUnits, sellableStock } from "@/lib/presale-owed";
 import {
   InventoryMovementType,
-  OrderStatus,
+  OrderSalesChannel,
   OrderSource,
+  OrderStatus,
   OrderType,
   PaymentMethod,
 } from "@prisma/client";
@@ -318,6 +319,7 @@ export async function createPointOfSaleSale({
         paidAt: pendingOnTerminal ? null : new Date(),
         type: OrderType.POINT_OF_SALE,
         source: OrderSource.POS,
+        salesChannel: OrderSalesChannel.PRESENCIAL,
         subtotal,
         total: subtotal,
         totalProductCost,

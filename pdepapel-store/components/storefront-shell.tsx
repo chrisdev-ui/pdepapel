@@ -16,6 +16,7 @@ import Navbar from "@/components/navbar";
 import { Spooky } from "@/components/spooky";
 import { VercelAnalytics } from "@/components/vercel-analytics";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { WhatsAppClickTracker } from "@/components/whatsapp-click-tracker";
 import { WishlistSyncProvider } from "@/components/wishlist-sync-provider";
 import { buildFeaturedByType, buildFeaturedSubcategories, buildNavigationTypes } from "@/lib/catalog-navigation";
 import { getCurrentSeason } from "@/lib/date-utils";
@@ -107,6 +108,7 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
         />
         <VercelAnalytics />
         <WebVitalsReporter />
+        <WhatsAppClickTracker />
       </ReactQueryProvider>
     </ClerkProvider>
   );

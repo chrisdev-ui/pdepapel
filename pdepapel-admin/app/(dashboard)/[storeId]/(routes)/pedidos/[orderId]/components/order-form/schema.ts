@@ -1,6 +1,7 @@
 import { ENVIOCLICK_LIMITS } from "@/constants/shipping";
 import {
   DiscountType,
+  OrderSalesChannel,
   OrderStatus,
   OrderType,
   PaymentMethod,
@@ -117,8 +118,14 @@ export const orderFormSchema = z
     discount: discountSchema,
     couponCode: z.string().optional(),
     expiresAt: optionalDate,
+    // Por dónde llegó la clienta. Obligatorio al crear (requireSalesChannel), opcional al editar un pedido viejo.
+    salesChannel: z.nativeEnum(OrderSalesChannel).nullable().optional(),
+    requireSalesChannel: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
+    if (data.requireSalesChannel && !data.salesChannel) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Elige por dónde llegó la clienta", path: ["salesChannel"] });
+    }
     if (data.shippingProvider === ShippingProvider.ENVIOCLICK && (!data.city || !data.department || !data.daneCode)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Elige la ciudad con el buscador para cotizar con EnvioClick", path: ["daneCode"] });
     }
@@ -313,6 +320,9 @@ export function buildNewOrderDefaults(preset: OrderTypePreset, guestId: string):
     discount: {},
     couponCode: "",
     expiresAt,
+    // Sin canal por defecto: elegirlo es una decisión consciente.
+    salesChannel: null,
+    requireSalesChannel: true,
   };
 }
 
@@ -349,6 +359,8 @@ export function buildExistingOrderDefaults(order: NonNullable<GetOrderResult["or
     giftRecipientPhone: (raw as { giftRecipientPhone?: string | null }).giftRecipientPhone || "",
     giftMessage: order.giftMessage || "",
     couponCode: order.coupon?.code || "",
+    salesChannel: (order as { salesChannel?: OrderSalesChannel | null }).salesChannel ?? null,
+    requireSalesChannel: false,
     orderItems: order.orderItems.map((item) => {
       const product = products.find((p) => p.value === item.productId);
       return {

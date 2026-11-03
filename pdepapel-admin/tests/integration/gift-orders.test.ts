@@ -63,7 +63,7 @@ describe("gift orders with MySQL", () => {
   const createViaPanel = async (f: InventoryFixture, extra: Record<string, unknown> = {}) => {
     const { POST } = await import("@/app/api/[storeId]/orders/route");
     const response = await POST(
-      json("POST", { ...buyer, type: OrderType.STANDARD, payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: f.component.id, quantity: 1 }], subtotal: 10000, total: 10000, ...extra }),
+      json("POST", { ...buyer, type: OrderType.STANDARD, salesChannel: "WHATSAPP", payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: f.component.id, quantity: 1 }], subtotal: 10000, total: 10000, ...extra }),
       { params: { storeId: f.store.id } },
     );
     expect(response.status).toBe(200);
@@ -120,7 +120,7 @@ describe("gift orders with MySQL", () => {
     session.userId = fixture.store.userId;
     const { POST } = await import("@/app/api/[storeId]/orders/route");
     const response = await POST(
-      json("POST", { ...buyer, type: OrderType.STANDARD, payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: fixture.component.id, quantity: 1 }], subtotal: 10000, total: 10000, isGift: true, giftRecipientName: " " }),
+      json("POST", { ...buyer, type: OrderType.STANDARD, salesChannel: "WHATSAPP", payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: fixture.component.id, quantity: 1 }], subtotal: 10000, total: 10000, isGift: true, giftRecipientName: " " }),
       { params: { storeId: fixture.store.id } },
     );
     expect(response.status).toBe(400);

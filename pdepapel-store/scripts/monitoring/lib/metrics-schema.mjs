@@ -14,8 +14,23 @@ export const SOURCES = {
   vercel: "Vercel",
   psi: "PageSpeed Insights",
   admin: "Panel (solo lectura)",
+  ventas: "Ventas por canal (base de datos)",
   capa2: "Chequeo diario (capa 2)",
 };
+
+/** Sources the weekly review must not write: scripts produce them. */
+export const SCRIPT_SOURCES = new Set(["capa2", "ventas"]);
+
+const VENTAS_CHANNELS = [
+  ["whatsapp", "WhatsApp"],
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["presencial", "Presencial"],
+  ["feria", "Feria"],
+  ["otro", "Otro"],
+  ["tienda", "Tienda en línea"],
+  ["sin_registrar", "Sin registrar"],
+];
 
 export const METRICS = [
   m("ga4.users", "Usuarios", "n", "up"),
@@ -77,6 +92,12 @@ export const METRICS = [
   m("admin.ml_active_listings", "Publicaciones ML activas", "n", "up"),
   m("admin.ml_problem_listings", "Publicaciones ML con problema", "n", "down"),
   m("admin.owner_alerts", "Alertas pendientes de la dueña", "n", "down"),
+  m("ventas.orders", "Ventas (pedidos)", "n", "up"),
+  m("ventas.total_cop", "Ventas (total)", "cop", "up"),
+  ...VENTAS_CHANNELS.flatMap(([id, label]) => [
+    m(`ventas.${id}.orders`, `${label} · pedidos`, "n", id === "sin_registrar" ? "down" : "up"),
+    m(`ventas.${id}.cop`, `${label} · total`, "cop", id === "sin_registrar" ? null : "up"),
+  ]),
   m("capa2.days_run", "Días con chequeo", "n", "up"),
   m("capa2.days_failed", "Días con falla", "n", "down"),
   m("capa2.home_390_lcp_ms_median", "Inicio 390 · LCP lab (mediana)", "ms", "down"),

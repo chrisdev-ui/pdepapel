@@ -101,7 +101,7 @@ describe("quién registra el pedido y quién es la clienta (MySQL)", () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;
 
-    const order = await create(orderBody(fixture, { status: OrderStatus.PAID, createdBy: "otra-persona" }));
+    const order = await create(orderBody(fixture, { status: OrderStatus.PAID, createdBy: "otra-persona", salesChannel: "WHATSAPP" }));
 
     expect(order).toMatchObject({ userId: null, createdBy: fixture.store.userId, source: OrderSource.PANEL });
     const movements = await testPrisma.inventoryMovement.findMany({ where: { referenceId: order.id, type: InventoryMovementType.ORDER_PLACED }, select: { createdBy: true } });
@@ -112,7 +112,7 @@ describe("quién registra el pedido y quién es la clienta (MySQL)", () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;
 
-    const order = await create(orderBody(fixture, { userId: "user_clienta" }));
+    const order = await create(orderBody(fixture, { userId: "user_clienta", salesChannel: "WHATSAPP" }));
 
     expect(order).toMatchObject({ userId: "user_clienta", createdBy: fixture.store.userId, source: OrderSource.PANEL });
   });
@@ -129,7 +129,7 @@ describe("quién registra el pedido y quién es la clienta (MySQL)", () => {
   it("«Mis pedidos» de la dueña no lista los pedidos que registró desde el panel", async () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;
-    await create(orderBody(fixture));
+    await create(orderBody(fixture, { salesChannel: "WHATSAPP" }));
 
     const { GET } = await import("@/app/api/[storeId]/orders/route");
     const response = await GET(new NextRequest("http://admin.test/api/x"), { params: { storeId: fixture.store.id } });

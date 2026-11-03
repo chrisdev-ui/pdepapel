@@ -259,7 +259,13 @@ describe("Google Analytics purchase tracking", () => {
       "skipped",
     );
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(updateManyMock).not.toHaveBeenCalled();
+    // A tracked order that still holds its ids (cash on delivery, sent at
+    // creation) only loses them now; nothing else is written or sent.
+    expect(updateManyMock).toHaveBeenCalledTimes(1);
+    expect(updateManyMock).toHaveBeenCalledWith({
+      where: { id: "order-id" },
+      data: { analyticsClientId: null, analyticsSessionId: null },
+    });
   });
 
   it("leaves the purchase pending when GA4 rejects the request", async () => {

@@ -1,4 +1,4 @@
-import { OrderSource, OrderStatus, OrderType } from "@prisma/client";
+import { OrderSalesChannel, OrderSource, OrderStatus, OrderType } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { parseCartMetadata, resolveCart, type ConversationCart, type ConversationCartItemInput } from "@/lib/conversations";
@@ -206,6 +206,7 @@ export async function createOrderFromConversationCart(input: {
         // Borrador: sin dirección ni pago todavía, y sin tocar inventario.
         status: OrderStatus.DRAFT,
         source: OrderSource.WHATSAPP,
+        salesChannel: OrderSalesChannel.WHATSAPP,
         createdBy: input.createdBy,
         fullName: conversation.contactName?.trim() || "Clienta de WhatsApp",
         // Un borrador necesita un teléfono: `Order.phone` es la llave con la

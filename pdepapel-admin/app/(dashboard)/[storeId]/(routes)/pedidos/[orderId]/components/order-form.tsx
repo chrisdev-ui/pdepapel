@@ -37,7 +37,9 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
+import { SalesChannelChips } from "@/components/orders/sales-channel-chips";
 import type { LocationOption } from "@/components/ui/location-combobox";
 import {
   Select,
@@ -343,6 +345,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       const status = options.status ?? (initialData ? undefined : data.status);
       const payload = {
         ...data,
+        // Form-only switch; the API decides on its own when the channel is required.
+        requireSalesChannel: undefined,
         status,
         expectedStatus: initialData?.status,
         ...(initialData ? { notifyCustomer } : {}),
@@ -970,6 +974,27 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </div>
               )}
             <div className="order-3 flex flex-col gap-4 lg:order-none">
+              {(
+                <FormField
+                  control={form.control}
+                  name="salesChannel"
+                  render={({ field, fieldState }) => (
+                    <FormItem className="rounded-xl border bg-white px-4 py-3 shadow-sm">
+                      <FormLabel id="sales-channel-label">
+                        ¿Por dónde llegó la clienta?{!initialData && " *"}
+                      </FormLabel>
+                      <SalesChannelChips
+                        value={field.value}
+                        onChange={(channel) => field.onChange(channel)}
+                        labelledBy="sales-channel-label"
+                        invalid={Boolean(fieldState.error)}
+                        disabled={loading}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <CustomerCard
                 storeId={storeId}
                 users={users}

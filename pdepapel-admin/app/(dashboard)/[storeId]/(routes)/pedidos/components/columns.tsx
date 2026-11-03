@@ -18,6 +18,8 @@ import { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNowStrict } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
+import { REPORT_CHANNEL_LABELS, reportChannelOf } from "@/lib/order-sales-channel";
+
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { CHANNEL_TONE, TintBadge } from "./order-badges";
@@ -87,6 +89,19 @@ export const buildColumns = (storeId: string): ColumnDef<OrderColumn>[] => [
     cell: ({ row }) => {
       const channel = getOrderChannel(row.original.type);
       return <TintBadge label={channel.label} tone={CHANNEL_TONE[channel.id]} />;
+    },
+  },
+  {
+    id: "origin",
+    accessorFn: (row) => REPORT_CHANNEL_LABELS[reportChannelOf(row)],
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+    cell: ({ row }) => {
+      const origin = reportChannelOf(row.original);
+      return (
+        <span className={origin === "SIN_REGISTRAR" ? "text-sm text-muted-foreground" : "text-sm"}>
+          {REPORT_CHANNEL_LABELS[origin]}
+        </span>
+      );
     },
   },
   {

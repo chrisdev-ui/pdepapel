@@ -1,8 +1,9 @@
-import type { OrderType } from "@prisma/client";
+import type { OrderSalesChannel, OrderSource, OrderType } from "@prisma/client";
 import { addDays, format, parseISO } from "date-fns";
 import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
 import { getOrderChannel, type SalesChannel } from "@/lib/order-queues";
+import { REPORT_CHANNEL_LABELS, reportChannelOf, SALES_CHANNELS, type SalesReportChannel } from "@/lib/order-sales-channel";
 
 /**
  * Canal y fecha de la lista de Pedidos. Se combinan con las pestañas (colas):
@@ -22,6 +23,11 @@ export const ORDER_CHANNEL_FILTERS: { id: SalesChannel; label: string }[] = [
   { id: "regalo", label: "Tarjeta de regalo" },
 ];
 
+/** «Origen»: por dónde llegó la clienta (Order.salesChannel, o lo que implica el sistema que escribió el pedido). */
+export const ORDER_ORIGIN_FILTERS: { id: SalesReportChannel; label: string }[] = (
+  [...SALES_CHANNELS, "TIENDA", "SIN_REGISTRAR"] as SalesReportChannel[]
+).map((id) => ({ id, label: REPORT_CHANNEL_LABELS[id] }));
+
 export type OrderDateFilter =
   | { kind: "todas" }
   | { kind: "hoy" }
@@ -40,10 +46,14 @@ export const ORDER_DATE_FILTERS: { kind: OrderDateFilter["kind"]; label: string 
 export interface OrderListFilters {
   channel: SalesChannel | null;
   date: OrderDateFilter;
+  origin?: SalesReportChannel | null;
 }
 
 const isChannel = (value: string | null): value is SalesChannel =>
   ORDER_CHANNEL_FILTERS.some((option) => option.id === value);
+
+const isOrigin = (value: string | null): value is SalesReportChannel =>
+  ORDER_ORIGIN_FILTERS.some((option) => option.id === value);
 
 export function parseOrderListFilters(query: URLSearchParams): OrderListFilters {
   const channel = query.get("canal");
@@ -55,12 +65,14 @@ export function parseOrderListFilters(query: URLSearchParams): OrderListFilters 
     const to = query.get("hasta") ?? "";
     if (DAY.test(from) && DAY.test(to)) date = { kind: "rango", from, to };
   }
-  return { channel: isChannel(channel) ? channel : null, date };
+  const origin = query.get("origen");
+  return { channel: isChannel(channel) ? channel : null, date, origin: isOrigin(origin) ? origin : null };
 }
 
 export function writeOrderListFilters(query: URLSearchParams, filters: OrderListFilters) {
-  for (const key of ["canal", "fecha", "desde", "hasta"]) query.delete(key);
+  for (const key of ["canal", "fecha", "desde", "hasta", "origen"]) query.delete(key);
   if (filters.channel) query.set("canal", filters.channel);
+  if (filters.origin) query.set("origen", filters.origin);
   if (filters.date.kind !== "todas") query.set("fecha", filters.date.kind);
   if (filters.date.kind === "rango") {
     query.set("desde", filters.date.from);
@@ -103,11 +115,12 @@ export function getOrderDateRange(filter: OrderDateFilter, now = new Date()) {
 }
 
 export function orderMatchesListFilters(
-  order: { type: OrderType; createdAt: Date | string },
+  order: { type: OrderType; createdAt: Date | string; salesChannel?: OrderSalesChannel | null; source?: OrderSource | null },
   filters: OrderListFilters,
   now = new Date(),
 ) {
   if (filters.channel && getOrderChannel(order.type).id !== filters.channel) return false;
+  if (filters.origin && reportChannelOf({ salesChannel: order.salesChannel ?? null, source: order.source ?? null }) !== filters.origin) return false;
   const range = getOrderDateRange(filters.date, now);
   if (!range) return true;
   const created = new Date(order.createdAt).getTime();
@@ -115,5 +128,5 @@ export function orderMatchesListFilters(
 }
 
 export function hasActiveListFilters(filters: OrderListFilters) {
-  return Boolean(filters.channel) || filters.date.kind !== "todas";
+  return Boolean(filters.channel) || Boolean(filters.origin) || filters.date.kind !== "todas";
 }

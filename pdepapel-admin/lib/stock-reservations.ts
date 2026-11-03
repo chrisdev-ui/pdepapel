@@ -1,4 +1,4 @@
-import { OrderSource, OrderStatus, OrderType, PaymentMethod, Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
+import { OrderSalesChannel, OrderSource, OrderStatus, OrderType, PaymentMethod, Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
 
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { calculateOrderTotals } from "@/lib/order-totals";
@@ -403,7 +403,7 @@ export async function previewConversion(storeId: string, id: string) {
  * unidades hasta que el pedido se pague (la venta las consume) o se cancele
  * (se liberan). El pago queda como transferencia por defecto.
  */
-export async function convertReservation(storeId: string, id: string, createdBy: string) {
+export async function convertReservation(storeId: string, id: string, createdBy: string, salesChannel: OrderSalesChannel | null = null) {
   const found = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: CONVERT_SELECT });
   if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
   if (found.status === StockReservationStatus.CONVERTED && found.orderId) return { orderId: found.orderId, existing: true };
@@ -419,6 +419,7 @@ export async function convertReservation(storeId: string, id: string, createdBy:
         type: OrderType.STANDARD,
         status: OrderStatus.PENDING,
         source: OrderSource.PANEL,
+        salesChannel,
         createdBy,
         fullName: found.customerName,
         phone: found.customerPhone,

@@ -58,7 +58,7 @@ describe("marcar pagado con Redis colgado (MySQL)", () => {
   const createPending = async (f: InventoryFixture) => {
     const { POST } = await import("@/app/api/[storeId]/orders/route");
     const response = await POST(
-      json("POST", { ...buyer, type: OrderType.STANDARD, status: OrderStatus.PENDING, payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: f.component.id, quantity: 1 }], subtotal: 10000, total: 10000 }, { "Idempotency-Key": `k-${Date.now()}-${Math.random()}` }),
+      json("POST", { ...buyer, type: OrderType.STANDARD, salesChannel: "WHATSAPP", status: OrderStatus.PENDING, payment: { method: PaymentMethod.BankTransfer }, orderItems: [{ productId: f.component.id, quantity: 1 }], subtotal: 10000, total: 10000 }, { "Idempotency-Key": `k-${Date.now()}-${Math.random()}` }),
       { params: { storeId: f.store.id } },
     );
     expect(response.status).toBe(200);
@@ -94,7 +94,7 @@ describe("marcar pagado con Redis colgado (MySQL)", () => {
     const { POST } = await import("@/app/api/[storeId]/orders/route");
     const started = Date.now();
     const response = await POST(
-      json("POST", { ...buyer, type: OrderType.STANDARD, status: OrderStatus.PAID, payment: { method: PaymentMethod.CASH }, orderItems: [{ productId: fixture.component.id, quantity: 1 }], subtotal: 10000, total: 10000 }, { "Idempotency-Key": `k-${Date.now()}-${Math.random()}` }),
+      json("POST", { ...buyer, type: OrderType.STANDARD, salesChannel: "WHATSAPP", status: OrderStatus.PAID, payment: { method: PaymentMethod.CASH }, orderItems: [{ productId: fixture.component.id, quantity: 1 }], subtotal: 10000, total: 10000 }, { "Idempotency-Key": `k-${Date.now()}-${Math.random()}` }),
       { params: { storeId: fixture.store.id } },
     );
     expect(response.status).toBe(200);

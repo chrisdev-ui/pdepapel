@@ -334,13 +334,30 @@ describe("reservas (MySQL)", () => {
     expect(await again.json()).toEqual({ released: false });
     await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 1 });
 
-    const converted = await CONVERT(request("POST"), params(other.reservation.id));
+    const converted = await CONVERT(request("POST", { salesChannel: "WHATSAPP" }), params(other.reservation.id));
     expect(converted.status).toBe(201);
     const { orderId } = (await converted.json()) as { orderId: string };
-    const repeated = await CONVERT(request("POST"), params(other.reservation.id));
+    const repeated = await CONVERT(request("POST", { salesChannel: "WHATSAPP" }), params(other.reservation.id));
     expect(repeated.status).toBe(200);
     expect(await repeated.json()).toEqual({ orderId, existing: true });
     await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(1);
     await expect(counters(f.component.id)).resolves.toMatchObject({ stock: 4, reservedUnits: 1 });
+  });
+
+  it("«Convertir» por la API pide el canal y lo guarda en el pedido", async () => {
+    const f = await setup(4);
+    const hold = await reserve(f, 1);
+    const { POST: CONVERT } = await import("@/app/api/[storeId]/stock-reservations/[reservationId]/convert/route");
+    const params = { params: { storeId: f.store.id, reservationId: hold.reservation.id } };
+
+    const missing = await CONVERT(request("POST"), params);
+    expect(missing.status).toBe(400);
+    await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(0);
+    await expect(testPrisma.stockReservation.findUniqueOrThrow({ where: { id: hold.reservation.id } })).resolves.toMatchObject({ status: StockReservationStatus.ACTIVE });
+
+    const converted = await CONVERT(request("POST", { salesChannel: "PRESENCIAL" }), params);
+    expect(converted.status).toBe(201);
+    const { orderId } = (await converted.json()) as { orderId: string };
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { salesChannel: true } })).resolves.toEqual({ salesChannel: "PRESENCIAL" });
   });
 });

@@ -1,4 +1,4 @@
-import { OrderPaymentKind, OrderPaymentPlan, OrderPaymentStatus, OrderStatus } from "@prisma/client";
+import { OrderPaymentKind, OrderPaymentPlan, OrderPaymentStatus, OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
@@ -147,6 +147,14 @@ export async function recordPaidOrderInGoogleAnalytics(
       total: true,
     },
   });
+
+  // Cash on delivery: the purchase already went out when the order was created
+  // and the ids were kept for a possible refund. Payment on delivery ends that
+  // window, so the ids go now; nothing is sent twice.
+  if (order?.status === OrderStatus.PAID && order.analyticsPurchaseTrackedAt && order.analyticsClientId) {
+    await clearGoogleAnalyticsIds(order.id);
+    return "skipped";
+  }
 
   if (
     !order ||
@@ -302,5 +310,182 @@ export async function recordDepositInGoogleAnalytics(orderId: string): Promise<"
     where: { id: order.id, analyticsDepositTrackedAt: null },
     data: { analyticsDepositTrackedAt: new Date() },
   });
+  return "sent";
+}
+
+async function clearGoogleAnalyticsIds(orderId: string): Promise<void> {
+  await prismadb.order.updateMany({
+    where: { id: orderId },
+    data: { analyticsClientId: null, analyticsSessionId: null },
+  });
+}
+
+async function postMeasurementProtocol(body: unknown): Promise<void> {
+  const measurementId = env.GA4_MEASUREMENT_ID;
+  const apiSecret = env.GA4_API_SECRET;
+  if (!measurementId || !apiSecret) throw new Error("GA4 sin configurar");
+  const query = new URLSearchParams({ api_secret: apiSecret, measurement_id: measurementId });
+  const response = await fetch(`${GOOGLE_ANALYTICS_MEASUREMENT_PROTOCOL_URL}?${query.toString()}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(3_000),
+  });
+  if (!response.ok) throw new Error(`GA4 Measurement Protocol respondió ${response.status}`);
+}
+
+const COD_ANALYTICS_SELECT = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  total: true,
+  analyticsClientId: true,
+  analyticsSessionId: true,
+  analyticsPurchaseTrackedAt: true,
+  analyticsRefundTrackedAt: true,
+  coupon: { select: { code: true } },
+  payment: { select: { method: true } },
+  shipping: { select: { cost: true, status: true } },
+  orderItems: {
+    select: {
+      name: true,
+      price: true,
+      brandName: true,
+      product: { select: { category: { select: { name: true } }, sku: true } },
+      productId: true,
+      quantity: true,
+      sku: true,
+    },
+  },
+} as const;
+
+/**
+ * Contra entrega: la compra va a GA4 al crear el pedido (no espera el cobro
+ * al entregar, que puede no marcarse nunca), con `payment_type: "cod"`. Solo
+ * con consentimiento (hay client id). Se reclama `analyticsPurchaseTrackedAt`
+ * antes de mandar, así dos llamadas a la vez no la mandan dos veces; si GA4
+ * falla se suelta el reclamo. Los ids se quedan: un `refund` los necesita si
+ * el pedido se cancela antes de entregar.
+ */
+export async function recordCodOrderInGoogleAnalytics(orderId: string): Promise<"sent" | "skipped"> {
+  if (!env.GA4_MEASUREMENT_ID || !env.GA4_API_SECRET) return "skipped";
+  const order = await prismadb.order.findUnique({ where: { id: orderId }, select: COD_ANALYTICS_SELECT });
+  if (
+    !order ||
+    order.payment?.method !== PaymentMethod.COD ||
+    order.status === OrderStatus.CANCELLED ||
+    order.analyticsPurchaseTrackedAt ||
+    !order.analyticsClientId
+  ) {
+    return "skipped";
+  }
+  const clientId = normalizeGoogleAnalyticsClientId(order.analyticsClientId);
+  if (!clientId) return "skipped";
+
+  const claimedAt = new Date();
+  const claim = await prismadb.order.updateMany({
+    where: { id: order.id, analyticsPurchaseTrackedAt: null },
+    data: { analyticsPurchaseTrackedAt: claimedAt },
+  });
+  if (claim.count === 0) return "skipped";
+
+  try {
+    await postMeasurementProtocol(
+      buildGoogleAnalyticsPurchasePayload({
+        clientId,
+        sessionId: normalizeGoogleAnalyticsSessionId(order.analyticsSessionId),
+        couponCode: order.coupon?.code,
+        items: order.orderItems,
+        orderNumber: order.orderNumber,
+        paymentMethod: "cod",
+        shippingCost: order.shipping?.cost,
+        total: order.total,
+      }),
+    );
+  } catch (error) {
+    await prismadb.order.updateMany({
+      where: { id: order.id, analyticsPurchaseTrackedAt: claimedAt },
+      data: { analyticsPurchaseTrackedAt: null },
+    });
+    throw error;
+  }
+  return "sent";
+}
+
+/**
+ * The GA4 `refund` body for a cash-on-delivery order whose purchase already
+ * went out and that never reached the customer, or null when none is owed.
+ * `beforeDelete`: the order is about to be deleted, so CANCELLED is not required.
+ */
+export async function buildCodRefundBody(
+  orderId: string,
+  options: { beforeDelete?: boolean } = {},
+): Promise<{ client_id: string; events: Array<{ name: "refund"; params: Record<string, unknown> }> } | null> {
+  if (!env.GA4_MEASUREMENT_ID || !env.GA4_API_SECRET) return null;
+  const order = await prismadb.order.findUnique({ where: { id: orderId }, select: COD_ANALYTICS_SELECT });
+  if (
+    !order ||
+    order.payment?.method !== PaymentMethod.COD ||
+    (!options.beforeDelete && order.status !== OrderStatus.CANCELLED) ||
+    !order.analyticsPurchaseTrackedAt ||
+    order.analyticsRefundTrackedAt ||
+    !order.analyticsClientId ||
+    order.shipping?.status === ShippingStatus.Delivered
+  ) {
+    return null;
+  }
+  const clientId = normalizeGoogleAnalyticsClientId(order.analyticsClientId);
+  if (!clientId) return null;
+  const sessionId = normalizeGoogleAnalyticsSessionId(order.analyticsSessionId);
+  return {
+    client_id: clientId,
+    events: [
+      {
+        name: "refund",
+        params: {
+          currency: "COP",
+          engagement_time_msec: 1,
+          ...(sessionId ? { session_id: sessionId } : {}),
+          transaction_id: order.orderNumber,
+          value: Number(order.total),
+          payment_type: "cod",
+        },
+      },
+    ],
+  };
+}
+
+/** Sends a body built earlier (a deleted order has no row left to read). */
+export async function sendGoogleAnalyticsRefund(body: NonNullable<Awaited<ReturnType<typeof buildCodRefundBody>>>): Promise<void> {
+  await postMeasurementProtocol(body);
+}
+
+/**
+ * Contra entrega cancelado antes de entregar, con la compra ya en GA4: un
+ * `refund` por el total, una sola vez (`analyticsRefundTrackedAt`, aunque el
+ * pedido se reactive después). Al mandarlo se borran los ids.
+ */
+export async function recordCancelledCodOrderInGoogleAnalytics(orderId: string): Promise<"sent" | "skipped"> {
+  const body = await buildCodRefundBody(orderId);
+  if (!body) return "skipped";
+
+  const claimedAt = new Date();
+  const claim = await prismadb.order.updateMany({
+    where: { id: orderId, analyticsRefundTrackedAt: null },
+    data: { analyticsRefundTrackedAt: claimedAt },
+  });
+  if (claim.count === 0) return "skipped";
+
+  try {
+    await postMeasurementProtocol(body);
+  } catch (error) {
+    await prismadb.order.updateMany({
+      where: { id: orderId, analyticsRefundTrackedAt: claimedAt },
+      data: { analyticsRefundTrackedAt: null },
+    });
+    throw error;
+  }
+  await clearGoogleAnalyticsIds(orderId);
   return "sent";
 }

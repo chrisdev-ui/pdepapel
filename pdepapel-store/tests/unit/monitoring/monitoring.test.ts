@@ -160,6 +160,8 @@ describe("monitoreo: validación de lo que guarda la revisión semanal", () => {
     expect(validateRawSource("tiktok", { source: "tiktok", ok: false }).ok).toBe(false);
     expect(validateRawSource("gsc", { source: "gsc", ok: true, metrics: { "gsc.clicks": { current: "4" } } }).ok).toBe(false);
     expect(validateRawSource("capa2", { source: "capa2", ok: true }).ok).toBe(false);
+    // «Ventas por canal» comes from the database script; the review cannot overwrite it.
+    expect(validateRawSource("ventas", { source: "ventas", ok: true, metrics: { "ventas.orders": { current: 1, previous: 0 } } }).ok).toBe(false);
   });
 
   it("exige el resumen de 5 líneas e impactos válidos", () => {

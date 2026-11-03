@@ -66,7 +66,15 @@ describe("POST /shipment/quote", () => {
     // El recaudo final cuadra: lo que cobra EnvioClick sobre el total con recaudo.
     expect(envia.codFee - enviaFee(68000 + envia.codFee)).toBeLessThan(1);
     expect(quotes.find((quote: { carrier: string }) => quote.carrier === "COORDINADORA").codFee).toBe(6116);
-    expect(mocks.upsert).not.toHaveBeenCalled();
+    // Saved under the exact amounts: another cart in the same thousand must not reuse this collection fee.
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].where.quoteCacheKey).toMatchObject({
+      destDaneCode: "17380000",
+      declaredValue: 52000,
+      isCOD: true,
+      codAmount: 50000,
+      codFreeShipping: false,
+    });
 
     const line = mocks.log.mock.calls.find(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega");
     expect(JSON.parse(String(line![1]))).toMatchObject({ destDaneCode: "17380000", rates: [{ carrier: "ENVIA", cod: true, codFee: envia.codFee }, { carrier: "COORDINADORA", cod: true, codFee: 6116 }] });
@@ -87,7 +95,29 @@ describe("POST /shipment/quote", () => {
     expect(mocks.quoteShipment).toHaveBeenCalledTimes(1);
     expect(mocks.quoteShipment.mock.calls[0][0]).not.toHaveProperty("codValue");
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].where.quoteCacheKey).toMatchObject({ declaredValue: 52000, isCOD: false, codAmount: 0, codFreeShipping: false });
     expect(mocks.log.mock.calls.some(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega")).toBe(false);
+  });
+
+  it("contra entrega con la misma ciudad, paquete y valores: sale de la caché sin ir a EnvioClick", async () => {
+    const cachedQuotes = [{ idRate: 9, carrier: "ENVIA", product: "Normal", flete: 17000, minimumInsurance: 1000, totalCost: 18000, deliveryDays: 3, isCOD: true, codCost: 2000, codFee: 2100 }];
+    const prisma = (await import("@/lib/prismadb")).default as unknown as { shippingQuote: { findUnique: ReturnType<typeof vi.fn> } };
+    prisma.shippingQuote.findUnique.mockResolvedValueOnce({ id: "q-1", quotesData: cachedQuotes, expiresAt: new Date(Date.now() + 60_000) });
+    const body = { destination: { daneCode: "17380000", address: ADDRESS }, orderTotal: 52000, amountBeforeShipping: 50000, productSubtotal: 50000, items: [{ productId: "MAN-1", name: "Libreta", quantity: 1, price: 52000 }], isCOD: true };
+    const response = await POST(
+      new Request("https://admin.test/api/store-1/shipment/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+      { params: { storeId: "store-1" } },
+    );
+    const json = await response.json();
+    expect(json).toMatchObject({ cached: true, quotes: cachedQuotes });
+    expect(mocks.quoteShipment).not.toHaveBeenCalled();
+    expect(prisma.shippingQuote.findUnique.mock.calls[0][0].where.quoteCacheKey).toMatchObject({ isCOD: true, codAmount: 50000, declaredValue: 52000, codFreeShipping: false });
+  });
+
+  it("otro recaudo o envío gratis es otra fila de la caché", async () => {
+    mocks.threshold.value = 40000;
+    await POST(request(true, { amountBeforeShipping: 48000, productSubtotal: 50000 }), { params: { storeId: "store-1" } });
+    expect(mocks.upsert.mock.calls[0][0].where.quoteCacheKey).toMatchObject({ isCOD: true, codAmount: 48000, codFreeShipping: true });
   });
 });
 

@@ -77,7 +77,7 @@ import {
   redeemGiftCardForOrder,
 } from "@/lib/gift-cards";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import { recordCodOrderInGoogleAnalytics, recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { runInBackground } from "@/lib/background";
 import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { createGuideInBackground } from "@/lib/guide-background";
@@ -1082,6 +1082,9 @@ async function createCheckout(
         console.log(
           `✅ ${payment.method} payment selected - returning order details directly for client handling.`,
         );
+        if (payment.method === PaymentMethod.COD && !isStoreOwner) {
+          runInBackground("compra contra entrega en GA4", () => recordCodOrderInGoogleAnalytics(order.id));
+        }
         return NextResponse.json(order, { headers: corsHeaders });
       }
 

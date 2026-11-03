@@ -211,7 +211,7 @@ describe("caja de la tienda con preventa con anticipo", () => {
     expect(response.status).toBe(200);
 
     const order = await latestOrder();
-    expect(order).toMatchObject({ status: OrderStatus.PENDING, paymentPlan: OrderPaymentPlan.DEPOSIT, depositAmount: UNIT_DEPOSIT * 2, preorderTermsVersion: TERMS, paidAt: null });
+    expect(order).toMatchObject({ status: OrderStatus.PENDING, paymentPlan: OrderPaymentPlan.DEPOSIT, depositAmount: UNIT_DEPOSIT * 2, preorderTermsVersion: TERMS, paidAt: null, salesChannel: null });
     expect(order.total).toBe(UNIT_PRICE * 2);
     expect(order.shipping?.cost ?? 0).toBe(0);
     expect(order.orderItems).toEqual([expect.objectContaining({ productId: calendarId, quantity: 2, isPreorder: true, presaleId })]);

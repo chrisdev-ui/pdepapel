@@ -80,6 +80,12 @@ interface ShippingInfoStepProps {
   freeShipping?: boolean;
   /** Preventa con anticipo: solo la dirección; el envío se cotiza y se cobra con el saldo. */
   depositPresale?: boolean;
+  /**
+   * True while the rates for the current city/cart are on their way. The form
+   * holds «Continuar al pago» meanwhile, so the customer never sees «Elige una
+   * transportadora» for a rate that is still loading.
+   */
+  onQuotingChange?: (quoting: boolean) => void;
 }
 
 const MEDELLIN_AREA_CITIES = [
@@ -128,6 +134,7 @@ export const ShippingInfoStep = ({
   amountBeforeShipping,
   freeShipping = false,
   depositPresale = false,
+  onQuotingChange,
 }: ShippingInfoStepProps) => {
   const { getToken, isLoaded: isAuthLoaded, userId } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -226,15 +233,16 @@ export const ShippingInfoStep = ({
       canFetchQuotes
         ? getShippingQuoteKey({
             daneCode: selectedDaneCode,
-            address: address1,
             orderTotal,
+            amountBeforeShipping: amountBeforeShipping ?? orderTotal,
+            isCOD: true,
             items: cartItems.map((item) => ({
               productId: item.id,
               quantity: item.quantity,
             })),
           })
         : null,
-    [address1, canFetchQuotes, cartItems, orderTotal, selectedDaneCode],
+    [amountBeforeShipping, canFetchQuotes, cartItems, orderTotal, selectedDaneCode],
   );
   const debouncedQuoteKey = useDebounce(quoteKey, 600);
   const requestedKeyRef = useRef<string | null>(null);
@@ -267,8 +275,9 @@ export const ShippingInfoStep = ({
         data,
         getShippingQuoteKey({
           daneCode: variables.destination.daneCode,
-          address: variables.destination.address,
           orderTotal: variables.orderTotal,
+          amountBeforeShipping: variables.amountBeforeShipping,
+          isCOD: Boolean(variables.isCOD),
           items: variables.items,
         }),
       );
@@ -317,7 +326,7 @@ export const ShippingInfoStep = ({
     isShippingQuoteFresh(storedQuoteFetchedAt);
 
   // Quotes are fetched as soon as city + address are complete (debounced),
-  // and again whenever the address or the cart changes.
+  // and again whenever the city or the cart changes (not the street address).
   useEffect(() => {
     if (shippingOptionType !== "ENVIOCLICK") return;
     if (!debouncedQuoteKey || debouncedQuoteKey !== quoteKey) return;
@@ -334,6 +343,21 @@ export const ShippingInfoStep = ({
     requestQuotes,
     shippingOptionType,
   ]);
+
+  // A failed request for this same key is an answer (the error box with
+  // «Volver a calcular»), not a wait; anything else without matching rates is.
+  const quoteFailedForCurrentKey = Boolean(quoteError) && requestedKeyRef.current === quoteKey;
+  const isQuoting =
+    shippingOptionType === "ENVIOCLICK" &&
+    Boolean(quoteKey) &&
+    (isLoadingQuotes || (!quotesMatchCurrentAddress && !quoteFailedForCurrentKey));
+
+  useEffect(() => {
+    onQuotingChange?.(isQuoting);
+    if (isQuoting) form.clearErrors("envioClickIdRate");
+  }, [form, isQuoting, onQuotingChange]);
+
+  useEffect(() => () => onQuotingChange?.(false), [onQuotingChange]);
 
   const groupedQuotes = useMemo(
     () =>
@@ -757,6 +781,7 @@ export const ShippingInfoStep = ({
                         href={buildWhatsAppUrl({ pageType: "general" })}
                         target="_blank"
                         rel="noopener noreferrer"
+                        data-ui-source="checkout_city_not_found"
                         className="font-semibold text-blue-yankees underline underline-offset-4"
                       >
                         ¿No aparece? Escríbenos por WhatsApp
@@ -1220,7 +1245,13 @@ export const ShippingInfoStep = ({
                     ? "Mostramos una tarifa por transportadora, la más barata. La tarifa se mantiene si eliges pago contra entrega."
                     : null}
                 </FormDescription>
-                <FormMessage reserveSpace />
+                {isQuoting ? (
+                  <p className="min-h-5 text-sm text-muted-foreground" role="status" data-testid="shipping-quoting">
+                    Calculando envío…
+                  </p>
+                ) : (
+                  <FormMessage reserveSpace />
+                )}
               </FormItem>
             )}
           />

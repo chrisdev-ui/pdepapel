@@ -59,7 +59,8 @@ import {
   describeDeletionBlock,
 } from "@/lib/order-transitions";
 import { round2 } from "@/lib/order-totals";
-import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import { buildCodRefundBody, recordCancelledCodOrderInGoogleAnalytics, recordPaidOrderInGoogleAnalytics, sendGoogleAnalyticsRefund } from "@/lib/google-analytics";
+import { parseSalesChannel } from "@/lib/order-sales-channel";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { autoAdoptOrphanGuide } from "@/lib/orphan-guides";
 import { getInPersonOrderGuard } from "@/lib/in-person-orders";
@@ -237,6 +238,8 @@ export async function PATCH(
       internalNotes,
       expiresAt,
     } = body;
+    // Canal de la clienta: opcional al editar (para completar pedidos viejos); solo se toca si viene un valor válido.
+    const salesChannel = parseSalesChannel(body?.salesChannel);
     // Regalo: solo se toca cuando el cuerpo trae la bandera; un PATCH que
     // no habla de regalo (cambio de estado, guía) deja lo guardado intacto.
     const notifyCustomer = parseNotifyCustomer(body);
@@ -894,6 +897,7 @@ export async function PATCH(
           ...(type && { type }),
           adminNotes,
           internalNotes,
+          ...(salesChannel ? { salesChannel } : {}),
           ...(gift ?? {}),
           expiresAt,
           payment: payment && {
@@ -1248,6 +1252,14 @@ export async function PATCH(
       }
     }
 
+    if (
+      originalStatus !== OrderStatus.CANCELLED &&
+      updatedOrder.status === OrderStatus.CANCELLED
+    ) {
+      // Contra entrega con la compra ya en GA4: el reembolso, sin frenar la respuesta.
+      runInBackground("reembolso contra entrega en GA4", () => recordCancelledCodOrderInGoogleAnalytics(updatedOrder.id));
+    }
+
     // Número de guía escrito a mano que es el de una guía hecha en
     // envioclick.com: la guía se adopta sola (estado, seguimiento, avisos).
     let adoptedGuide: Awaited<ReturnType<typeof autoAdoptOrphanGuide>> = null;
@@ -1357,6 +1369,10 @@ export async function DELETE(
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
     await verifyStoreOwner(userId, params.storeId);
+
+    // Contra entrega con la compra ya en GA4: el reembolso se arma antes de
+    // borrar (después no queda fila que leer) y sale solo si el borrado pasa.
+    const codRefund = await buildCodRefundBody(params.orderId, { beforeDelete: true }).catch(() => null);
 
     let deletedProductIds: string[] = [];
     const order = await prismadb.$transaction(async (tx) => {
@@ -1479,6 +1495,10 @@ export async function DELETE(
 
     // Sin esto la tienda seguia mostrando el stock viejo tras la devolucion.
     await invalidateStoreProductsCache(params.storeId, { productIds: deletedProductIds });
+
+    if (codRefund) {
+      runInBackground("reembolso contra entrega en GA4 (pedido borrado)", () => sendGoogleAnalyticsRefund(codRefund));
+    }
 
     // Borrar un pedido no manda correo: el pedido ya no existe para armarlo.
     // La cancelación con aviso a la clienta es el cambio de estado a

@@ -70,6 +70,7 @@ describe("quotation decommission with MySQL", () => {
         ...customer,
         type: OrderType.CUSTOM,
         status: OrderStatus.DRAFT,
+        salesChannel: "WHATSAPP",
         daysValid: 5,
         orderItems: [{ productId: fixture.component.id, quantity: 1 }],
       }),

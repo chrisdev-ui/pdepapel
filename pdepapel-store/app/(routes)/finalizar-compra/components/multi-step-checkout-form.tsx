@@ -345,6 +345,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     return Math.min(Math.max(stored, 1), CHECKOUT_TOTAL_STEPS);
   });
   const [isNavigating, setIsNavigating] = useState(false);
+  // Set by the shipping step while the rates for the current city are loading.
+  const [isQuotingShipping, setIsQuotingShipping] = useState(false);
+  const isWaitingForShippingRates = currentStep === 2 && isQuotingShipping;
   const [isPreparingSubmit, setIsPreparingSubmit] = useState(false);
   const [completedOrderPath, setCompletedOrderPath] = useState<string | null>(
     null,
@@ -769,6 +772,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   const handleNext = async () => {
     if (isNavigating) return;
+    // The button is disabled meanwhile; this also covers a tap that lands in the same frame.
+    if (currentStep === 2 && isQuotingShipping) return;
     setIsNavigating(true);
     try {
       // Tapping the button blurs the last field, which starts its own
@@ -1778,6 +1783,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           amountBeforeShipping={Math.max(0, subtotal - couponDiscount)}
                           freeShipping={freeShipping}
                           depositPresale={depositMode}
+                          onQuotingChange={setIsQuotingShipping}
                         />
                       )}
                       {currentStep === 3 && (
@@ -1830,9 +1836,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       onNext={handleNext}
                       onBack={handleBack}
                       isNextDisabled={
-                        currentStep === FORM_STEPS.length &&
-                        (stockConflicts.length > 0 || (depositMode && !preorderTermsAccepted))
+                        (currentStep === FORM_STEPS.length &&
+                          (stockConflicts.length > 0 || (depositMode && !preorderTermsAccepted))) ||
+                        isWaitingForShippingRates
                       }
+                      nextPendingLabel={isWaitingForShippingRates ? "Calculando envío…" : undefined}
                       isLoading={isPendingSubmit || isNavigating}
                       submitLabel={submitLabel}
                       footnote={
@@ -1882,10 +1890,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               disabled={
                 isPendingSubmit ||
                 isNavigating ||
+                isWaitingForShippingRates ||
                 (currentStep === FORM_STEPS.length &&
                   (stockConflicts.length > 0 || (depositMode && !preorderTermsAccepted)))
               }
-              aria-busy={isPendingSubmit || undefined}
+              aria-busy={isPendingSubmit || isWaitingForShippingRates || undefined}
               className="ml-auto h-12 shrink-0 rounded-full px-6 text-base font-semibold"
               onClick={() => {
                 if (currentStep === FORM_STEPS.length) {
@@ -1895,7 +1904,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 }
               }}
             >
-              {isPendingSubmit ? (
+              {isPendingSubmit || isWaitingForShippingRates ? (
                 <Loader2
                   aria-hidden="true"
                   className="mr-2 h-4 w-4 animate-spin"
@@ -1907,7 +1916,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 ? submitLabel
                 : currentStep === 1
                   ? "Continuar a entrega"
-                  : "Continuar al pago"}
+                  : isWaitingForShippingRates
+                    ? "Calculando envío…"
+                    : "Continuar al pago"}
             </Button>
           </div>
         </div>

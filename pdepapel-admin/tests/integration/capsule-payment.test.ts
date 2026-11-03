@@ -161,7 +161,7 @@ describe("pagar un pack de cápsulas", () => {
     expect((await patchMany(request("PATCH", { ids: [bulk.id], status: OrderStatus.PAID }), { params: { storeId: f.store.id } })).status).toBe(200);
     await expect(capsuleState(bulk.id)).resolves.toMatchObject({ order: { status: OrderStatus.PAID }, capsule: { provisionalCost: 20000 }, slot: { status: CapsuleDailySlotStatus.CONFIRMED } });
 
-    const created = await POST(request("POST", { ...capsuleCheckoutBody(editionProduct.id, 5), status: OrderStatus.PAID, type: OrderType.STANDARD }), { params: { storeId: f.store.id } });
+    const created = await POST(request("POST", { ...capsuleCheckoutBody(editionProduct.id, 5), status: OrderStatus.PAID, type: OrderType.STANDARD, salesChannel: "WHATSAPP" }), { params: { storeId: f.store.id } });
     expect(created.status).toBe(200);
     const createdId = ((await created.json()) as { id: string }).id;
     await expect(capsuleState(createdId)).resolves.toMatchObject({ order: { status: OrderStatus.PAID, totalProductCost: 20000 }, capsule: { provisionalCost: 20000 }, slot: { status: CapsuleDailySlotStatus.CONFIRMED } });

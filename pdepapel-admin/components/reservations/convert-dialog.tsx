@@ -1,9 +1,11 @@
 "use client";
 
+import type { OrderSalesChannel } from "@prisma/client";
 import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { SalesChannelChips } from "@/components/orders/sales-channel-chips";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { currencyFormatter } from "@/lib/utils";
@@ -34,9 +36,11 @@ export function ConvertReservationDialog({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [salesChannel, setSalesChannel] = useState<OrderSalesChannel | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setSalesChannel(null);
     let cancelled = false;
     setPreview(null);
     setError(null);
@@ -55,7 +59,7 @@ export function ConvertReservationDialog({
     setSaving(true);
     setError(null);
     try {
-      const { data } = await axios.post(`/api/${storeId}/stock-reservations/${reservationId}/convert`);
+      const { data } = await axios.post(`/api/${storeId}/stock-reservations/${reservationId}/convert`, { salesChannel });
       onConverted(String(data.orderId));
     } catch (cause) {
       setError(axios.isAxiosError(cause) && typeof cause.response?.data?.error === "string" ? cause.response.data.error : "No se creó el pedido. Intenta de nuevo.");
@@ -96,6 +100,10 @@ export function ConvertReservationDialog({
               <span className="tabular-nums">{currencyFormatter(preview.total)}</span>
             </p>
             <p className="text-xs text-muted-foreground">Pago: {preview.payment}. El correo, la dirección y el envío se completan en el pedido.</p>
+            <p id="convert-sales-channel-label" className="mt-2 font-medium">
+              ¿Por dónde llegó la clienta? *
+            </p>
+            <SalesChannelChips value={salesChannel} onChange={setSalesChannel} labelledBy="convert-sales-channel-label" disabled={saving} />
           </div>
         ) : null}
         {error && (
@@ -107,7 +115,7 @@ export function ConvertReservationDialog({
           <Button type="button" variant="outline" className="min-h-11" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
-          <Button type="button" className="min-h-11" onClick={confirm} disabled={saving || loading || !preview}>
+          <Button type="button" className="min-h-11" onClick={confirm} disabled={saving || loading || !preview || !salesChannel}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             Crear el pedido
           </Button>

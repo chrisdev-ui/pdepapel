@@ -94,6 +94,7 @@ test.describe("pedido de cápsulas en el panel", () => {
     // La dueña registra el pedido (sin pagar): toma un cupo apartado.
     const created = await page.request.post(new URL(`/api/${storeId}/orders`, baseURL).toString(), {
       data: {
+        salesChannel: "WHATSAPP",
         fullName: "Mariana Gómez",
         phone: "3001234567",
         email: "mariana@ejemplo.test",
@@ -162,6 +163,7 @@ test.describe("pedido de cápsulas en el panel", () => {
     await expect(page.getByTestId("cupos-de-hoy")).toBeVisible({ timeout: 90_000 });
     const created = await page.request.post(new URL(`/api/${storeId}/orders`, baseURL).toString(), {
       data: {
+        salesChannel: "WHATSAPP",
         fullName: "Laura Pineda",
         phone: "3001234567",
         email: "laura@ejemplo.test",

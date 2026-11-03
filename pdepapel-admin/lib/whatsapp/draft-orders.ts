@@ -1,4 +1,4 @@
-import { OrderSource, OrderStatus, OrderType, type Prisma } from "@prisma/client";
+import { OrderSalesChannel, OrderSource, OrderStatus, OrderType, type Prisma } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
@@ -112,6 +112,7 @@ export async function createWhatsAppDraftOrder(input: DraftInput): Promise<Draft
         type: OrderType.STANDARD,
         status: OrderStatus.DRAFT,
         source: OrderSource.WHATSAPP,
+        salesChannel: OrderSalesChannel.WHATSAPP,
         createdBy: input.createdBy,
         fullName,
         // Sin teléfono visible (clienta con nombre de usuario) queda vacío: Paula lo completa al confirmar.

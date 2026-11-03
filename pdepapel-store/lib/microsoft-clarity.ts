@@ -32,6 +32,7 @@ const TRACKED_CLARITY_EVENTS = new Set([
   "shipping_quote_succeeded",
   "view_cart",
   "view_item",
+  "whatsapp_click",
   "view_item_list",
 ]);
 

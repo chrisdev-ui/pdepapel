@@ -20,7 +20,8 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { qualifiesForFreeShipping } from "@/lib/order-totals";
 import { priceLines } from "@/lib/product-pricing";
-import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId } from "@/lib/google-analytics";
+import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId, recordCancelledCodOrderInGoogleAnalytics, recordCodOrderInGoogleAnalytics, recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import { parseSalesChannel } from "@/lib/order-sales-channel";
 import { screenStoreOrder } from "@/lib/order-intake";
 import { FRAUD_REASON_CODE, withRiskReason } from "@/lib/order-risk";
 import { normalizePhone } from "@/lib/phone";
@@ -85,6 +86,7 @@ import {
   ShippingProvider,
   ShippingStatus,
   OrderType,
+  OrderSalesChannel,
   OrderSource,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -154,6 +156,8 @@ type OrderData = {
   analyticsConsent?: boolean | null;
   /** Lo fija el servidor según quién crea el pedido; del cuerpo nunca se lee. */
   source?: OrderSource;
+  /** Por dónde llegó la clienta: del cuerpo solo cuando crea la dueña. */
+  salesChannel?: OrderSalesChannel | null;
   // Regalo: quien recibe (quien compra sigue en email/fullName/phone).
   isGift?: GiftFields["isGift"];
   giftRecipientName?: GiftFields["giftRecipientName"];
@@ -238,6 +242,8 @@ async function createOrder(
     } = body;
     let normalizedPhone = normalizePhone(phone);
     const gift = normalizeGiftFields(body as Record<string, unknown>);
+    // Por dónde llegó la clienta: obligatorio en un pedido creado en el panel; la tienda en línea no lo manda (su canal es la tienda).
+    const salesChannel = isStoreOwner ? parseSalesChannel(body?.salesChannel) : null;
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
@@ -296,6 +302,11 @@ async function createOrder(
           ? "Este producto está en preventa con anticipo: anota el anticipo desde su lista de espera con «Marcar anticipo recibido»."
           : DEPOSIT_PRESALE_ALONE_MESSAGE,
       );
+    }
+
+    // After the guards above, so their more specific messages still win.
+    if (isStoreOwner && !salesChannel) {
+      throw ErrorFactory.InvalidRequest("Elige por dónde llegó la clienta: WhatsApp, Instagram, TikTok, Presencial, Feria u Otro.");
     }
 
     // Strict validation for Active Orders (CREATED, PENDING, PAID, SENT)
@@ -799,6 +810,7 @@ async function createOrder(
         ...gift,
         createdBy: isStoreOwner ? userLogged : null,
         source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
+        salesChannel,
         ...orderLegalConsentData({ isStoreOwner, legalConsent: body?.legalConsent }),
         ...orderWhatsAppOptInData({ isStoreOwner, whatsappOptIn: body?.whatsappOptIn }),
         ...(normalizedAnalyticsClientId
@@ -1040,6 +1052,10 @@ async function createOrder(
           // Consider implementing a retry mechanism or queue system
         }
       });
+      // Contra entrega: la compra va a GA4 al crearse (con consentimiento), no al cobrarse.
+      if (payment?.method === PaymentMethod.COD) {
+        runInBackground("compra contra entrega en GA4", () => recordCodOrderInGoogleAnalytics(order.id));
+      }
     }
 
     return NextResponse.json(
@@ -1677,6 +1693,22 @@ export async function PATCH(
     for (const issued of issuedGiftCards) {
       const buyer = result.find((row) => row.id === issued.card.purchaseOrderId);
       await deliverGiftCard(issued, { buyerName: buyer?.fullName ?? null });
+    }
+
+    // GA4, igual que el cambio de estado en la página del pedido: pagado manda
+    // la compra (o, en contra entrega ya medida, solo borra los ids) y
+    // cancelado manda el reembolso de contra entrega. Cada uno se protege solo.
+    if (status === OrderStatus.PAID || status === OrderStatus.CANCELLED) {
+      const orderIds = result.map((order) => order.id);
+      runInBackground("GA4 de la actualización masiva", async () => {
+        await Promise.allSettled(
+          orderIds.map((orderId) =>
+            status === OrderStatus.PAID
+              ? recordPaidOrderInGoogleAnalytics(orderId)
+              : recordCancelledCodOrderInGoogleAnalytics(orderId),
+          ),
+        );
+      });
     }
 
     if (!notifyCustomer) {

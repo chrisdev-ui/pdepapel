@@ -146,6 +146,7 @@ describe("garantías de un borrador de WhatsApp", () => {
 
     const other = await testPrisma.conversation.create({ data: { storeId: f.store.id, bsuid: `CO.garantias-${Date.now()}`, username: "otra_clienta_garantias" } });
     const byButton = await draftByButton(other.id);
+    await expect(testPrisma.order.findMany({ where: { id: { in: [byCommand, byButton] } }, select: { salesChannel: true } })).resolves.toEqual([{ salesChannel: "WHATSAPP" }, { salesChannel: "WHATSAPP" }]);
 
     // Paula lo llena: productos, ciudad y dirección, sin confirmar.
     for (const orderId of [byCommand, byButton]) {

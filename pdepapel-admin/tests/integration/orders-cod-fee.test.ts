@@ -245,7 +245,7 @@ describe("recaudo contra entrega en POST /orders (MySQL)", () => {
   it("panel: guarda el recaudo de su cotización y lo quita al pasar a transferencia", async () => {
     const f = await setup();
     session.userId = f.store.userId;
-    const response = await post({ ...storeOrder(f, { cost: FREIGHT, codFee: 7000 }, price + FREIGHT + 7000), guestId: undefined, status: "PENDING" });
+    const response = await post({ ...storeOrder(f, { cost: FREIGHT, codFee: 7000 }, price + FREIGHT + 7000), guestId: undefined, status: "PENDING", salesChannel: "WHATSAPP" });
     expect(response.status).toBe(200);
     const order = await saved(response);
     expect(order).toMatchObject({ total: price + FREIGHT + 7000, shipping: { codFee: 7000, cost: FREIGHT } });

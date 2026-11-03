@@ -143,6 +143,7 @@ describe("fair event flow with MySQL", () => {
     });
 
     expect(sale.duplicate).toBe(false);
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id }, select: { salesChannel: true } })).resolves.toEqual({ salesChannel: "FERIA" });
     expect(duplicateSale).toMatchObject({
       duplicate: true,
       order: { id: sale.order.id },

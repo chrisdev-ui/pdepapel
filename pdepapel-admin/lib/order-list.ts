@@ -1,4 +1,6 @@
-import { OrderStatus, OrderType, ShippingStatus, type Prisma } from "@prisma/client";
+import { OrderSalesChannel, OrderSource, OrderStatus, OrderType, ShippingStatus, type Prisma } from "@prisma/client";
+
+import type { SalesReportChannel } from "@/lib/order-sales-channel";
 import { UNFULFILLED_PRESALE_LINE, UNRELEASED_PRESALE_LINE } from "@/lib/presale-hold";
 
 import {
@@ -79,29 +81,52 @@ export function parseAmount(word: string): number | null {
   return Number.isSafeInteger(value) ? value : null;
 }
 
+/** The same rule as `reportChannelOf`, as a query: the chosen channel, else what the writing system implies. */
+const IMPLIED_BY_SOURCE: Partial<Record<SalesReportChannel, OrderSource>> = {
+  TIENDA: OrderSource.STORE,
+  WHATSAPP: OrderSource.WHATSAPP,
+  PRESENCIAL: OrderSource.POS,
+  FERIA: OrderSource.FAIR,
+};
+
+export function orderOriginWhere(origin: SalesReportChannel): Prisma.OrderWhereInput {
+  if (origin === "SIN_REGISTRAR") {
+    return {
+      salesChannel: null,
+      OR: [{ source: null }, { source: { notIn: [OrderSource.STORE, OrderSource.WHATSAPP, OrderSource.POS, OrderSource.FAIR] } }],
+    };
+  }
+  const implied = IMPLIED_BY_SOURCE[origin];
+  if (origin === "TIENDA") return { salesChannel: null, source: implied };
+  return implied
+    ? { OR: [{ salesChannel: origin as OrderSalesChannel }, { salesChannel: null, source: implied }] }
+    : { salesChannel: origin as OrderSalesChannel };
+}
+
 /** Canal, fecha y búsqueda van en la consulta; las pestañas se resuelven con las reglas de las colas. */
 export function orderListWhere(storeId: string, filters: OrderListFilters, search: string, now = new Date()): Prisma.OrderWhereInput {
   const where: Prisma.OrderWhereInput = { storeId };
   if (filters.channel) where.type = { in: CHANNEL_TYPES[filters.channel] };
+  // The origin goes in AND so it can carry its own OR next to the search words.
+  const originClause = filters.origin ? [orderOriginWhere(filters.origin)] : [];
   const range = getOrderDateRange(filters.date, now);
   if (range) where.createdAt = { gte: range.start, lte: range.end };
   const words = search.replace(/\$\s*/g, "").split(/\s+/).filter(Boolean).slice(0, 5);
-  if (words.length) {
-    where.AND = words.map((word) => {
-      const amount = parseAmount(word);
-      return {
-        OR: [
-          ...(amount !== null ? [{ total: amount }, { orderNumber: { contains: String(amount) } }] : []),
-          { orderNumber: { contains: word } },
-          { fullName: { contains: word } },
-          { phone: { contains: word } },
-          { documentId: { contains: word } },
-          { orderItems: { some: { name: { contains: word } } } },
-          { orderItems: { some: { product: { name: { contains: word } } } } },
-        ],
-      };
-    });
-  }
+  const wordClauses: Prisma.OrderWhereInput[] = words.map((word) => {
+    const amount = parseAmount(word);
+    return {
+      OR: [
+        ...(amount !== null ? [{ total: amount }, { orderNumber: { contains: String(amount) } }] : []),
+        { orderNumber: { contains: word } },
+        { fullName: { contains: word } },
+        { phone: { contains: word } },
+        { documentId: { contains: word } },
+        { orderItems: { some: { name: { contains: word } } } },
+        { orderItems: { some: { product: { name: { contains: word } } } } },
+      ],
+    };
+  });
+  if (originClause.length || wordClauses.length) where.AND = [...originClause, ...wordClauses];
   return where;
 }
 

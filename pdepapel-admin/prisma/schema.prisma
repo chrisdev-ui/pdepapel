@@ -1233,11 +1233,15 @@ model Order {
   paidAt    DateTime?
 
   // Analytics attribution is optional and is captured only after visitor consent.
-  // The client ID is cleared once the server-side purchase event is confirmed.
+  // The client ID is cleared at the order's last analytics event: the paid
+  // purchase, or for cash on delivery (purchase sent at creation) the refund
+  // of a cancellation or the payment on delivery.
   analyticsClientId          String?   @db.VarChar(128)
   /// session_id de GA4 al hacer el pedido; sin él la compra por Measurement Protocol cae en «Unassigned».
   analyticsSessionId         String?   @db.VarChar(32)
   analyticsPurchaseTrackedAt DateTime?
+  /// Contra entrega cancelado antes de entregar: el `refund` de GA4 ya salió. Una sola vez, aunque el pedido se reactive.
+  analyticsRefundTrackedAt   DateTime?
   // Sólo el sí o el no, para poder medir cuántas ventas pagadas quedan fuera
   // de GA4. De quien no acepta no se guarda nada más.
   analyticsConsent           Boolean?
@@ -1288,11 +1292,13 @@ model Order {
   riskReasons String? @db.Text
 
   // Sender Info
-  createdBy String? // Admin User ID
+  createdBy    String? // Admin User ID
   /**
    * Canal que originó el pedido; `null` en los pedidos anteriores a 2026-09-13.
    */
-  source    OrderSource?
+  source       OrderSource?
+  /// Por dónde llegó la clienta (no qué sistema escribió el pedido): lo elige la dueña al crear un pedido en el panel; WhatsApp, punto de venta y ferias lo ponen solos. Null en los de la tienda en línea y en los anteriores a 2026-11-13.
+  salesChannel OrderSalesChannel?
 
   /// Prueba de consentimiento (Ley 1581): versiones que la frase encima del botón de pago mostró y hora del servidor. Solo el checkout de la tienda; null en todo lo demás.
   legalTermsVersion    String?              @db.VarChar(20)
@@ -1798,23 +1804,29 @@ model ShippingTrackingEvent {
 }
 
 model ShippingQuote {
-  id             String   @id @default(uuid())
-  storeId        String
-  originDaneCode String // Código DANE origen
-  destDaneCode   String // Código DANE destino
-  weight         Float // Peso en kg
-  declaredValue  Float // Valor declarado
-  height         Float?
-  width          Float?
-  length         Float?
-  quotesData     Json // Array completo de rates
-  expiresAt      DateTime
-  hitCount       Int      @default(0) // Cuántas veces se usó
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  store          Store    @relation("StoreToShippingQuotes", fields: [storeId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid())
+  storeId         String
+  originDaneCode  String // Código DANE origen
+  destDaneCode    String // Código DANE destino
+  weight          Float // Peso en kg
+  declaredValue   Float // Valor declarado (prepagado: redondeado a mil; contra entrega: exacto)
+  /// Contra entrega: el recaudo y el envío gratis cambian la tarifa, así que la fila es otra.
+  isCOD           Boolean  @default(false)
+  /// Contra entrega: el pedido sin envío (después del cupón) sobre el que se calcula el recaudo; 0 en prepagado.
+  codAmount       Int      @default(0)
+  /// Contra entrega: el pedido tenía envío gratis cuando se cotizó.
+  codFreeShipping Boolean  @default(false)
+  height          Float?
+  width           Float?
+  length          Float?
+  quotesData      Json // Array completo de rates
+  expiresAt       DateTime
+  hitCount        Int      @default(0) // Cuántas veces se usó
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  store           Store    @relation("StoreToShippingQuotes", fields: [storeId], references: [id], onDelete: Cascade)
 
-  @@unique([storeId, originDaneCode, destDaneCode, weight, declaredValue])
+  @@unique([storeId, originDaneCode, destDaneCode, weight, declaredValue, isCOD, codAmount, codFreeShipping], name: "quoteCacheKey", map: "ShippingQuote_quote_cache_key")
   @@index([storeId])
   @@index([expiresAt])
   @@index([storeId, originDaneCode, destDaneCode])
@@ -3493,6 +3505,16 @@ enum OrderSource {
   POS
   /// Feria.
   FAIR
+}
+
+/// Por dónde llegó la clienta de un pedido (Order.salesChannel), para contar ventas por canal.
+enum OrderSalesChannel {
+  WHATSAPP
+  INSTAGRAM
+  TIKTOK
+  PRESENCIAL
+  FERIA
+  OTRO
 }
 
 /// Un hilo con una clienta en un canal: una fila por (tienda, canal, teléfono normalizado).

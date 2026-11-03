@@ -115,7 +115,7 @@ describe("gift card purchase and issuance with MySQL", () => {
     const order = await buy(fixture.store.id);
 
     const stored = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { orderItems: true, shipping: true, payment: true, giftCardPurchase: true } });
-    expect(stored).toMatchObject({ type: OrderType.GIFT_CARD, status: OrderStatus.PENDING, total: 100000, email: "luisa@prueba.test", giftRecipientName: "Mariana López" });
+    expect(stored).toMatchObject({ type: OrderType.GIFT_CARD, status: OrderStatus.PENDING, total: 100000, email: "luisa@prueba.test", giftRecipientName: "Mariana López", salesChannel: null });
     expect(stored.shipping).toBeNull();
     expect(stored.giftCardPurchase).toBeNull();
     expect(stored.orderItems).toHaveLength(1);

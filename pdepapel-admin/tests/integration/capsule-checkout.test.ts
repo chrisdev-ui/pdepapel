@@ -43,7 +43,7 @@ let f: InventoryFixture | undefined;
 const post = async (route: "checkout" | "orders", body: Record<string, unknown>) => {
   const { POST } = route === "checkout" ? await import("@/app/api/[storeId]/checkout/route") : await import("@/app/api/[storeId]/orders/route");
   return POST(
-    new Request("http://admin.test/api/x", { method: "POST", headers: { "content-type": "application/json", Origin: "https://papeleriapdepapel.com" }, body: JSON.stringify(body) }),
+    new Request("http://admin.test/api/x", { method: "POST", headers: { "content-type": "application/json", Origin: "https://papeleriapdepapel.com" }, body: JSON.stringify(route === "orders" ? { salesChannel: "WHATSAPP", ...body } : body) }),
     { params: { storeId: f!.store.id } },
   );
 };

@@ -10,6 +10,7 @@ import { Models } from "@/constants";
 import { DEFAULT_ORDER_VIEW, ORDER_VIEWS, isOrderView, type OrderView } from "@/lib/order-queues";
 import {
   ORDER_CHANNEL_FILTERS,
+  ORDER_ORIGIN_FILTERS,
   ORDER_DATE_FILTERS,
   colombiaDay,
   hasActiveListFilters,
@@ -198,6 +199,22 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
 
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center" aria-label="Filtrar pedidos">
         <Select
+          value={filters.origin ?? "todos"}
+          onValueChange={(value) => setFilters({ ...filters, origin: value === "todos" ? null : (value as OrderListFilters["origin"]) })}
+        >
+          <SelectTrigger className="h-9 w-full rounded-full bg-white lg:w-52" aria-label="Origen">
+            <SelectValue placeholder="Origen" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Cualquier origen</SelectItem>
+            {ORDER_ORIGIN_FILTERS.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
           value={filters.channel ?? "todos"}
           onValueChange={(value) => setFilters({ ...filters, channel: value === "todos" ? null : (value as OrderListFilters["channel"]) })}
         >
@@ -263,7 +280,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
           </div>
         )}
         {filtering && (
-          <Button variant="ghost" size="sm" className="self-start lg:self-auto" onClick={() => setFilters({ channel: null, date: { kind: "todas" } })}>
+          <Button variant="ghost" size="sm" className="self-start lg:self-auto" onClick={() => setFilters({ channel: null, origin: null, date: { kind: "todas" } })}>
             <X className="h-4 w-4" aria-hidden="true" />
             Quitar filtros
           </Button>
@@ -293,7 +310,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
             ? {
                 title: "Ningún pedido con estos filtros",
                 description: "Prueba con otra fecha o con todos los canales.",
-                action: <Button variant="outline" onClick={() => setFilters({ channel: null, date: { kind: "todas" } })}>Quitar filtros</Button>,
+                action: <Button variant="outline" onClick={() => setFilters({ channel: null, origin: null, date: { kind: "todas" } })}>Quitar filtros</Button>,
               }
             : view === "todos"
             ? { title: "Aún no hay pedidos", description: "Crea el primero o registra una venta presencial.", action: <Button asChild><Link href={`/${storeId}/pedidos/nuevo`}>Nuevo pedido</Link></Button> }

@@ -110,6 +110,7 @@ describe("comandos que crean cosas (C2)", () => {
       expect(order).toMatchObject({
         status: OrderStatus.DRAFT,
         source: "WHATSAPP",
+        salesChannel: "WHATSAPP",
         draftOrigin: "whatsapp_command",
         draftAgreedAmount: 30000,
         phone: `+57${PHONE_TAIL}`,

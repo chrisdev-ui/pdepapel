@@ -197,7 +197,7 @@ describe("guías de EnvioClick sin pedido", () => {
     const response = await POST(
       new Request("http://admin.test/api/x", { method: "POST", headers: { "content-type": "application/json", Origin: "https://papeleriapdepapel.com" }, body: JSON.stringify({
         fullName: "Clienta WhatsApp", phone: "+573001234567", email: "clienta@prueba.test", address: "Calle 1 # 2-3", city: "Tuluá", department: "Valle del Cauca", daneCode: "76834000",
-        type: OrderType.STANDARD, status: OrderStatus.PAID,
+        type: OrderType.STANDARD, status: OrderStatus.PAID, salesChannel: "WHATSAPP",
         orderItems: [{ productId: f.component.id, quantity: 1 }],
         payment: { method: PaymentMethod.BankTransfer },
         shipping: { provider: "ENVIOCLICK", envioClickIdRate: 123, carrierName: "ENVIA", cost: 9000 },

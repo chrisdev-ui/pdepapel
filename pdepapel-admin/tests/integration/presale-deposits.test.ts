@@ -256,6 +256,7 @@ describe("preventa con anticipo", () => {
     const order = await orderOf(orderId);
     expect(order).toMatchObject({ status: OrderStatus.DEPOSIT_PAID, paymentPlan: OrderPaymentPlan.DEPOSIT, depositAmount: UNIT_DEPOSIT, total: UNIT_PRICE, source: OrderSource.PANEL, paidAt: null });
     expect(order.payments[0]).toMatchObject({ kind: OrderPaymentKind.DEPOSIT, status: OrderPaymentStatus.APPROVED, method: PaymentMethod.BankTransfer });
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { salesChannel: true } })).resolves.toEqual({ salesChannel: "WHATSAPP" });
     expect((await testPrisma.preorderWaitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })).status).toBe(PreorderWaitlistStatus.CONVERTED);
     expect(emails.order).not.toHaveBeenCalled();
     const skipped = await testPrisma.orderNotification.findMany({ where: { orderId } });

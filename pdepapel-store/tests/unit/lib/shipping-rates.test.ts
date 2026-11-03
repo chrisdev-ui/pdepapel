@@ -65,19 +65,18 @@ describe("groupShippingQuotes", () => {
 });
 
 describe("getShippingQuoteKey", () => {
-  it("es estable ante el orden de los productos y mayúsculas en la dirección", () => {
+  const base = { daneCode: "05001000", orderTotal: 3000, isCOD: true, items: [{ productId: "a", quantity: 1 }] };
+
+  it("es estable ante el orden de los productos y el redondeo del total", () => {
     const a = getShippingQuoteKey({
-      daneCode: "05001000",
-      address: "Calle 123 # 45-67",
-      orderTotal: 3000,
+      ...base,
       items: [
         { productId: "b", quantity: 1 },
         { productId: "a", quantity: 2 },
       ],
     });
     const b = getShippingQuoteKey({
-      daneCode: "05001000",
-      address: "  CALLE 123 # 45-67 ",
+      ...base,
       orderTotal: 3000.4,
       items: [
         { productId: "a", quantity: 2 },
@@ -87,13 +86,18 @@ describe("getShippingQuoteKey", () => {
     expect(a).toBe(b);
   });
 
-  it("cambia cuando cambia la cantidad", () => {
-    const base = { daneCode: "05001000", address: "x", orderTotal: 1 };
-    expect(
-      getShippingQuoteKey({ ...base, items: [{ productId: "a", quantity: 1 }] }),
-    ).not.toBe(
-      getShippingQuoteKey({ ...base, items: [{ productId: "a", quantity: 2 }] }),
-    );
+  it("no depende de la dirección: corregir «Apto 101» no invalida la tarifa elegida", () => {
+    // The key has no address input at all; this pins that a caller cannot add it back by accident.
+    expect(getShippingQuoteKey.length).toBe(1);
+    expect(getShippingQuoteKey(base)).not.toMatch(/calle|carrera|apto/i);
+  });
+
+  it("cambia con la ciudad, la cantidad, el recaudo y el tipo de cobro", () => {
+    const key = getShippingQuoteKey(base);
+    expect(getShippingQuoteKey({ ...base, daneCode: "11001000" })).not.toBe(key);
+    expect(getShippingQuoteKey({ ...base, items: [{ productId: "a", quantity: 2 }] })).not.toBe(key);
+    expect(getShippingQuoteKey({ ...base, amountBeforeShipping: 2500 })).not.toBe(key);
+    expect(getShippingQuoteKey({ ...base, isCOD: false })).not.toBe(key);
   });
 });
 

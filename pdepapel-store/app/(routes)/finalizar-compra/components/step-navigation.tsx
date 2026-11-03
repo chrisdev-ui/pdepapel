@@ -15,6 +15,8 @@ interface StepNavigationProps {
   /** Label shown while the order is being created. */
   loadingLabel?: string;
   nextLabel?: string;
+  /** Next is waiting on something the customer cannot speed up (e.g. shipping rates): spinner + this text. */
+  nextPendingLabel?: string;
   backLabel?: string;
   className?: string;
   /** Small print under the buttons (what happens next). */
@@ -40,6 +42,7 @@ export const StepNavigation = forwardRef<HTMLDivElement, StepNavigationProps>(
       submitLabel = "Confirmar pedido",
       loadingLabel = "Creando tu pedido…",
       nextLabel,
+      nextPendingLabel,
       backLabel,
       className,
       footnote,
@@ -87,11 +90,19 @@ export const StepNavigation = forwardRef<HTMLDivElement, StepNavigationProps>(
                 onNext?.();
               }
             }}
-            disabled={isNextDisabled || isLoading}
-            aria-busy={isLoading || undefined}
+            disabled={isNextDisabled || isLoading || Boolean(nextPendingLabel)}
+            aria-busy={isLoading || Boolean(nextPendingLabel) || undefined}
             className="group relative h-12 w-full overflow-hidden rounded-full bg-primary px-7 text-base font-semibold shadow-lg transition-[transform,box-shadow,background-color] duration-300 hover:scale-[1.02] hover:shadow-primary/40 motion-reduce:transform-none sm:ml-auto sm:w-auto"
           >
-            {isLoading ? (
+            {nextPendingLabel && !isLoading ? (
+              <>
+                <Loader2
+                  aria-hidden="true"
+                  className="mr-2 h-4 w-4 animate-spin"
+                />
+                {nextPendingLabel}
+              </>
+            ) : isLoading ? (
               <>
                 <Loader2
                   aria-hidden="true"

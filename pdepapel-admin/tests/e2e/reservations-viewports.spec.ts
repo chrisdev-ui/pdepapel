@@ -209,6 +209,9 @@ test.describe("reservas en distintos tamaños", () => {
         await expect(summary).toContainText("Libreta reservas E2E");
         await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-6-resumen.png`) });
         const detailUrl = page.url();
+        // Sin canal no se crea: «Crear el pedido» espera a que se elija por dónde llegó la clienta.
+        await expect(page.getByRole("button", { name: "Crear el pedido" })).toBeDisabled();
+        await page.getByRole("radio", { name: "WhatsApp" }).click();
         await page.getByRole("button", { name: "Crear el pedido" }).click();
         await page.waitForURL(new RegExp(`/${storeId}/pedidos/[^/?]+$`), { timeout: 120_000 });
         await expect(page.getByText("Libreta reservas E2E").first()).toBeVisible({ timeout: 90_000 });

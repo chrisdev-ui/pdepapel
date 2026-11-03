@@ -1,6 +1,6 @@
-import { METRIC_KEYS, SOURCES, sourceOfKey } from "./metrics-schema.mjs";
+import { METRIC_KEYS, SCRIPT_SOURCES, SOURCES, sourceOfKey } from "./metrics-schema.mjs";
 
-const COLLECTED_SOURCES = new Set(Object.keys(SOURCES).filter((key) => key !== "capa2"));
+const COLLECTED_SOURCES = new Set(Object.keys(SOURCES).filter((key) => !SCRIPT_SOURCES.has(key)));
 const isNum = (v) => v === null || v === undefined || (typeof v === "number" && Number.isFinite(v));
 
 /** Hard errors reject the file; unknown metric keys are dropped with a warning so one typo doesn't lose a source. */

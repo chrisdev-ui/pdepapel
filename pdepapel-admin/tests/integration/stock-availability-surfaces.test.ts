@@ -139,7 +139,7 @@ describe("lo apartado no se vende en ninguna superficie (MySQL)", () => {
 
     // Pedido del panel (pendiente): la misma regla.
     session.userId = fixture.store.userId;
-    const panelOrder = (quantity: number) => post({ ...storeBody(fixture!, quantity), guestId: null, status: "PENDING" });
+    const panelOrder = (quantity: number) => post({ ...storeBody(fixture!, quantity), guestId: null, status: "PENDING", salesChannel: "WHATSAPP" });
     expect((await orders(panelOrder(5), params)).status).toBeGreaterThanOrEqual(400);
     expect((await orders(panelOrder(4), params)).status).toBe(200);
     await expect(validateStockAvailability(testPrisma, [{ productId: fixture.component.id, quantity: 4 }])).resolves.toBeUndefined();
