@@ -26,6 +26,14 @@ mkdir -p "$OUT/logs"
 LOG="$OUT/logs/semanal-$DATE.claude.json"
 echo "=== monitoreo semanal $DATE $(date '+%H:%M:%S %Z') · repo $REPO"
 
+# 0) A copy behind origin/main (or edited) on monitoring files would run last week's rules: push and stop.
+#    The token is loaded only into this one process.
+(cd "$STORE_DIR" && "$NODE" --env-file-if-exists="$SCRIPT_DIR/.env" scripts/monitoring/checkout-guard.mjs --weekly)
+if [[ $? -eq 3 ]]; then
+  echo "=== fin $(date '+%H:%M:%S %Z'): copia desactualizada, no corrí la revisión semanal"
+  exit 3
+fi
+
 wait_for_daily_lock() {
   local waited=0
   while [[ -d "$OUT/.lock-diario" && $waited -lt 1200 ]]; do sleep 15; waited=$((waited + 15)); done
@@ -64,8 +72,8 @@ ALLOWED=(
   "mcp__claude-in-chrome__tabs_context_mcp" "mcp__claude-in-chrome__tabs_create_mcp" "mcp__claude-in-chrome__tabs_close_mcp"
   "mcp__claude-in-chrome__navigate" "mcp__claude-in-chrome__get_page_text" "mcp__claude-in-chrome__read_page"
   "mcp__claude-in-chrome__find" "mcp__claude-in-chrome__computer"
-  "mcp__plugin_vercel_vercel__list_projects" "mcp__plugin_vercel_vercel__get_project"
-  "mcp__plugin_vercel_vercel__list_deployments" "mcp__plugin_vercel_vercel__get_deployment"
+  # Team and project ids come from weekly-context (`vercel`), so no list_teams/list_projects.
+  "mcp__plugin_vercel_vercel__list_deployments"
   "mcp__plugin_vercel_vercel__get_runtime_errors" "mcp__plugin_vercel_vercel__get_runtime_logs"
 )
 # Reads inside the checkout are implicitly allowed, so env files need explicit denies.
@@ -80,7 +88,7 @@ DISALLOWED=(
 #    these scripts and the /monitoreo-semanal command; output still lands in the main checkout's output/.
 cd "${STORE_DIR:h}" || exit 2
 BEFORE=$(git status --porcelain)
-"$CLAUDE_BIN" -p "/monitoreo-semanal $DATE" \
+MONITOREO_HEADLESS=1 "$CLAUDE_BIN" -p "/monitoreo-semanal $DATE" \
   --model "$MODEL" \
   --chrome --no-session-persistence --add-dir "$OUT" \
   --permission-mode dontAsk --permission-prompts none \
@@ -105,14 +113,11 @@ if [[ "$AFTER" != "$BEFORE" ]]; then
   osascript -e 'display notification "La revisión semanal cambió archivos del repositorio. Revisa git status." with title "P de Papel · monitoreo"' 2>/dev/null
 fi
 
-# 4) Compile from whatever was collected. If Claude already compiled and notified, recompiling is idempotent; only notify here when it did not.
+# 4) Compile from whatever was collected (idempotent if Claude already compiled) and notify, always from here:
+#    the push token is loaded only into this process, never into the headless review.
 cd "$STORE_DIR" || exit 2
 RUN_STATS=$("$NODE" -e 'try { const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log([d.total_cost_usd ?? "-", Math.round((d.duration_ms ?? 0) / 60000), d.num_turns ?? "-"].join(" ")); } catch { console.log("- - -"); }' "$LOG")
 read -r RUN_COST RUN_MINUTES RUN_TURNS <<< "$RUN_STATS"
 RUN_ARGS=(--run-model "$MODEL" --run-cost "$RUN_COST" --run-minutes "$RUN_MINUTES" --run-turns "$RUN_TURNS" --run-exit "$CLAUDE_CODE")
-if [[ -f "$OUT/$DATE.md" && $CLAUDE_CODE -eq 0 ]]; then
-  "$NODE" scripts/monitoring/weekly-report.mjs --date "$DATE" --no-notify "${RUN_ARGS[@]}"
-else
-  "$NODE" scripts/monitoring/weekly-report.mjs --date "$DATE" "${RUN_ARGS[@]}"
-fi
+"$NODE" --env-file-if-exists="$SCRIPT_DIR/.env" scripts/monitoring/weekly-report.mjs --date "$DATE" --notify "${RUN_ARGS[@]}"
 echo "=== fin $(date '+%H:%M:%S %Z')"

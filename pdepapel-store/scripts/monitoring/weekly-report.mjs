@@ -3,9 +3,10 @@
  * Compiles the weekly report from what the review collected:
  *   raw/<date>/<source>.json   one per source: {source, ok, error, metrics:{key:{current,previous}}, details:[tables], notes:[]}
  *   raw/<date>/findings.json   {summary:{mejoro,empeoro,roto,vigilar,accion1}, findings:[...]}
- * Writes output/monitoreo/<date>.md, upserts history.json and notifies.
+ * Writes output/monitoreo/<date>.md and upserts history.json. Notifies only with --notify:
+ * run-weekly.sh passes it after Claude exits, with the push token loaded only into that process.
  *
- *   node pdepapel-store/scripts/monitoring/weekly-report.mjs [--date YYYY-MM-DD] [--no-notify]
+ *   node pdepapel-store/scripts/monitoring/weekly-report.mjs [--date YYYY-MM-DD] [--notify]
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +20,8 @@ import { collectMetrics, detailTables, historyEntry, metricsTable, rankFindings,
 
 const args = process.argv.slice(2);
 const date = args.includes("--date") ? args[args.indexOf("--date") + 1] : bogotaDate();
-const NOTIFY = !args.includes("--no-notify");
+// The headless review compiles but never notifies, even if it passes --notify.
+const NOTIFY = args.includes("--notify") && process.env.MONITOREO_HEADLESS !== "1";
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const num = (value) => (value !== undefined && value !== "-" && Number.isFinite(Number(value)) ? Number(value) : null);
 // Filled by run-weekly.sh after the Claude run ends; a compile from inside the run has none yet.

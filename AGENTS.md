@@ -185,6 +185,10 @@ A local, scheduled, **read-only** monitor of the public store runs on Christian'
   - Analytics requests are aborted, so the monitor never inflates GA4, Clarity, TikTok or Vercel Analytics.
   - Metric keys in `lib/metrics-schema.mjs` are stable: add keys, never rename them.
   - The headless review may write only under `output/monitoreo/`, through `save-raw.mjs`. `run-weekly.sh` alerts if `git status` changes during a run.
+  - launchd runs the **main checkout's** copy of the scripts and command. Both wrappers start with `checkout-guard.mjs`. If that copy is missing `origin/main` commits that touch the monitoring files, or has local edits to them:
+    - The weekly review does not run. It pushes «Monitoreo: la copia principal está desactualizada (git pull)» and exits 3.
+    - The daily check still runs, but its result carries `warnings`.
+  - The weekly push is sent only by `run-weekly.sh` after Claude exits (`weekly-report.mjs --notify`, token loaded with `--env-file-if-exists` into that process only). No process the headless review launches gets `MONITOREO_PUSH_TOKEN`.
 - **Headless Chrome needs:** Chrome running (the wrapper opens it in the background), the Claude extension connected, and the Mac awake. launchd runs a missed slot at the next wake, and skips it if the Mac was shut down.
 
 ## Agent skills

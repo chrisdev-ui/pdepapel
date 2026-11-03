@@ -24,6 +24,21 @@ launchctl kickstart -k gui/$(id -u)/com.pdepapel.monitoreo-diario  # correr ya (
 
 El horario es la hora del Mac (America/Bogota). Si el Mac está dormido a la hora, launchd corre el trabajo una vez al despertar. Si está apagado, esa corrida se pierde.
 
+### La copia principal tiene que estar al día
+
+launchd corre los scripts y el comando `/monitoreo-semanal` del checkout principal, no de `origin/main`. El 2026-11-03 la revisión semanal corrió con las reglas de la semana anterior porque esa copia no se había actualizado. Por eso los dos wrappers empiezan con `checkout-guard.mjs`:
+
+- Hace `git fetch origin main` y revisa los archivos del monitoreo: `pdepapel-store/scripts/monitoring/`, `.claude/commands/monitoreo-semanal.md` y `pdepapel-admin/scripts/monitoring-sales-by-channel.ts`.
+- La copia está **desactualizada** si le faltan commits de `origin/main` que tocan esos archivos, o si alguno tiene cambios locales. Los commits que no tocan el monitoreo no cuentan, así que la copia puede estar en una rama de trabajo.
+- **Semanal:** si está desactualizada, no corre la revisión. Manda el aviso «Monitoreo: la copia principal está desactualizada (git pull)» por macOS y Web Push y sale con código 3.
+- **Diaria:** corre igual, porque solo lee la tienda pública, pero el resultado (`diario/<fecha>.json`, campo `warnings`) y el log llevan el aviso.
+- Si `git fetch` falla (sin red), compara contra el último `origin/main` conocido y lo dice en el log.
+
+Arreglo, en el checkout principal:
+- En `main`: `git pull`.
+- En una rama de trabajo: traer `origin/main` a esa rama. Un `git pull` ahí solo trae la rama misma.
+- Si eso trae cambios al esquema: `npx prisma generate` en `pdepapel-admin`.
+
 ## Correr a mano
 
 ```bash
@@ -53,13 +68,14 @@ Siempre en `output/monitoreo/` del checkout principal (gitignored), aunque el sc
 - `claude -p --chrome` maneja Chrome sin sesión interactiva (probado el 2026-11-01 con Claude Code 2.1.316). Necesita Chrome abierto con la extensión de Claude conectada y las sesiones de los paneles iniciadas. El wrapper abre Chrome en segundo plano si está cerrado.
 - **Permisos:** `--permission-mode dontAsk` con una lista corta de herramientas:
   - Chrome: leer, navegar, clic y pestañas propias. Sin `javascript_tool` ni formularios.
-  - Vercel MCP: solo lectura.
+  - Vercel MCP: solo `list_deployments`, `get_runtime_errors` y `get_runtime_logs`. Los ids del equipo y de los dos proyectos llegan en el bloque `vercel` de `weekly-context.mjs` (`lib/context.mjs`), así que la revisión no necesita `list_teams` (sin ese permiso, la fuente falló el 2026-11-03).
   - `Read` y `Edit` limitados a `output/monitoreo/**`. Las lecturas dentro del checkout siguen permitidas de forma implícita, así que los `.env*` se niegan explícitamente (probado: `.env.example` queda denegado).
   - Tres comandos `node` exactos.
   - Todo lo demás se niega solo.
 - **Escritura de datos:** Claude escribe un borrador `raw/<fecha>/<fuente>.draft.json` y corre `save-raw.mjs --date … --source …`. Ese script valida la forma, descarta claves desconocidas y oculta correos y teléfonos. Ningún JSON viaja dentro de un comando de shell: el comparador de prefijos rechaza comandos con `$` o comillas.
 - **Escrituras bajo `~/.claude`:** Claude Code las niega en modo headless (carpeta sensible). Por eso la salida no puede vivir ahí.
-- **Números:** `weekly-report.mjs` arma la tabla, los porcentajes, las tendencias y los avisos. Si una fuente falla, sale como «falló: motivo» y sin números. No se estima nada.
+- **Números:** `weekly-report.mjs` arma la tabla, los porcentajes y las tendencias. Si una fuente falla, sale como «falló: motivo» y sin números. No se estima nada.
+- **Aviso semanal:** solo lo manda `run-weekly.sh`, después de que Claude termina. Corre `weekly-report.mjs --notify` con `node --env-file-if-exists=scripts/monitoring/.env`, de modo que el token de Web Push vive solo en ese proceso. La revisión de Claude corre con `MONITOREO_HEADLESS=1`: ahí el compilador nunca avisa, aunque reciba `--notify`. `psi-run.mjs`, que sí lanza Claude, carga del `.env` solo `PSI_API_KEY`.
 - **Alarma de cambios:** si `git status` cambia durante la revisión, el wrapper avisa. Esto detecta, no previene. La prevención es la lista de permisos.
 - **Tiempo:** `MONITOREO_TIMEOUT_MIN` (90 por defecto) corta la corrida. El compilador corre igual con lo que se alcanzó a recolectar.
 
@@ -80,7 +96,7 @@ Siempre en `output/monitoreo/` del checkout principal (gitignored), aunque el sc
 
 - **Autorización:** `Authorization: Bearer <MONITOREO_PUSH_SECRET>`. La variable va en Vercel, proyecto del panel, solo Production, con 32 caracteres o más. Sin ella la ruta responde 404.
 - **Lo que manda:** solo título (≤ 80) y texto (≤ 240). El enlace del aviso lo fija el servidor al panel.
-- **En el Mac:** el mismo valor va en `MONITOREO_PUSH_TOKEN` de `pdepapel-store/scripts/monitoring/.env`. Sin él, solo hay avisos de macOS.
+- **En el Mac:** el mismo valor va en `MONITOREO_PUSH_TOKEN` de `pdepapel-store/scripts/monitoring/.env`. Sin él, solo hay avisos de macOS. Lo leen el chequeo diario, `checkout-guard.mjs --weekly` y el compilador final de `run-weekly.sh`; nunca un proceso que lance la revisión de Claude.
 
 ### Cuenta de solo lectura para el monitoreo
 

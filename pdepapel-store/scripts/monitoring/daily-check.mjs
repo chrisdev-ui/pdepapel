@@ -28,6 +28,8 @@ const argValue = (name) => {
 };
 const BASE_URL = (argValue("--base-url") || process.env.MONITOREO_BASE_URL || "https://papeleriapdepapel.com").replace(/\/$/, "");
 const NOTIFY = !args.includes("--no-notify");
+// Set by run-daily.sh from checkout-guard.mjs: the check still runs, the result carries the warning.
+const CHECKOUT_WARNING = process.env.MONITOREO_CHECKOUT_WARNING?.trim() || null;
 const STORE_HOST = new URL(BASE_URL).hostname;
 
 // Consent-gated providers. Vercel Web Analytics is cookieless and loads for everyone, so it is
@@ -270,7 +272,12 @@ async function checkCartAndCheckout(browser, productCandidates) {
     if (!addedFrom) return;
 
     await page.goto(`${BASE_URL}/carrito`, { waitUntil: "load", timeout: 45_000 });
-    const summary = await page.getByText("Resumen del pedido").first().isVisible({ timeout: 10_000 }).catch(() => false);
+    // isVisible() ignores its timeout and answers at once; the summary renders after hydration.
+    const summary = await page
+      .getByRole("heading", { name: "Resumen del pedido" })
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
     addCheck("carrito:resumen", summary, { error: summary ? undefined : "el carrito no muestra «Resumen del pedido» con un producto" });
 
     await page.goto(`${BASE_URL}/finalizar-compra`, { waitUntil: "load", timeout: 45_000 });
@@ -421,11 +428,13 @@ async function main() {
       vitalsNote: "Laboratorio local sin limitar red ni CPU: solo sirve para comparar día contra día.",
       psi,
       checks,
+      warnings: CHECKOUT_WARNING ? [CHECKOUT_WARNING] : [],
     };
     const file = path.join(dailyDir, `${today}.json`);
     writeJson(file, result);
     console.log(`\nResultado: ${file}`);
     console.log(`Fallas: ${failures.length}, regresiones: ${regressions.length}`);
+    if (CHECKOUT_WARNING) console.log(`AVISO en el resultado: ${CHECKOUT_WARNING}`);
 
     const issueKeys = [...failures.map((id) => `falla:${id}`), ...regressions.map((r) => `regresion:${r.id}:${r.metric}`)];
     if (NOTIFY && issueKeys.length) {

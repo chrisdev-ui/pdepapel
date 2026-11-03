@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 
 export const MONITORING_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const STORE_DIR = path.resolve(MONITORING_DIR, "../..");
@@ -25,10 +26,19 @@ export function ensureDir(dir) {
   return dir;
 }
 
-/** Loads scripts/monitoring/.env (gitignored) without ever printing a value. */
-export function loadLocalEnv() {
-  const file = path.join(MONITORING_DIR, ".env");
-  if (fs.existsSync(file)) process.loadEnvFile(file);
+/**
+ * Loads scripts/monitoring/.env (gitignored) without ever printing a value. With `keys`, only those:
+ * scripts the headless review launches (psi-run) must not carry the push token.
+ * @param {string[] | null} [keys]
+ * @param {string} [file]
+ */
+export function loadLocalEnv(keys = null, file = path.join(MONITORING_DIR, ".env")) {
+  if (!fs.existsSync(file)) return;
+  const values = parseEnv(fs.readFileSync(file, "utf8"));
+  for (const [key, value] of Object.entries(values)) {
+    if (keys && !keys.includes(key)) continue;
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
 }
 
 export function bogotaDate(date = new Date()) {

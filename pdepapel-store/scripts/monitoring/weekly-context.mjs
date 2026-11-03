@@ -9,7 +9,7 @@
 import path from "node:path";
 
 import { bogotaDate, ensureDir, outputDir, readJson, weekWindows, writeJson } from "./lib/common.mjs";
-import { deploysInWindow, knownEvents } from "./lib/context.mjs";
+import { VERCEL, deploysInWindow, knownEvents } from "./lib/context.mjs";
 import { METRICS, SOURCES } from "./lib/metrics-schema.mjs";
 
 const args = process.argv.slice(2);
@@ -78,6 +78,7 @@ const context = {
     admin: "https://admin.papeleriapdepapel.com/",
     pagespeed: "Run: node pdepapel-store/scripts/monitoring/psi-run.mjs --date <today> --paths / <top product> <category> /carrito",
   },
+  vercel: VERCEL,
   knownEvents: knownEvents([windows.previous[0], windows.today]),
   deploys: deploysInWindow([windows.previous[0], windows.current[1]]),
   history: (readJson(path.join(out, "history.json"), { weeks: [] }).weeks ?? []).slice(-4).map((w) => ({ weekEnding: w.weekEnding, sources: w.sources })),

@@ -13,7 +13,7 @@ import path from "node:path";
 import { bogotaDate, loadLocalEnv, outputDir, readJson, writeJson } from "./lib/common.mjs";
 import { runPsi } from "./lib/psi.mjs";
 
-loadLocalEnv();
+loadLocalEnv(["PSI_API_KEY"]);
 const args = process.argv.slice(2);
 const date = args.includes("--date") ? args[args.indexOf("--date") + 1] : bogotaDate();
 const start = args.indexOf("--paths");

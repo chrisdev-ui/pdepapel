@@ -4,6 +4,19 @@ import path from "node:path";
 
 import { MONITORING_DIR, mainCheckoutRoot, outputDir, readJson } from "./common.mjs";
 
+/**
+ * Same ids as each app's .vercel/project.json (not secrets). `tools` must match the Vercel entries
+ * in run-weekly.sh's ALLOWED list; a test compares them.
+ */
+export const VERCEL = {
+  teamId: "team_KCRyaMNhGNjeVkOf6Np3CWIQ",
+  projects: {
+    store: { projectId: "prj_UHwsq67ho0pDb5krrcgcdPTl5aaV", name: "pdepapel-store" },
+    admin: { projectId: "prj_wKAeHsPDbtW1nO6aDpNXXsM5gqJR", name: "pdepapel-admin" },
+  },
+  tools: ["list_deployments", "get_runtime_errors", "get_runtime_logs"],
+};
+
 const overlaps = (event, [from, to]) => event.start <= to && (event.end ?? "9999-12-31") >= from;
 
 export function knownEvents(window) {
