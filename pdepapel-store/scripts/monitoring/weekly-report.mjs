@@ -15,13 +15,13 @@ import { median } from "./lib/baseline.mjs";
 import { bogotaDate, outputDir, readJson, scrubDeep, scrubText, weekWindows, writeJson } from "./lib/common.mjs";
 import { dailyResults, deploysInWindow, knownEvents } from "./lib/context.mjs";
 import { SOURCES } from "./lib/metrics-schema.mjs";
-import { notifyAll } from "./lib/notify.mjs";
+import { notifyAll, shouldNotifyWeekly } from "./lib/notify.mjs";
 import { collectMetrics, detailTables, historyEntry, metricsTable, rankFindings, upsertHistory } from "./lib/report.mjs";
 
 const args = process.argv.slice(2);
 const date = args.includes("--date") ? args[args.indexOf("--date") + 1] : bogotaDate();
 // The headless review compiles but never notifies, even if it passes --notify.
-const NOTIFY = args.includes("--notify") && process.env.MONITOREO_HEADLESS !== "1";
+const NOTIFY = shouldNotifyWeekly(args);
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const num = (value) => (value !== undefined && value !== "-" && Number.isFinite(Number(value)) ? Number(value) : null);
 // Filled by run-weekly.sh after the Claude run ends; a compile from inside the run has none yet.

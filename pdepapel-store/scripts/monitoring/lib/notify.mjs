@@ -58,6 +58,16 @@ export async function notifyWebPush({ title, body, tag }, fetchImpl = fetch) {
   }
 }
 
+/**
+ * El informe semanal solo avisa con `--notify` y nunca dentro de la revisión headless de Claude
+ * (`MONITOREO_HEADLESS=1`): el aviso lo manda run-weekly.sh con el token cargado solo en ese proceso.
+ * @param {string[]} args
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function shouldNotifyWeekly(args, env = process.env) {
+  return args.includes("--notify") && env.MONITOREO_HEADLESS !== "1";
+}
+
 export async function notifyAll(message) {
   const results = await Promise.all([notifyMac(message.title, message.body), notifyWebPush(message)]);
   return results;

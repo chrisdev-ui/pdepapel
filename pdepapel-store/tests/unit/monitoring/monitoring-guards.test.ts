@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MONITORING_PATHS, STALE_TITLE, assessCheckout, inspectCheckout } from "@/scripts/monitoring/lib/checkout-guard.mjs";
 import { loadLocalEnv } from "@/scripts/monitoring/lib/common.mjs";
 import { VERCEL } from "@/scripts/monitoring/lib/context.mjs";
+import { shouldNotifyWeekly } from "@/scripts/monitoring/lib/notify.mjs";
 
 const MONITORING = path.resolve(__dirname, "../../../scripts/monitoring");
 const read = (file: string) => fs.readFileSync(path.join(MONITORING, file), "utf8");
@@ -115,18 +115,15 @@ describe("monitoreo: el token de Web Push nunca llega a la revisión de Claude",
     expect(weekly).not.toMatch(/^export MONITOREO_PUSH_TOKEN/m);
   });
 
+  // Sin lanzar el compilador como proceso: tres arranques bajo cobertura pasaban de 30 s en CI (2026-11-03).
   it("el compilador solo avisa con --notify y nunca dentro de la revisión headless", () => {
-    const out = fs.mkdtempSync(path.join(os.tmpdir(), "monitoreo-out-"));
-    created.push(out);
-    const run = (extraArgs: string[], extraEnv: Record<string, string>) => {
-      const env: NodeJS.ProcessEnv = { ...process.env, MONITOREO_DIR: out, MONITOREO_NO_MAC_NOTIFY: "1", ...extraEnv };
-      delete env.MONITOREO_PUSH_TOKEN;
-      return execFileSync(process.execPath, [path.join(MONITORING, "weekly-report.mjs"), "--date", "2026-11-03", ...extraArgs], { env, encoding: "utf8" });
-    };
-    expect(run([], {})).not.toContain("Avisos:");
-    expect(run(["--notify"], { MONITOREO_HEADLESS: "1" })).not.toContain("Avisos:");
-    expect(run(["--notify"], {})).toContain("Avisos:");
-  }, 30_000);
+    expect(shouldNotifyWeekly([], {})).toBe(false);
+    expect(shouldNotifyWeekly(["--notify"], { MONITOREO_HEADLESS: "1" })).toBe(false);
+    expect(shouldNotifyWeekly(["--notify"], {})).toBe(true);
+    const report = read("weekly-report.mjs");
+    expect(report).toContain("const NOTIFY = shouldNotifyWeekly(args);");
+    expect(report).toMatch(/if \(NOTIFY\) \{[\s\S]{0,200}notifyAll\(/);
+  });
 
   it("el comando semanal no le pide a Claude que avise", () => {
     const command = fs.readFileSync(path.resolve(__dirname, "../../../../.claude/commands/monitoreo-semanal.md"), "utf8");
