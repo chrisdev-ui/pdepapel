@@ -16,7 +16,7 @@ describe("Términos y condiciones", () => {
   it("tiene sus secciones en orden, la fecha y ningún marcador sin llenar", () => {
     const { container } = render(<TermsPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Términos y condiciones de P de Papel" })).toBeInTheDocument();
-    expect(screen.getByText("29 de octubre de 2026")).toBeInTheDocument();
+    expect(screen.getByText("3 de noviembre de 2026")).toBeInTheDocument();
     const article = container.querySelector("article") ?? container;
     const titles = within(article as HTMLElement).getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(titles.slice(0, 14)).toEqual([
@@ -46,6 +46,17 @@ describe("Términos y condiciones", () => {
       expect(hrefs).toContain(route);
     }
     expect(container.querySelector("#peticiones-quejas-reclamos")).not.toBeNull();
+  });
+
+  // 2026-11-03: cápsulas en combos para lives y la tienda; rango aprobado por Paula.
+  it("dice qué trae una cápsula sorpresa: rango de precio, sin escoger y la regla del agotado", () => {
+    const { container } = render(<TermsPage />);
+    const text = container.querySelector("#productos-precios")!.textContent!.replace(/\s+/g, " ");
+    expect(text).toContain("Las cápsulas sorpresa se venden en combos desde 5 cápsulas, al precio que ves en cada combo.");
+    expect(text).toContain("Cada cápsula trae un papel con el nombre de un producto sorpresa de la tienda, con un precio en la tienda de entre $5.000 y $35.000.");
+    expect(text).toContain("No se puede escoger el contenido y puede repetirse entre cápsulas.");
+    expect(text).toContain("Si el producto de tu papel se agotó, te enviamos otro de igual o mayor precio y te avisamos cuál.");
+    expect(text).toContain("Las ediciones de cápsulas de /capsulas tienen además las condiciones que aparecen en su página.");
   });
 
   it("tiene la sección de preventas con anticipo que enlaza el checkout (#preventas)", () => {

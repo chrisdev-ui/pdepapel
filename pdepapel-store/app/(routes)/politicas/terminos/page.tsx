@@ -69,8 +69,15 @@ const sections: PolicySection[] = [
           incluyen o qué puedes esperar recibir.
         </p>
         <p>
-          Las cápsulas sorpresa tienen sus condiciones en la página de cada
-          edición (<Link href={STOREFRONT_ROUTES.capsules}>/capsulas</Link>).
+          Las cápsulas sorpresa se venden en combos desde 5 cápsulas, al precio
+          que ves en cada combo. Cada cápsula trae un papel con el nombre de un
+          producto sorpresa de la tienda, con un precio en la tienda de entre
+          $5.000 y $35.000. No se puede escoger el contenido y puede
+          repetirse entre cápsulas. Si el producto de tu papel se agotó, te
+          enviamos otro de igual o mayor precio y te avisamos cuál. Las
+          ediciones de cápsulas de{" "}
+          <Link href={STOREFRONT_ROUTES.capsules}>/capsulas</Link> tienen además
+          las condiciones que aparecen en su página.
         </p>
       </>
     ),

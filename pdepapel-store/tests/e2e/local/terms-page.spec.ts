@@ -48,7 +48,7 @@ for (const viewport of [
     await page.waitForURL("**/politicas/terminos");
 
     await expect(page.getByRole("heading", { level: 1, name: "Términos y condiciones de P de Papel" })).toBeVisible();
-    await expect(page.getByText("28 de octubre de 2026").first()).toBeVisible();
+    await expect(page.getByText("3 de noviembre de 2026").first()).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Reversión del pago" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Preventas y anticipos" })).toBeVisible();
     await expect(page.locator("link[rel=canonical]")).toHaveAttribute("href", /\/politicas\/terminos$/);

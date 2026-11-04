@@ -6,7 +6,7 @@
  * contra ella lo que llega del checkout y del registro.
  */
 export const LEGAL_VERSIONS = {
-  terms: "2026-10-29",
+  terms: "2026-11-03",
   privacy: "2026-10-26",
 } as const;
 
