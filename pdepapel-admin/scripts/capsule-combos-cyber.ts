@@ -9,7 +9,9 @@
  *
  * Stock según la urna (todos los canales venden los mismos combos): disponibles = urna − cápsulas ya comprometidas en
  * pedidos de combos (pendientes o pagados) − cápsulas vendidas fuera del sistema (`--fuera-de-sistema`, lives y
- * WhatsApp que aún no están en el panel; 0 cuando ya estén) − 10 % de margen. Se reparten con más peso en x5–x7 y al menos 1 por combo,
+ * WhatsApp que no se van a registrar; 0 cuando ya estén) − cápsulas de pedidos que Paula va a registrar en el panel
+ * (`--por-registrar 7:2,10:1`: se apartan en el stock final como un pendiente, para que al pagarse no se descuenten
+ * dos veces) − 10 % de margen. Se reparten con más peso en x5–x7 y al menos 1 por combo,
  * con Σ(stock × N) ≤ disponibles. El stock final de cada combo suma además las unidades de sus pedidos pendientes, que
  * se descuentan al pagarse; los pagados ya se descontaron. El ajuste va por `createInventoryMovement`
  * (MANUAL_ADJUSTMENT, referencia edicion-cyber-2026-11-03:<SKU>), nunca escribiendo la columna. Paula recarga un combo
@@ -85,6 +87,16 @@ async function main() {
   // Obligatorio aunque sea 0: ventas de lives/WhatsApp que todavía no están en el panel y ya salieron de la urna.
   const offline = numberArg("--fuera-de-sistema");
   if (!Number.isInteger(offline) || offline < 0) throw new Error("falta --fuera-de-sistema <cápsulas vendidas que no están en el panel> (0 si ya están todas).");
+  // Pedidos ya vendidos que Paula va a registrar en el panel (guía, pago): «7:2,10:1». Se apartan como un pendiente.
+  const toRegisterIndex = process.argv.indexOf("--por-registrar");
+  const toRegister = new Map<number, number>();
+  if (toRegisterIndex >= 0) {
+    for (const part of (process.argv[toRegisterIndex + 1] ?? "").split(",").filter(Boolean)) {
+      const [n, qty] = part.split(":").map(Number);
+      if (!COMBOS.some(([, size]) => size === n) || !Number.isInteger(qty) || qty < 1) throw new Error(`--por-registrar: «${part}» no es «tamaño:cantidad» de un combo.`);
+      toRegister.set(n, (toRegister.get(n) ?? 0) + qty);
+    }
+  }
   const viaProdWrite = process.env.PROD_WRITE_APPROVED === "1";
   if (apply && !viaProdWrite) throw new Error("--apply solo corre con `npm run prod:write -- …/capsule-combos-cyber.ts --apply --expect new`.");
   if (viaProdWrite && process.env.PROD_WRITE_EXPECT !== "new") throw new Error("este guion solo escribe en la base nueva (--expect new).");
@@ -141,7 +153,8 @@ async function main() {
     const committedCapsules = committed.reduce((sum, row) => sum + row.capsulas, 0);
     const pendingUnits = new Map<string, number>();
     for (const row of committed) if (!row.pagado) pendingUnits.set(row.productId, (pendingUnits.get(row.productId) ?? 0) + row.cantidad);
-    const available = Math.floor((urn - committedCapsules - offline) * (1 - MARGIN));
+    const toRegisterCapsules = Array.from(toRegister).reduce((sum, [n, qty]) => sum + n * qty, 0);
+    const available = Math.floor((urn - committedCapsules - offline - toRegisterCapsules) * (1 - MARGIN));
     const split = splitCapsules(available, COMBOS.map(([, n]) => n));
 
     const done = await db.inventoryMovement.findMany({ where: { storeId: STORE_ID, referenceId: { startsWith: `${REFERENCE}:` } }, select: { referenceId: true } });
@@ -149,13 +162,14 @@ async function main() {
     const stockPlan = COMBOS.map(([sku, n]) => {
       const product = products.find((row) => row.sku === sku)!;
       const pending = pendingUnits.get(product.id) ?? 0;
-      const target = split.get(n)! + pending;
-      return { id: product.id, sku, combo: `x${n}`, stockAntes: product.stock, paraVender: split.get(n)!, pendientes: pending, stockFinal: target, capsulas: split.get(n)! * n, delta: target - product.stock, hecho: doneRefs.has(`${REFERENCE}:${sku}`) };
+      const reserved = toRegister.get(n) ?? 0;
+      const target = split.get(n)! + pending + reserved;
+      return { id: product.id, sku, combo: `x${n}`, stockAntes: product.stock, paraVender: split.get(n)!, pendientes: pending, porRegistrar: reserved, stockFinal: target, capsulas: split.get(n)! * n, delta: target - product.stock, hecho: doneRefs.has(`${REFERENCE}:${sku}`) };
     });
     const capsulesForSale = stockPlan.reduce((sum, row) => sum + row.capsulas, 0);
     if (capsulesForSale > available) throw new Error(`el reparto (${capsulesForSale}) pasa de las disponibles (${available}).`);
     if (stockPlan.some((row) => row.paraVender < 1)) throw new Error("algún combo quedó en 0 para vender.");
-    console.log(JSON.stringify({ urna: urn, comprometidas: committedCapsules, fueraDeSistema: offline, pedidos: committed.map(({ productId, ...row }) => row), margen: `${MARGIN * 100} %`, disponibles: available, enVenta: capsulesForSale }, null, 1));
+    console.log(JSON.stringify({ urna: urn, comprometidas: committedCapsules, fueraDeSistema: offline, porRegistrar: Object.fromEntries(Array.from(toRegister, ([n, qty]) => [`x${n}`, qty])), capsulasPorRegistrar: toRegisterCapsules, pedidos: committed.map(({ productId, ...row }) => row), margen: `${MARGIN * 100} %`, disponibles: available, enVenta: capsulesForSale }, null, 1));
     console.log(JSON.stringify(stockPlan.map(({ id, ...row }) => row), null, 1));
     const adjust = stockPlan.filter((row) => !row.hecho && row.delta !== 0);
     if (!apply) {
@@ -183,7 +197,7 @@ async function main() {
           type: "MANUAL_ADJUSTMENT",
           quantity: row.delta,
           reason: `Edición Cyber: stock según la urna (~${urn} cápsulas)`,
-          description: `${urn} cápsulas estimadas por Paula − ${committedCapsules} en pedidos del panel − ${offline} vendidas fuera del sistema − ${MARGIN * 100} % de margen = ${available}; a este combo le tocan ${row.paraVender} para vender${row.pendientes ? ` + ${row.pendientes} de pedidos pendientes` : ""}.`,
+          description: `${urn} cápsulas estimadas por Paula − ${committedCapsules} en pedidos del panel − ${offline} vendidas fuera del sistema − ${toRegisterCapsules} de pedidos por registrar − ${MARGIN * 100} % de margen = ${available}; a este combo le tocan ${row.paraVender} para vender${row.pendientes ? ` + ${row.pendientes} de pedidos pendientes` : ""}${row.porRegistrar ? ` + ${row.porRegistrar} de pedidos que Paula va a registrar` : ""}.`,
           referenceId: `${REFERENCE}:${row.sku}`,
           createdBy: "SYSTEM",
         });
@@ -193,7 +207,7 @@ async function main() {
     });
     appendFileSync(
       resolve(process.cwd(), "ops/prod-writes.log"),
-      `# ${new Date().toISOString()} capsule-combos-cyber · ${todo.length} combos → «Cápsula sorpresa Cyber xN» y a la venta (availableAt null), mismo SKU, precio y URL · stock por la urna: ${urn} − ${committedCapsules} en pedidos − ${offline} fuera del sistema −${MARGIN * 100} % = ${available} cápsulas, ${capsulesForSale} en venta (${stockPlan.map((row) => `${row.combo}=${row.stockFinal}`).join(" ")}) · DESHACER renombrando y poniendo la fecha 2027-01-01 desde Productos y ajustando el stock desde el kardex.\n`,
+      `# ${new Date().toISOString()} capsule-combos-cyber · ${todo.length} combos → «Cápsula sorpresa Cyber xN» y a la venta (availableAt null), mismo SKU, precio y URL · stock por la urna: ${urn} − ${committedCapsules} en pedidos − ${offline} fuera del sistema − ${toRegisterCapsules} por registrar (${Array.from(toRegister, ([n, qty]) => `x${n}×${qty}`).join(" ") || "ninguno"}) − ${MARGIN * 100} % =${available} cápsulas, ${capsulesForSale} en venta (${stockPlan.map((row) => `${row.combo}=${row.stockFinal}`).join(" ")}) · DESHACER renombrando y poniendo la fecha 2027-01-01 desde Productos y ajustando el stock desde el kardex.\n`,
     );
     console.log(`PROD_WRITE_ROWS=${changed}`);
   } finally {
