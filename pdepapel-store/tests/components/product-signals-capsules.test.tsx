@@ -33,6 +33,12 @@ describe("ProductSignals en un combo de cápsulas", () => {
     expect(screen.getByText(/12 artículos sorpresa/)).toBeTruthy();
   });
 
+  it("enlaza las condiciones de las cápsulas en los términos", () => {
+    render(<ProductSignals product={capsule("Cápsula sorpresa Cyber x5")} availability={availability} quantity={1} />);
+    expect(screen.getByText(/5 artículos sorpresa/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ver condiciones" }).getAttribute("href")).toBe("/politicas/terminos#productos-precios");
+  });
+
   it("una cajita sorpresa sin «xN» sigue contando la cantidad", () => {
     render(<ProductSignals product={capsule("Cajita sorpresa Snoopy")} availability={availability} quantity={3} />);
     expect(screen.getByText(/3 artículos sorpresa/)).toBeTruthy();

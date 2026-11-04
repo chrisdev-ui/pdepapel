@@ -70,7 +70,13 @@ export function ProductSignals({ product, availability, quantity, className }: P
           <span>
             <strong>No se puede escoger qué viene adentro.</strong> Llevas{" "}
             {blindBoxFloor(quantity * capsulesPerUnit(product))}: el contenido es al azar y puede repetirse
-            entre cápsulas.
+            entre cápsulas.{" "}
+            <Link
+              href={`${STOREFRONT_ROUTES.termsPolicy}#productos-precios`}
+              className="font-semibold underline underline-offset-4 hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell"
+            >
+              Ver condiciones
+            </Link>
           </span>
         </p>
       )}
