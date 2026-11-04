@@ -28,7 +28,17 @@ import "./lib/allow-server-only.cjs";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { Prisma, PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
+
+import type { Prisma, PrismaClient } from "@prisma/client";
+
+/**
+ * prod:write corre desde el checkout principal con este archivo en el worktree: `@/lib/...` carga el `@prisma/client`
+ * del checkout principal y un import normal aquí cargaría el del worktree. Son dos copias, y los fragmentos
+ * `Prisma.sql` de una no son SQL para la otra: el UPDATE con guarda de las reservas no casaba ninguna fila
+ * («El inventario cambió mientras reservabas», 2026-11-04 20:5xZ). Se usa la copia del directorio donde corre.
+ */
+const prismaRuntime = createRequire(`${process.cwd()}/package.json`)("@prisma/client") as typeof import("@prisma/client");
 
 import { createProdClient } from "./lib/prod-client.mjs";
 
@@ -65,7 +75,7 @@ async function main() {
   if (viaProdWrite && process.env.PROD_WRITE_EXPECT !== "new") throw new Error("este guion solo escribe en la base nueva (--expect new).");
 
   const { MAX_WAIT_TIME, TIMEOUT_TIME } = await import("@/constants");
-  const base = new PrismaClient({ transactionOptions: { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: MAX_WAIT_TIME, timeout: TIMEOUT_TIME } });
+  const base = new prismaRuntime.PrismaClient({ transactionOptions: { isolationLevel: prismaRuntime.Prisma.TransactionIsolationLevel.Serializable, maxWait: MAX_WAIT_TIME, timeout: TIMEOUT_TIME } });
   const db = viaProdWrite ? (createProdClient({ client: base }) as unknown as PrismaClient) : base;
   (globalThis as unknown as { prisma: PrismaClient }).prisma = db;
   const { createInventoryMovement, recalculateKitStock } = await import("@/lib/inventory");
