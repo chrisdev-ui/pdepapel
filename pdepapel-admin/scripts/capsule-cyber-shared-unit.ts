@@ -76,6 +76,11 @@ async function main() {
   const { generateProductSlug } = await import("@/lib/slugify");
   const { normalizeProductIdentifiers } = await import("@/lib/product-identifiers");
   const { availableStock } = await import("@/lib/available-stock");
+  // prod:write corre desde el checkout principal y `@/` resuelve a SU código: si no está al día (da0ba5d6), falta
+  // `holdPanelOrderLines` y la corrida se cae a mitad (2026-11-04: pasos 1–2 escritos, 3–4 no).
+  if (typeof holdPanelOrderLines !== "function" || typeof createReservation !== "function" || typeof settleKitStock !== "function") {
+    throw new Error("el checkout principal no tiene el código de da0ba5d6 (falta holdPanelOrderLines): actualízalo con git pull --ff-only antes de correr este guion.");
+  }
 
   try {
     if (!viaProdWrite) {
