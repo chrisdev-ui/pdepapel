@@ -277,6 +277,10 @@ describe("Meta catalog feed eligibility", () => {
     expect(args.where).toHaveProperty("OR");
     expect(args.orderBy).toEqual({ name: "asc" });
   });
+
+  it("deja fuera «Kits sorpresa», igual que Google", () => {
+    expect(getMetaCatalogFeedProductArgs("store-1").where).toMatchObject({ categoryId: { not: "9bdebb9f-8a23-4bed-a8a4-8e6de8b58f47" } });
+  });
 });
 
 describe("Meta catalog feed access token", () => {

@@ -15,6 +15,16 @@ export function isBlindBox(product: Pick<Product, "category">): boolean {
 }
 
 /**
+ * Cápsulas por unidad: un combo «Cápsula sorpresa x5» trae 5. Sin «xN» al
+ * final del nombre (una cajita sorpresa suelta) cuenta como una.
+ */
+export function capsulesPerUnit(product: Pick<Product, "name">): number {
+  const match = /\bx\s*(\d{1,3})\s*$/i.exec(product.name ?? "");
+  const count = match ? Number(match[1]) : 1;
+  return count >= 1 ? count : 1;
+}
+
+/**
  * Lo que se promete y nada más: una cápsula trae un artículo, así que llevar
  * N cápsulas son N artículos. No se promete cuál, ni marca, ni color, ni que
  * dos cápsulas traigan cosas distintas.

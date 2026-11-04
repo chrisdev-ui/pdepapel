@@ -9,6 +9,7 @@ vi.mock("@upstash/redis", () => ({
   },
 }));
 
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import {
   GOOGLE_MERCHANT_FEED_HEADERS,
   buildGoogleMerchantFeed,
@@ -174,6 +175,13 @@ describe("buildGoogleMerchantFeed", () => {
     expect(getGoogleMerchantFeedProductArgs("store-1")).toMatchObject({
       where: { storeId: "store-1", isArchived: false },
       orderBy: { name: "asc" },
+    });
+  });
+
+  it("deja fuera «Kits sorpresa» y los productos de una edición de cápsulas", () => {
+    expect(getGoogleMerchantFeedProductArgs("store-1").where).toMatchObject({
+      categoryId: { not: CAPSULAS_SORPRESA_ID },
+      capsuleEdition: { is: null },
     });
   });
 });

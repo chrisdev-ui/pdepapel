@@ -236,4 +236,30 @@ describe("order editing guards with MySQL", () => {
     expect(fresh.total).toBe(20000);
     expect(fresh.shipping?.envioClickIdRate).toBeNull();
   });
+
+  // ORD-1793744962855-67 (2026-11-03): el descuento quedaba en 0 pero con su tipo y su motivo de antes.
+  it("quitar el descuento de un pedido pendiente borra también su tipo y su motivo", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const order = await createPending(fixture, { subtotal: 20000, discount: 5000, discountType: "FIXED", discountReason: "Combo", total: 15000 });
+    const { PATCH } = await patchRoute();
+    const items = [{ productId: fixture.component.id, quantity: 2 }];
+
+    const response = await PATCH(
+      json("PATCH", { ...customer, expectedStatus: OrderStatus.PENDING, orderItems: items, discount: { amount: 0, reason: "" }, payment: { method: PaymentMethod.BankTransfer } }),
+      { params: { storeId: fixture.store.id, orderId: order.id } },
+    );
+    expect(response.status).toBe(200);
+    const fresh = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(fresh).toMatchObject({ discount: 0, discountType: null, discountReason: null, total: 20000, status: OrderStatus.PENDING });
+    expect(await testPrisma.inventoryMovement.count({ where: { referenceId: order.id } })).toBe(0);
+
+    const again = await PATCH(
+      json("PATCH", { ...customer, expectedStatus: OrderStatus.PENDING, orderItems: items, discount: { type: "FIXED", amount: 3000, reason: "Cliente frecuente" }, payment: { method: PaymentMethod.BankTransfer } }),
+      { params: { storeId: fixture.store.id, orderId: order.id } },
+    );
+    expect(again.status).toBe(200);
+    const withDiscount = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(withDiscount).toMatchObject({ discount: 3000, discountType: "FIXED", discountReason: "Cliente frecuente", total: 17000 });
+  });
 });

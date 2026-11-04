@@ -11,7 +11,8 @@
 export const KNOWN_LEGAL_VERSIONS = {
   // 2026-10-29: solo el anticipo se retiene; los abonos por encima se devuelven o quedan como saldo a favor
   // (aceptada en e68c69c4 antes de publicarla). 2026-10-28 («Preventas y anticipos») y 2026-10-21 se siguen aceptando.
-  terms: ["2026-10-29", "2026-10-28", "2026-10-21"],
+  // 2026-11-03 (al final: aceptada antes de publicarla): cápsulas en combos, precio en la tienda de entre $5.000 y $35.000 y la regla del agotado.
+  terms: ["2026-10-29", "2026-10-28", "2026-10-21", "2026-11-03"],
   // 2026-10-26: «Publicidad» (TikTok). Se aceptó antes de publicarla (197c8ee3) para que el orden de despliegue no importe.
   privacy: ["2026-10-26", "2026-10-21"],
 } as const;

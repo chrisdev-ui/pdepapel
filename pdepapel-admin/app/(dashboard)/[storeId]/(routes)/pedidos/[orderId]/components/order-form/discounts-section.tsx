@@ -99,9 +99,10 @@ export function DiscountsSection({
             size="xs"
             disabled={disabled}
             onClick={() => {
-              form.resetField("discount.type");
-              form.resetField("discount.amount", { defaultValue: 0 });
-              form.resetField("discount.reason", { defaultValue: "" });
+              // resetField volvía al descuento guardado: en un pedido existente el tipo seguía puesto y no dejaba guardar.
+              form.setValue("discount.type", undefined, { shouldDirty: true });
+              form.setValue("discount.amount", 0, { shouldDirty: true });
+              form.setValue("discount.reason", "", { shouldDirty: true });
               toast({ description: "Descuento eliminado", variant: "success" });
             }}
           >

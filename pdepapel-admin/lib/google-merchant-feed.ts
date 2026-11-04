@@ -1,5 +1,6 @@
 import { availableStock } from "@/lib/available-stock";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
+import { EXCLUDE_CAPSULE_PRODUCTS } from "@/lib/catalog-filters";
 import { productAvailabilityWhere } from "@/lib/product-availability";
 import { PRESALE_FEED_INCLUDE, presaleFeedDecision } from "@/lib/presale-feed";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
@@ -100,9 +101,10 @@ export type GoogleMerchantFeedProduct = Prisma.ProductGetPayload<{
   include: typeof GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE;
 }>;
 
+/** Google y Meta (que reutiliza esta consulta) no reciben «Kits sorpresa»: el contenido de una cápsula es al azar. */
 export function getGoogleMerchantFeedProductArgs(storeId: string) {
   return {
-    where: { storeId, isArchived: false, ...productAvailabilityWhere("available") },
+    where: { storeId, isArchived: false, ...productAvailabilityWhere("available"), ...EXCLUDE_CAPSULE_PRODUCTS },
     include: GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE,
     orderBy: { name: "asc" as const },
   } satisfies Prisma.ProductFindManyArgs;

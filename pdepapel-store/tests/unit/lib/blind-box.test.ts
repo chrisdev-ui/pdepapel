@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { blindBoxFloor, isBlindBox } from "@/lib/blind-box";
+import { blindBoxFloor, capsulesPerUnit, isBlindBox } from "@/lib/blind-box";
 import type { Product } from "@/types";
 
 const inCategory = (slug: string) =>
@@ -41,5 +41,25 @@ describe("blindBoxFloor", () => {
   it("nunca promete menos de uno", () => {
     expect(blindBoxFloor(0)).toBe("1 artículo sorpresa");
     expect(blindBoxFloor(-3)).toBe("1 artículo sorpresa");
+  });
+});
+
+/** Un combo x5 en el carrito con cantidad 1 son 5 sorpresas, no 1 (2026-11-03). */
+describe("capsulesPerUnit", () => {
+  it("lee las cápsulas del combo en el nombre", () => {
+    expect(capsulesPerUnit({ name: "Cápsula sorpresa x5" })).toBe(5);
+    expect(capsulesPerUnit({ name: "Cápsula sorpresa x15" })).toBe(15);
+    expect(capsulesPerUnit({ name: "Cápsula sorpresa X7 " })).toBe(7);
+  });
+
+  it("sin «xN» al final cuenta como una", () => {
+    expect(capsulesPerUnit({ name: "Cajita sorpresa Snoopy" })).toBe(1);
+    expect(capsulesPerUnit({ name: "Pack x5 de cápsulas mini" })).toBe(1);
+    expect(capsulesPerUnit({ name: "Cápsula sorpresa x0" })).toBe(1);
+  });
+
+  it("con el combo, el aviso promete tantas sorpresas como cápsulas", () => {
+    expect(blindBoxFloor(1 * capsulesPerUnit({ name: "Cápsula sorpresa x5" }))).toBe("5 artículos sorpresa");
+    expect(blindBoxFloor(2 * capsulesPerUnit({ name: "Cápsula sorpresa x6" }))).toBe("12 artículos sorpresa");
   });
 });

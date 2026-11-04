@@ -21,9 +21,14 @@ describe("versiones legales: copia de la tienda", () => {
 
   it("los términos 2026-10-29 (solo el anticipo se retiene) son los vigentes y los anteriores se siguen aceptando", () => {
     expect(LEGAL_VERSIONS.terms).toBe("2026-10-29");
-    expect(KNOWN_LEGAL_VERSIONS.terms).toEqual(["2026-10-29", "2026-10-28", "2026-10-21"]);
+    expect(KNOWN_LEGAL_VERSIONS.terms).toEqual(["2026-10-29", "2026-10-28", "2026-10-21", "2026-11-03"]);
     expect(parseLegalVersions({ terms: "2026-10-28", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-28", privacy: "2026-10-26" });
     expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-26" });
+  });
+
+  it("los términos 2026-11-03 (cápsulas en combos) se aceptan antes de publicarlos, sin ser todavía los vigentes", () => {
+    expect(LEGAL_VERSIONS.terms).not.toBe("2026-11-03");
+    expect(parseLegalVersions({ terms: "2026-11-03", privacy: "2026-10-26" })).toEqual({ terms: "2026-11-03", privacy: "2026-10-26" });
   });
 
   it("la política 2026-10-26 es la vigente y la anterior se sigue aceptando (la tienda puede llegar después)", () => {

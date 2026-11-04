@@ -10,7 +10,7 @@ import { useCart } from "@/hooks/use-cart";
 import { ProductAvailability } from "@/lib/product-availability";
 import { formatArrivalDate } from "@/lib/product-card";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { blindBoxFloor, isBlindBox } from "@/lib/blind-box";
+import { blindBoxFloor, capsulesPerUnit, isBlindBox } from "@/lib/blind-box";
 import { calculateTotals, cn, effectiveUnitPrice } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { Product } from "@/types";
@@ -69,7 +69,7 @@ export function ProductSignals({ product, availability, quantity, className }: P
           <Gift aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             <strong>No se puede escoger qué viene adentro.</strong> Llevas{" "}
-            {blindBoxFloor(quantity)}: el contenido es al azar y puede repetirse
+            {blindBoxFloor(quantity * capsulesPerUnit(product))}: el contenido es al azar y puede repetirse
             entre cápsulas.
           </span>
         </p>

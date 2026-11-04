@@ -883,12 +883,15 @@ export async function PATCH(
           company,
           subtotal: totals.subtotal,
           discount: totals.discount,
+          // Quitado el descuento no quedan tipo ni motivo: antes se conservaban los anteriores.
           ...(itemsLocked
             ? {}
-            : {
-                discountType: discount?.type as DiscountType,
-                discountReason: discount?.reason,
-              }),
+            : discount?.type && discount?.amount
+              ? {
+                  discountType: discount?.type as DiscountType,
+                  discountReason: discount?.reason,
+                }
+              : { discountType: null, discountReason: null }),
           coupon: targetCoupon
             ? { connect: { id: targetCoupon.id } }
             : order.coupon
