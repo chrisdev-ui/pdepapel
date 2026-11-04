@@ -134,7 +134,24 @@ async function main() {
       return;
     }
 
-    const unitId = await db.$transaction(async (tx) => {
+    // Pasos cortos, cada uno en su transacción y reanudable: la primera corrida (2026-11-04 19:58Z) hizo todo en una sola
+    // transacción Serializable contra Railway y falló sin escribir nada. Cada paso se mide y se reintenta si choca.
+    const step = async <T>(name: string, run: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
+      for (let attempt = 1; ; attempt++) {
+        const started = Date.now();
+        try {
+          const result = await db.$transaction(run);
+          console.log(`paso «${name}»: ok en ${Date.now() - started} ms`);
+          return result;
+        } catch (error) {
+          const code = (error as { code?: string }).code;
+          console.error(`paso «${name}»: intento ${attempt} falló en ${Date.now() - started} ms (${code ?? "sin código"}): ${error instanceof Error ? error.message : String(error)}`);
+          if (attempt >= 3 || (code !== "P2034" && code !== "P2028")) throw error;
+        }
+      }
+    };
+
+    const unitId = await step("unidad", async (tx) => {
       let id = existingUnit?.id;
       if (!id) {
         const sample = rows[0];
@@ -164,22 +181,31 @@ async function main() {
           cost: UNIT_COST, createdBy: "SYSTEM",
         });
       }
+      return id as string;
+    });
+
+    // Los 8 combos juntos: si quedara uno a medias, ese combo y la unidad venderían las mismas cápsulas.
+    await step("combos a kit", async (tx) => {
       for (const row of rows.filter((item) => !item.linked)) {
-        await tx.productKit.create({ data: { kitId: row.id, componentId: id, quantity: row.n } });
+        await tx.productKit.create({ data: { kitId: row.id, componentId: unitId, quantity: row.n } });
         await tx.product.update({ where: { id: row.id }, data: { isKit: true } });
         await settleKitStock(tx, { storeId: STORE_ID, productId: row.id, reason: KIT_CONVERSION_REASON, createdBy: "SYSTEM" });
       }
       await recalculateKitStock(tx, rows.map((row) => row.id));
-      if (!orderHold) {
-        await holdPanelOrderLines(tx, { storeId: STORE_ID, orderId: order.id, orderNumber: order.orderNumber, customerName: order.fullName, customerPhone: order.phone, lines: orderLines, createdBy: "SYSTEM" });
-      }
-      return id;
     });
+
+    if (!orderHold) {
+      await step(`apartado ${ORDER_NUMBER}`, (tx) =>
+        holdPanelOrderLines(tx, { storeId: STORE_ID, orderId: order.id, orderNumber: order.orderNumber, customerName: order.fullName, customerPhone: order.phone, lines: orderLines, createdBy: "SYSTEM" }),
+      );
+    }
 
     for (const [name, n] of LIVE_ORDERS) {
       if (liveDone.has(name)) continue;
       const combo = rows.find((row) => row.n === n)!;
+      const started = Date.now();
       await createReservation({ storeId: STORE_ID, items: [{ productId: combo.id, quantity: 1 }], customerName: name, note: `Combo x${n} vendido en un live; Paula lo registra con «Convertir en pedido».`, days: HOLD_DAYS, createdBy: "SYSTEM" });
+      console.log(`paso «${name}»: ok en ${Date.now() - started} ms`);
     }
 
     const unit = await db.product.findUniqueOrThrow({ where: { id: unitId }, select: { stock: true, reservedUnits: true } });
@@ -196,6 +222,7 @@ async function main() {
 }
 
 void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  const code = (error as { code?: string }).code;
+  console.error(`ERROR${code ? ` ${code}` : ""}: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });
