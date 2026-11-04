@@ -62,6 +62,10 @@ describe("product card helpers", () => {
     expect(isLowStock({ stock: 2, isGroup: true })).toBe(false);
   });
 
+  it("never shows «Últimas N» on a capsule combo card", () => {
+    expect(isLowStock({ stock: 2, isGroup: false, category: { id: "c", name: "Kits sorpresa", slug: "kits-sorpresa" } as never })).toBe(false);
+  });
+
   it("averages published reviews and detects recent products", () => {
     expect(getAverageRating([{ rating: 5 }, { rating: 4 }])).toEqual({ average: 4.5, count: 2 });
     expect(getAverageRating([])).toBeNull();

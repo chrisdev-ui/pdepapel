@@ -1,3 +1,4 @@
+import { isBlindBox } from "@/lib/blind-box";
 import { currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
 
@@ -194,8 +195,10 @@ export function getProductCardPrice(
 }
 
 export function isLowStock(
-  product: Pick<Product, "stock" | "isGroup">,
+  product: Pick<Product, "stock" | "isGroup"> & Partial<Pick<Product, "category">>,
 ): boolean {
+  // Un combo de cápsulas comparte la urna con los demás: «Últimas 2» confunde cuando quedan cientos de cápsulas.
+  if (isBlindBox(product)) return false;
   return (
     !product.isGroup &&
     product.stock > 0 &&

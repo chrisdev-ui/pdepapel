@@ -57,6 +57,18 @@ export const BUNDLE_FILTER_CALLERS = [
 ] as const;
 
 /**
+ * Unidad interna de cápsulas (2026-11-04, Edición Cyber): un producto archivado
+ * de «Kits sorpresa» que no se vende solo y es el componente de los combos
+ * («Cápsula sorpresa Cyber xN» = kit de N unidades), así todos los combos
+ * descuentan de un mismo stock. Archivado lo saca de la tienda, los feeds, las
+ * búsquedas y el inventario; las guardas de kits lo aceptan como componente
+ * solo con esta regla, y «Restaurar» no lo saca del archivo.
+ */
+export function isInternalCapsuleUnit(product: { isArchived?: boolean | null; categoryId?: string | null }): boolean {
+  return Boolean(product.isArchived) && product.categoryId === CAPSULAS_SORPRESA_ID;
+}
+
+/**
  * La misma regla como función, para poder probarla sin base de datos y para
  * usarla sobre filas ya cargadas.
  */

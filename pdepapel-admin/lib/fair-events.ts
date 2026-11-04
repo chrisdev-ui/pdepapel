@@ -14,6 +14,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import { movementActor } from "@/lib/movement-actor";
+import { isInternalCapsuleUnit } from "@/lib/catalog-filters";
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { isPaymentProofForStore } from "@/lib/payment-proof-key";
 import {
@@ -161,6 +162,7 @@ function assertReservableKitRecipe(
         storeId: string;
         isArchived: boolean;
         isKit: boolean;
+        categoryId?: string | null;
       };
     }[];
   },
@@ -175,7 +177,7 @@ function assertReservableKitRecipe(
     if (
       line.quantity <= 0 ||
       line.component.storeId !== storeId ||
-      line.component.isArchived ||
+      (line.component.isArchived && !isInternalCapsuleUnit(line.component)) ||
       line.component.isKit
     ) {
       throw ErrorFactory.InvalidRequest(
@@ -514,6 +516,7 @@ export async function allocateFairInventory({
                 storeId: true,
                 isArchived: true,
                 isKit: true,
+                categoryId: true,
               },
             },
           },

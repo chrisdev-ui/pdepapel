@@ -1,5 +1,6 @@
 import { CapsuleEditionStatus, CapsuleSlipKind, CapsuleSlipStatus, OrderStatus, Prisma } from "@prisma/client";
 
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
 import { runInBackground } from "@/lib/background";
@@ -67,6 +68,22 @@ export async function assertEditionProductsStayArchived(db: Db, productIds: read
   });
   if (editions.length > 0) {
     throw ErrorFactory.Conflict(`«${editions[0].product.name}» es el producto de una edición de cápsulas: sale a la venta desde la edición, no desde la ficha`);
+  }
+}
+
+/**
+ * «Restaurar» no saca del archivo la unidad interna de cápsulas (`isInternalCapsuleUnit`): un producto archivado de
+ * «Kits sorpresa» que es componente de un kit (los combos «Cápsula sorpresa Cyber xN»). Restaurado se vendería suelto
+ * y aparecería en la tienda, los feeds y el inventario.
+ */
+export async function assertCapsuleUnitsStayArchived(db: Db, productIds: readonly string[]) {
+  if (productIds.length === 0) return;
+  const unit = await db.product.findFirst({
+    where: { id: { in: [...productIds] }, isArchived: true, categoryId: CAPSULAS_SORPRESA_ID, componentIn: { some: {} } },
+    select: { name: true },
+  });
+  if (unit) {
+    throw ErrorFactory.Conflict(`«${unit.name}» es la unidad interna de las cápsulas: los combos descuentan de ella y no se vende sola, así que se queda archivada`);
   }
 }
 

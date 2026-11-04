@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { assertEditionProductsStayArchived } from "@/lib/capsule-editions";
+import { assertCapsuleUnitsStayArchived, assertEditionProductsStayArchived } from "@/lib/capsule-editions";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -131,7 +131,10 @@ export async function POST(
     }
 
     const finalProductIds = Array.from(productsToUpdateIds);
-    if (field === "isArchived" && value === false) await assertEditionProductsStayArchived(prismadb, finalProductIds);
+    if (field === "isArchived" && value === false) {
+      await assertEditionProductsStayArchived(prismadb, finalProductIds);
+      await assertCapsuleUnitsStayArchived(prismadb, finalProductIds);
+    }
 
     if (isRelation && !preview) {
       // El valor debe ser de esta tienda; sin claves foráneas nada lo impedía.

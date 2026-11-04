@@ -1,3 +1,5 @@
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
+
 /**
  * Reglas de elegibilidad de los dos selectores de producto que no usan el
  * buscador compartido: qué puede ser componente de un kit y qué producto
@@ -15,11 +17,14 @@ export interface SelectableWhereInput {
   id?: string | null;
 }
 
-/** Componentes de un kit: nunca otro kit, nunca archivados, nunca el propio kit. */
+/**
+ * Componentes de un kit: nunca otro kit, nunca el propio kit, nunca archivados salvo la unidad interna de cápsulas
+ * («Kits sorpresa» archivado, `isInternalCapsuleUnit`), que es justo el componente de los combos.
+ */
 export function buildSelectableWhere({ storeId, query, excludeId, id }: SelectableWhereInput) {
   return {
     storeId,
-    isArchived: false,
+    AND: [{ OR: [{ isArchived: false }, { isArchived: true, categoryId: CAPSULAS_SORPRESA_ID }] }],
     isKit: false,
     ...(excludeId ? { NOT: { id: excludeId } } : {}),
     ...(id ? { id } : {}),

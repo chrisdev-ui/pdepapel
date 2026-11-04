@@ -15,7 +15,7 @@ import {
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { createCorsHeaders } from "@/lib/cors";
 import { parseTransportationCost } from "@/lib/product-costs";
-import { assertEditionProductsStayArchived } from "@/lib/capsule-editions";
+import { assertCapsuleUnitsStayArchived, assertEditionProductsStayArchived } from "@/lib/capsule-editions";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_PRODUCT_DETAIL_SELECT } from "@/lib/public-catalog";
 import { netPublicProduct } from "@/lib/available-stock";
@@ -365,6 +365,7 @@ export async function PATCH(
       );
     if (isArchived === false && productToUpdate.isArchived) {
       await assertEditionProductsStayArchived(prismadb, [params.productId]);
+      await assertCapsuleUnitsStayArchived(prismadb, [params.productId]);
     }
 
     // Solo si cambia el grupo o la combinación: un duplicado viejo se sigue

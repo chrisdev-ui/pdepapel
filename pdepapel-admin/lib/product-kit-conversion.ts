@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { ErrorFactory } from "./api-errors";
+import { isInternalCapsuleUnit } from "./catalog-filters";
 
 type KitTx = Pick<
   Prisma.TransactionClient,
@@ -43,7 +44,7 @@ export async function assertValidKitComponents(
   }
   const rows = await tx.product.findMany({
     where: { id: { in: ids }, storeId },
-    select: { id: true, name: true, isKit: true, isArchived: true },
+    select: { id: true, name: true, isKit: true, isArchived: true, categoryId: true },
   });
   if (rows.length !== ids.length) {
     throw ErrorFactory.InvalidRequest("Algún componente no existe en esta tienda.");
@@ -52,7 +53,7 @@ export async function assertValidKitComponents(
   if (kits.length > 0) {
     throw ErrorFactory.InvalidRequest(`Un kit no puede llevar otro kit dentro: ${kits.join(", ")}.`);
   }
-  const archived = rows.filter((row) => row.isArchived).map((row) => row.name);
+  const archived = rows.filter((row) => row.isArchived && !isInternalCapsuleUnit(row)).map((row) => row.name);
   if (archived.length > 0) {
     throw ErrorFactory.InvalidRequest(`No se puede armar con productos archivados: ${archived.join(", ")}.`);
   }

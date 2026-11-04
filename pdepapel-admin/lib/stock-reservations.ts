@@ -193,6 +193,53 @@ export async function createReservation(input: {
   }));
 }
 
+/** Cuánto aparta un pedido pendiente del panel antes de que salga el aviso «venció sin pagar» (2026-11-04). */
+export const PANEL_ORDER_HOLD_DAYS = 7;
+
+/**
+ * Un pedido PENDIENTE del panel aparta sus líneas desde que se crea, como si hubiera salido de una reserva: la
+ * reserva nace CONVERTIDA y atada al pedido, así que el pago la consume una sola vez, cancelar la libera, editar el
+ * pedido la sigue (`syncConvertedReservation`) y el barrido horario nunca la vence (solo avisa pasado el plazo).
+ * Lo usan los pedidos de cápsulas (Kits sorpresa), que todos los canales sacan de la misma urna. Dentro de la
+ * transacción del pedido. Devuelve los productos cuyo disponible cambió, para la purga de la tienda.
+ */
+export async function holdPanelOrderLines(
+  tx: PrismaTx,
+  input: { storeId: string; orderId: string; orderNumber: string; customerName: string | null; customerPhone?: string | null; lines: ReservationLine[]; createdBy: string; now?: Date },
+): Promise<string[]> {
+  const merged = new Map<string, number>();
+  for (const line of input.lines) if (line.quantity > 0) merged.set(line.productId, (merged.get(line.productId) ?? 0) + line.quantity);
+  const lines = Array.from(merged, ([productId, quantity]) => ({ productId, quantity }));
+  if (lines.length === 0) return [];
+  const products = await assertReservable(tx, input.storeId, lines.map((line) => line.productId));
+  const affectedProductIds = await holdLines(tx, input.storeId, lines, products);
+  const name = (input.customerName ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+  const now = input.now ?? new Date();
+  const created = await tx.stockReservation.create({
+    data: {
+      storeId: input.storeId,
+      ...headerMirror(lines),
+      status: StockReservationStatus.CONVERTED,
+      orderId: input.orderId,
+      customerName: name.length >= 2 ? name : `Pedido ${input.orderNumber}`.slice(0, 80),
+      customerPhone: input.customerPhone ? normalizePhone(input.customerPhone) : "",
+      note: `Apartado al crear el pedido ${input.orderNumber} en el panel.`,
+      expiresAt: new Date(now.getTime() + PANEL_ORDER_HOLD_DAYS * DAY_MS),
+      createdBy: input.createdBy,
+    },
+    select: { id: true },
+  });
+  await tx.stockReservationItem.createMany({
+    data: lines.map((line) => ({ storeId: input.storeId, reservationId: created.id, productId: line.productId, quantity: line.quantity, addedBy: input.createdBy })),
+  });
+  await recordReservationEvents(tx, [
+    { storeId: input.storeId, reservationId: created.id, kind: "created", actor: input.createdBy, detail: { items: lines.length, days: PANEL_ORDER_HOLD_DAYS, fromOrder: input.orderId } },
+    ...lines.map((line) => ({ storeId: input.storeId, reservationId: created.id, kind: "item_added" as const, actor: input.createdBy, productId: line.productId, quantity: line.quantity, previousQuantity: 0 })),
+    { storeId: input.storeId, reservationId: created.id, kind: "converted", actor: input.createdBy, detail: { orderId: input.orderId, lines: lines.length } },
+  ]);
+  return [...lines.map((line) => line.productId), ...affectedProductIds];
+}
+
 /** Una reserva que se edita tiene que seguir ACTIVA; la convertida se edita desde su pedido. */
 async function lockActive(tx: PrismaTx, storeId: string, id: string) {
   const hold = await lockReservation(tx, storeId, id);

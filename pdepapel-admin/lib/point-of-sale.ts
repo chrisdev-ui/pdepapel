@@ -10,6 +10,8 @@ import {
 } from "@prisma/client";
 
 import { movementActor } from "@/lib/movement-actor";
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { isInternalCapsuleUnit } from "@/lib/catalog-filters";
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { pushToBoldDatafono } from "@/lib/bold-terminal";
 import { priceLines } from "@/lib/product-pricing";
@@ -164,6 +166,7 @@ export async function createPointOfSaleSale({
                 isArchived: true,
                 isKit: true,
                 storeId: true,
+                categoryId: true,
               },
             },
           },
@@ -203,7 +206,7 @@ export async function createPointOfSaleSale({
         if (
           kitComponent.quantity <= 0 ||
           kitComponent.component.storeId !== storeId ||
-          kitComponent.component.isArchived ||
+          (kitComponent.component.isArchived && !isInternalCapsuleUnit(kitComponent.component)) ||
           kitComponent.component.isKit
         ) {
           throw ErrorFactory.InvalidRequest(
@@ -224,7 +227,7 @@ export async function createPointOfSaleSale({
       where: {
         id: { in: physicalProductIds },
         storeId,
-        isArchived: false,
+        OR: [{ isArchived: false }, { isArchived: true, categoryId: CAPSULAS_SORPRESA_ID }],
       },
       select: {
         id: true,

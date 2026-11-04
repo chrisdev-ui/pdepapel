@@ -10,7 +10,7 @@ import { Product } from "@/types";
  */
 export const BLIND_BOX_CATEGORY_SLUG = "kits-sorpresa";
 
-export function isBlindBox(product: Pick<Product, "category">): boolean {
+export function isBlindBox(product: Partial<Pick<Product, "category">>): boolean {
   return product.category?.slug === BLIND_BOX_CATEGORY_SLUG;
 }
 

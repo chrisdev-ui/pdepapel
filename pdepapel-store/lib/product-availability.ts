@@ -1,4 +1,5 @@
 import { getLowStockLabel, isLowStock } from "@/components/ui/low-stock-notice";
+import { isBlindBox } from "@/lib/blind-box";
 import { formatArrivalDate, isComingSoon } from "@/lib/product-card";
 import { describePresaleArrival, isDepositPresale } from "@/lib/presale-deposit";
 import { getActivePresale, getPurchasableUnits, isUncappedPresale } from "@/lib/purchasable-units";
@@ -46,7 +47,8 @@ export function getProductAvailability(
   product: Pick<
     Product,
     "stock" | "isArchived" | "availableAt" | "isGroup" | "presales"
-  >,
+  > &
+    Partial<Pick<Product, "category">>,
   options: { earlyAccess?: boolean; now?: Date } = {},
 ): ProductAvailability {
   const now = options.now ?? new Date();
@@ -102,14 +104,19 @@ export function getProductAvailability(
       tone: "purple",
     };
   }
+  // Combos de cápsulas: comparten la urna, así que la cuenta de un combo («quedan 2») no dice cuántas cápsulas hay.
+  const blindBox = isBlindBox(product);
   if (product.stock <= 0) {
     return {
       status: "sold-out",
       canBuy: false,
       ctaLabel: "Avísame cuando vuelva",
-      stockLabel: "Agotado por ahora",
+      stockLabel: blindBox ? "Agotado" : "Agotado por ahora",
       tone: "gray",
     };
+  }
+  if (blindBox) {
+    return { status: "in-stock", canBuy: true, ctaLabel: "Agregar al carrito", stockLabel: "Disponible", tone: "green" };
   }
   if (!product.isGroup && isLowStock(product.stock)) {
     return {

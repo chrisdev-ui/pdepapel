@@ -5,7 +5,8 @@ import {
   parseOrderListPage,
 } from "@/lib/public-orders";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
-import { BATCH_SIZE } from "@/constants";
+import { BATCH_SIZE, CAPSULAS_SORPRESA_ID } from "@/constants";
+import { holdPanelOrderLines } from "@/lib/stock-reservations";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
@@ -901,6 +902,27 @@ async function createOrder(
 
       if (capsulePlan) {
         await reserveCapsuleOrder(tx, capsulePlan, { storeId: params.storeId, orderId: createdOrder.id });
+      }
+
+      // Cápsulas de los combos (Kits sorpresa) en un pedido pendiente del panel: se apartan ya, porque la tienda, los
+      // lives y WhatsApp sacan de la misma urna. El pago consume la reserva y cancelar la libera.
+      const createdStatus = status || OrderStatus.PENDING;
+      if (isStoreOwner && !capsulePlan && (createdStatus === OrderStatus.PENDING || createdStatus === OrderStatus.CREATED)) {
+        const capsuleLines = createdOrder.orderItems
+          .filter((item) => item.productId && item.product?.categoryId === CAPSULAS_SORPRESA_ID)
+          .map((item) => ({ productId: item.productId as string, quantity: item.quantity }));
+        if (capsuleLines.length > 0) {
+          await holdPanelOrderLines(tx, {
+            storeId: params.storeId,
+            orderId: createdOrder.id,
+            orderNumber: createdOrder.orderNumber,
+            customerName: createdOrder.fullName,
+            customerPhone: createdOrder.phone,
+            lines: capsuleLines,
+            createdBy: userLogged || "SYSTEM",
+          });
+          purgeCacheAfterCommit = true;
+        }
       }
 
       // Batch update stock if order is paid

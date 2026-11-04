@@ -29,4 +29,14 @@ describe("getProductAvailability", () => {
     expect(getProductAvailability({ stock: 0, isArchived: true }, { now }).status).toBe("archived");
     expect(getProductAvailability({ stock: 2, isGroup: true }, { now })).toMatchObject({ status: "in-stock", stockLabel: "Disponible en varias opciones" });
   });
+
+  // 2026-11-04: los combos comparten la urna; «quedan 2» en el x15 confundía con cientos de cápsulas por vender.
+  it("a capsule combo («Kits sorpresa») says only Disponible or Agotado, never a count", () => {
+    const category = { id: "c", name: "Kits sorpresa", slug: "kits-sorpresa" } as never;
+    for (const stock of [1, 2, 3, 15, 45]) {
+      expect(getProductAvailability({ stock, category }, { now })).toMatchObject({ status: "in-stock", canBuy: true, stockLabel: "Disponible", tone: "green" });
+    }
+    expect(getProductAvailability({ stock: 0, category }, { now })).toMatchObject({ status: "sold-out", canBuy: false, stockLabel: "Agotado" });
+    expect(getProductAvailability({ stock: 5, category, availableAt: "2026-10-01T00:00:00Z" }, { now }).status).toBe("coming-soon");
+  });
 });

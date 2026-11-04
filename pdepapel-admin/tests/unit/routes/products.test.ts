@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/constants", () => ({
+  CAPSULAS_SORPRESA_ID: "9bdebb9f-8a23-4bed-a8a4-8e6de8b58f47",
   SORT_OPTIONS: {
     default: { createdAt: "desc" },
     dateAdded: { createdAt: "desc" },

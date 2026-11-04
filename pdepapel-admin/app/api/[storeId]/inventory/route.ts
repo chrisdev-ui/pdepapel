@@ -98,7 +98,9 @@ export async function POST(
         createdBy: movementActor(userId),
       });
     });
-    await invalidateStoreProductsCache(params.storeId, targetProductId);
+    // Los kits que llevan este producto cambian de stock con él (la unidad de cápsulas y sus 8 combos).
+    const parentKits = await prismadb.productKit.findMany({ where: { componentId: targetProductId }, select: { kitId: true } });
+    await invalidateStoreProductsCache(params.storeId, { productIds: [targetProductId, ...parentKits.map((row) => row.kitId)] });
 
     return NextResponse.json(movement, { headers: corsHeaders });
   } catch (error) {
