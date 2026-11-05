@@ -156,6 +156,16 @@ describe("cliente de TikTok", () => {
     expect(error!.message).not.toContain("rft.old");
   });
 
+  it("un refresh con credenciales de otra app (invalid_client, unauthorized_client) también pide reconectar; invalid_request no", async () => {
+    for (const code of ["invalid_client", "unauthorized_client"]) {
+      const error = await caught(refreshTikTokTokens(config, "rft.sandbox", vi.fn().mockResolvedValue(json({ error: code, error_description: "rft.sandbox rejected" }, { status: 400 }))));
+      expect(error, code).toMatchObject({ kind: "auth", code: `tiktok_${code}`, status: 400 });
+      expect(error!.message).not.toContain("rft.sandbox");
+    }
+    const malformed = await caught(refreshTikTokTokens(config, "rft.1", vi.fn().mockResolvedValue(json({ error: "invalid_request" }, { status: 400 }))));
+    expect(malformed).toMatchObject({ kind: "http", code: "tiktok_invalid_request" });
+  });
+
   it("lista videos con sus contadores, el token en Bearer y el cursor si hay más", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       json({ data: { videos: [{ id: "v1", create_time: 1_760_000_000, cover_image_url: "https://p16/c.jpg", share_url: "https://tiktok/v1", title: "", video_description: "Stickers", duration: 21, view_count: 900, like_count: 40, comment_count: 3, share_count: 2 }], cursor: 1_759_000_000_000, has_more: true }, error: { code: "ok" } }),

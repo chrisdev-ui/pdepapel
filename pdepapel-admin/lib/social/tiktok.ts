@@ -46,12 +46,16 @@ export function buildTikTokAuthorizeUrl(config: Pick<TikTokConfig, "clientKey" |
   return url.toString();
 }
 
+// invalid_client / unauthorized_client: el token guardado es de otra app (Sandbox → Live, 2026-11-05) o las
+// credenciales del servidor no sirven; los dos piden reconectar y avisar, no fallar en silencio cada corrida.
+const RECONNECT_CODES = new Set(["access_token_invalid", "scope_not_authorized", "invalid_grant", "invalid_client", "unauthorized_client"]);
+
 function apiError(status: number, code: string | null, retryAfter: string | null) {
   if (status === 429 || code === "rate_limit_exceeded") {
     const seconds = Number(retryAfter);
     return new SocialApiError(SocialPlatform.TIKTOK, "rate_limit", "tiktok_rate_limit", status, Number.isFinite(seconds) && seconds > 0 ? seconds : 60);
   }
-  if (status === 401 || code === "access_token_invalid" || code === "scope_not_authorized" || code === "invalid_grant") {
+  if (status === 401 || (code !== null && RECONNECT_CODES.has(code))) {
     return new SocialApiError(SocialPlatform.TIKTOK, "auth", `tiktok_${code ?? "unauthorized"}`, status);
   }
   return new SocialApiError(SocialPlatform.TIKTOK, "http", code ? `tiktok_${code}`.slice(0, 60) : `http_${status}`, status);
