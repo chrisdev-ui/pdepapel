@@ -76,7 +76,9 @@ const PRIZES: [string, string, string][] = [
   [ORDER_B3, "Vasito kawaii x7 negro", "KIT-KAW-NEG-XS-P-3562"],
   [ORDER_B3, "Notas osos miel", "NOT-OSI-AMA-XS-L-3187"],
   [ORDER_B3, "Bloques de construcción navidad", "LEG-VEG-ROJ-S-L-5037"],
-  [ORDER_B3, "Pin gato", "PIN-GAT-MUL-S-L-4354"],
+  // Regla de Christian: el papel salió de la Lista para papelitos; «Pin gato» (PIN-GAT-MUL-S-L-4354) no está en ella y
+  // «Pin Gato Pusheen» sí, así que es este.
+  [ORDER_B3, "Pin gato", "PIN-GAT-ROS-XS-P-4813"],
   [ORDER_B3, "Lapicero Intensamente Alegría", "BOL-INT-AMA-S-L-3594"],
   // B4: los 6 que faltaban de ORD-1793744962855-67 (los Bloques de Navidad ya están). Son los mismos SKU que Paula había
   // puesto de relleno en ese pedido antes de que existieran los combos.
