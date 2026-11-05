@@ -246,8 +246,8 @@ export const ORDER_TYPE_PRESETS: Record<CreatableOrderType, OrderTypePreset> = {
     paymentMethod: PaymentMethod.BankTransfer,
     allowManualItems: false,
     showPayment: true,
-    notesLabel: "Notas para el cliente",
-    notesHint: "Se muestran en la página del pedido.",
+    notesLabel: "Notas del pedido (no las ve la clienta)",
+    notesHint: "Solo se ven en el panel.",
   },
   [OrderType.CUSTOM]: {
     type: OrderType.CUSTOM,
@@ -258,7 +258,7 @@ export const ORDER_TYPE_PRESETS: Record<CreatableOrderType, OrderTypePreset> = {
     allowManualItems: true,
     showPayment: true,
     notesLabel: "Descripción del trabajo",
-    notesHint: "Qué se va a hacer y con qué acuerdos; el cliente la ve.",
+    notesHint: "Qué se va a hacer y con qué acuerdos. Solo se ve en el panel.",
   },
 };
 

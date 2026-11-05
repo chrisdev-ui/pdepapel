@@ -27,6 +27,7 @@ export interface ProductForItem {
   stock: number;
   images: { url: string }[];
   category?: { name: string };
+  categoryId?: string | null;
   size?: { name: string };
   color?: { name: string; value: string };
   discountedPrice?: number;

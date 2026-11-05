@@ -14,6 +14,7 @@ import { Lock, Package, Plus, Trash, Wand2 } from "lucide-react";
 import Image from "next/image";
 import { useFormContext, type UseFieldArrayReturn } from "react-hook-form";
 
+import { CapsulePrizeLinesNotice, hasCapsuleComboWithOtherLines } from "./capsule-prize-lines";
 import type { OrderFormValues } from "./schema";
 import { SectionCard } from "./section-card";
 
@@ -25,6 +26,9 @@ interface ItemsSectionProps {
   allowManualItems: boolean;
   loading: boolean;
   onConvert: (index: number) => void;
+  /** Productos de «Kits sorpresa» del pedido (combos de cápsulas). */
+  capsuleProductIds: ReadonlySet<string>;
+  onProductAdded: (productId: string, categoryId: string | null | undefined) => void;
 }
 
 export function ItemsSection({
@@ -34,6 +38,8 @@ export function ItemsSection({
   allowManualItems,
   loading,
   onConvert,
+  capsuleProductIds,
+  onProductAdded,
 }: ItemsSectionProps) {
   const form = useFormContext<OrderFormValues>();
   const { toast } = useToast();
@@ -162,6 +168,7 @@ export function ItemsSection({
                           stock: product.stock,
                           productGroup: product.productGroup,
                         });
+                        onProductAdded(productId, product.categoryId);
                       }
                     } else if (existingIndex !== -1) {
                       remove(existingIndex);
@@ -331,6 +338,8 @@ export function ItemsSection({
                     );
                   })}
                 </div>
+
+                {hasCapsuleComboWithOtherLines(watchedItems ?? fields, capsuleProductIds) && <CapsulePrizeLinesNotice />}
 
                 {allowManualItems && (
                   <Button

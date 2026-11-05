@@ -100,6 +100,7 @@ export async function getOrder(orderId: string, storeId: string) {
     label: string;
     name: string; // Clean name without SKU
     sku: string;
+    categoryId?: string | null;
     price: number;
     discountedPrice: number;
     offerLabel?: string;
@@ -123,6 +124,7 @@ export async function getOrder(orderId: string, storeId: string) {
       label: product.name,
       name: product.name,
       sku: product.sku,
+      categoryId: product.categoryId,
       price: product.price,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel ?? undefined,

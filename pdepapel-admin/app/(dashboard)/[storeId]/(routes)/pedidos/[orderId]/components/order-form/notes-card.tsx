@@ -21,7 +21,7 @@ interface NotesCardProps {
 export function NotesCard({ preset }: NotesCardProps) {
   const form = useFormContext<OrderFormValues>();
   return (
-    <SectionCard id="notas" step={5} title="Notas" description="Lo que ve el cliente y lo que es solo del equipo.">
+    <SectionCard id="notas" step={5} title="Notas" description="Ninguna de las dos le llega a la clienta: ni el correo, ni el recibo, ni la página del pedido las muestran.">
       <FormField
         control={form.control}
         name="adminNotes"

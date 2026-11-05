@@ -68,6 +68,7 @@ import { HistoryCard } from "./order-form/history-card";
 import { RiskReviewCard } from "./order-form/risk-review-card";
 import { WhatsAppDraftCard } from "./order-form/whatsapp-draft-card";
 import { CancelAsFraudDialog, canCancelAsFraud, deleteWarning } from "../../components/cancel-as-fraud";
+import { isCapsuleComboCategory } from "./order-form/capsule-prize-lines";
 import { ItemsSection } from "./order-form/items-section";
 import { LeaveGuard } from "./order-form/leave-guard";
 import { NotesCard } from "./order-form/notes-card";
@@ -224,6 +225,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     name: "orderItems",
   });
   const watchedItems = useWatch({ control: form.control, name: "orderItems" });
+  const [pickedCapsuleIds, setPickedCapsuleIds] = useState<ReadonlySet<string>>(() => new Set());
+  const capsuleProductIds = useMemo(
+    () => new Set(products.filter((product) => isCapsuleComboCategory(product.categoryId)).map((product) => product.value).concat(Array.from(pickedCapsuleIds))),
+    [products, pickedCapsuleIds],
+  );
+  const onProductAdded = useCallback((productId: string, categoryId: string | null | undefined) => {
+    if (isCapsuleComboCategory(categoryId)) setPickedCapsuleIds((current) => new Set(current).add(productId));
+  }, []);
   const watchedType = useWatch({ control: form.control, name: "type" });
   const watchedProvider = useWatch({
     control: form.control,
@@ -1013,6 +1022,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 allowManualItems={allowManualItems}
                 loading={loading}
                 onConvert={setConversionIndex}
+                capsuleProductIds={capsuleProductIds}
+                onProductAdded={onProductAdded}
               />
             </div>
             {watchedType !== OrderType.GIFT_CARD && (
