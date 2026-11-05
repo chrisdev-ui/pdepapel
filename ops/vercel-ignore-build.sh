@@ -18,6 +18,9 @@ set -u
 
 BASE="${VERCEL_GIT_PREVIOUS_SHA:-}"
 HEAD_REF="${IGNORE_BUILD_HEAD:-HEAD}"
+# Cómo llegó el clon, siempre (VERCEL_DEEP_CLONE=true en los dos proyectos desde 2026-11-05: sin él, un base a más de
+# 10 commits no está en el clon superficial y se compilaba de más).
+echo "ignore-build: base=${BASE:-ninguno} · clon superficial: $(git rev-parse --is-shallow-repository 2>/dev/null) · commits en el clon: $(git rev-list --count HEAD 2>/dev/null)"
 
 if [[ -z "$BASE" ]]; then
   echo "ignore-build: sin despliegue anterior; se compila"
