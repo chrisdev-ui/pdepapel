@@ -9,7 +9,7 @@
  *    interna «vendido en un live» → «vendido por WhatsApp» y se agrega la línea del Reto verde. Total esperado $59.000.
  * C) ORD-1793835746847-611, ORD-1793835663727-80, ORD-1793835786324-394: canal → WHATSAPP y la misma corrección de la
  *    nota. Sin cambios de líneas ni de reservas.
- * B) Premios de ORD-1793834279588-45 y B2) de ORD-1793835746847-611: MANUAL_ADJUSTMENT −1 por `createInventoryMovement`
+ * B) Premios de ORD-1793834279588-45, B2) de ORD-1793835746847-611, B3) de ORD-1793835786324-394 y B4) de ORD-1793744962855-67: MANUAL_ADJUSTMENT −1 por `createInventoryMovement`
  *    (el helper de «Ajustar»), motivo «Salió en cápsula · <pedido>», referencia «<pedido>:<SKU>»; acepta archivados.
  *
  * Ensayo (no escribe; pdepapel_ro):
@@ -36,6 +36,10 @@ const STORE_ID = "f23ee5bc-1f6f-4c10-9872-9e6217cc17fd";
 const UNIT_ID = "d84e61a8-02af-4f58-99a5-c0610b636948";
 const ORDER_A = "ORD-1793834279588-45";
 const ORDER_B2 = "ORD-1793835746847-611";
+const ORDER_B3 = "ORD-1793835786324-394";
+const ORDER_B4 = "ORD-1793744962855-67";
+/** Antes de registrar sus premios, el pedido tiene que ser de esta clienta (sin tildes ni mayúsculas). */
+const PRIZE_OWNERS: Record<string, string> = { [ORDER_B2]: "maria clara", [ORDER_B3]: "laura guarin", [ORDER_B4]: "julieth martinez" };
 const RETO_SKU = "KIT-SOR-MUL-S-P-4873";
 const RETO_PRICE = 10_000;
 const EXPECTED_TOTAL_A = 59_000;
@@ -59,6 +63,29 @@ const PRIZES: [string, string, string][] = [
   [ORDER_B2, "Llavero peluche Zootopia", "LLA-ANI-MUL-S-L-9099"],
   [ORDER_B2, "Bisturí cactus", "BIS-CAC-AZU-XS-L-1924"],
   [ORDER_B2, "Notas ruleta capibara", "NOT-CAP-MUL-S-L-7892"],
+  [ORDER_B3, "Carpeta hermética flores verde", "CAR-FLO-VER-M-L-5152"],
+  [ORDER_B3, "Resaltadores Studmark", "RES-CLS-PAS-S-P-2101"],
+  [ORDER_B3, "Resaltadores flower neon", "RES-MOD-NEN-S-P-4936"],
+  [ORDER_B3, "Cartuchera lovely verde", "CAR-CLS-VER-M-L-4040"],
+  [ORDER_B3, "Separadores imantados x4 gatito blanco", "SEP-GAT-BLA-S-L-9863"],
+  [ORDER_B3, "Stickers mini Hello Kitty", "STI-HEL-ROJ-XS-L-2809"],
+  [ORDER_B3, "Grapadora mini rosada", "HER-MOD-ROS-XS-P-3196"],
+  [ORDER_B3, "Kit kawaii amarillo", "KIT-KAW-AMA-S-L-2394"],
+  [ORDER_B3, "Espejo Stitch", "ESP-STI-AZU-XS-P-7053"],
+  [ORDER_B3, "Llavero Monsters Inc", "LLA-ANI-MUL-S-L-6481"],
+  [ORDER_B3, "Vasito kawaii x7 negro", "KIT-KAW-NEG-XS-P-3562"],
+  [ORDER_B3, "Notas osos miel", "NOT-OSI-AMA-XS-L-3187"],
+  [ORDER_B3, "Bloques de construcción navidad", "LEG-VEG-ROJ-S-L-5037"],
+  [ORDER_B3, "Pin gato", "PIN-GAT-MUL-S-L-4354"],
+  [ORDER_B3, "Lapicero Intensamente Alegría", "BOL-INT-AMA-S-L-3594"],
+  // B4: los 6 que faltaban de ORD-1793744962855-67 (los Bloques de Navidad ya están). Son los mismos SKU que Paula había
+  // puesto de relleno en ese pedido antes de que existieran los combos.
+  [ORDER_B4, "Folder de bolsillo", "FOL-CLS-AZU-S-P-5584"],
+  [ORDER_B4, "Lapiceros pocket x4", "BOL-MOD-BLA-S-L-1317"],
+  [ORDER_B4, "Llavero de lujo cute perrito negro", "LLA-PER-NEG-S-P-7598"],
+  [ORDER_B4, "Reto de lectura", "KIT-SOR-MUL-S-P-4873"],
+  [ORDER_B4, "Lapicero Intensamente Enuui", "BOL-INT-LIL-S-L-8778"],
+  [ORDER_B4, "Notas Monet", "NOT-ART-VER-S-L-5447"],
 ];
 
 const fixNote = (note: string | null) => (note ?? "").replace(OLD_PHRASE, NEW_PHRASE);
@@ -150,24 +177,38 @@ async function main() {
     for (const o of cPlan) console.log(JSON.stringify({ paso: "C", pedido: o.orderNumber, estadoPedido: o.status, estado: o.done ? "ya hecho" : "por hacer", canal: `${o.salesChannel} → WHATSAPP`, notaAntes: o.internalNotes, notaNueva: o.newNote }));
 
     // ---------- B / B2: plan ----------
-    const order611 = await db.order.findFirstOrThrow({ where: { storeId: STORE_ID, orderNumber: ORDER_B2 }, select: { fullName: true } });
-    const nameOk = (order611.fullName ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().startsWith("maria clara");
-    if (!nameOk) throw new Error(`${ORDER_B2} no es de «Maria Clara»; no se registran sus premios.`);
+    for (const [orderNumber, owner] of Object.entries(PRIZE_OWNERS)) {
+      const o = await db.order.findFirstOrThrow({ where: { storeId: STORE_ID, orderNumber }, select: { fullName: true } });
+      const name = (o.fullName ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (!name.startsWith(owner)) throw new Error(`${orderNumber} no es de «${owner}»; no se registran sus premios.`);
+    }
     const prizeRows = [];
+    const planned = new Map<string, number>();
+    const tooLow: string[] = [];
     for (const [orderNumber, said, sku] of PRIZES) {
       const product = await db.product.findFirstOrThrow({ where: { storeId: STORE_ID, sku }, select: { id: true, name: true, sku: true, stock: true, reservedUnits: true, isArchived: true, isKit: true, price: true } });
       if (product.isKit) throw new Error(`${sku} es un kit: un premio se descuenta del producto físico.`);
       const reference = `${orderNumber}:${sku}`;
       const done = await db.inventoryMovement.findFirst({ where: { storeId: STORE_ID, referenceId: reference }, select: { id: true } });
-      if (!done && product.stock < 1) throw new Error(`${sku} (${said}) tiene stock ${product.stock}: no se puede descontar.`);
+      const before = product.stock - (planned.get(sku) ?? 0);
+      if (!done) {
+        // Todo el lote junto: lo que ya descontaron otros premios de esta corrida, lo apartado hoy y el Reto que aparta A.
+        const heldByA = sku === RETO_SKU && !hasReto ? 1 : 0;
+        if (before - 1 < product.reservedUnits + heldByA) {
+          tooLow.push(`${sku} (${said}, ${orderNumber}): stock ${before} − 1 quedaría por debajo de lo apartado (${product.reservedUnits + heldByA})`);
+        }
+        planned.set(sku, (planned.get(sku) ?? 0) + 1);
+      }
       prizeRows.push({ orderNumber, said, product, reference, done: Boolean(done) });
-      console.log(JSON.stringify({ paso: orderNumber === ORDER_A ? "B" : "B2", pedido: orderNumber, premio: said, sku, producto: product.name, precio: product.price, archivado: product.isArchived, stock: `${product.stock} → ${done ? product.stock : product.stock - 1}`, referencia: reference, estado: done ? "ya registrado" : "por registrar" }));
+      const stepName = orderNumber === ORDER_A ? "B" : orderNumber === ORDER_B2 ? "B2" : orderNumber === ORDER_B3 ? "B3" : "B4";
+      console.log(JSON.stringify({ paso: stepName, pedido: orderNumber, premio: said, sku, producto: product.name, precio: product.price, archivado: product.isArchived, stock: `${before} → ${done ? before : before - 1}`, referencia: reference, estado: done ? "ya registrado" : "por registrar" }));
     }
+    if (tooLow.length > 0) throw new Error(`premios que dejarían el stock por debajo de 0 (no se escribe nada): ${tooLow.join("; ")}`);
 
     const pendingA = aDone ? 0 : 1;
     const pendingC = cPlan.filter((o) => !o.done).length;
     const pendingPrizes = prizeRows.filter((row) => !row.done).length;
-    console.log(`Resumen: A ${pendingA} pedido · C ${pendingC} pedidos · premios ${pendingPrizes} (B ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_A).length}, B2 ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_B2).length})`);
+    console.log(`Resumen: A ${pendingA} pedido · C ${pendingC} pedidos · premios ${pendingPrizes} (B ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_A).length}, B2 ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_B2).length}, B3 ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_B3).length}, B4 ${prizeRows.filter((r) => !r.done && r.orderNumber === ORDER_B4).length})`);
     if (!apply) {
       console.log("PROD_WRITE_ROWS=0");
       return;
@@ -235,7 +276,7 @@ async function main() {
     console.log(JSON.stringify({ unidadAntes: unitBefore, unidadDespues: unitAfter }));
     appendFileSync(
       resolve(process.cwd(), "ops/prod-writes.log"),
-      `# ${new Date().toISOString()} capsule-cyber-paula-batch · A ${ORDER_A}: +1 Reto de lectura ($${RETO_PRICE}, total $${EXPECTED_TOTAL_A}, reserva convertida +1 Reto), canal WHATSAPP y nota · C ${CHANNEL_ORDERS.join(", ")}: canal WHATSAPP y nota · premios: ${pendingPrizes} MANUAL_ADJUSTMENT −1 «Salió en cápsula» (${ORDER_A} y ${ORDER_B2}) · unidad ${unitBefore.libres} libres antes, ${unitAfter.libres} después · DESHACER: la línea del Reto se quita desde el pedido; los premios con un ajuste +1 desde el kardex.\n`,
+      `# ${new Date().toISOString()} capsule-cyber-paula-batch · A ${ORDER_A}: +1 Reto de lectura ($${RETO_PRICE}, total $${EXPECTED_TOTAL_A}, reserva convertida +1 Reto), canal WHATSAPP y nota · C ${CHANNEL_ORDERS.join(", ")}: canal WHATSAPP y nota · premios: ${pendingPrizes} MANUAL_ADJUSTMENT −1 «Salió en cápsula» (${ORDER_A}, ${ORDER_B2}, ${ORDER_B3} y ${ORDER_B4}) · unidad ${unitBefore.libres} libres antes, ${unitAfter.libres} después · DESHACER: la línea del Reto se quita desde el pedido; los premios con un ajuste +1 desde el kardex.\n`,
     );
     console.log(`PROD_WRITE_ROWS=${rows}`);
   } finally {
